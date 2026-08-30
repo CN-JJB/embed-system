@@ -5,6 +5,10 @@
 #
 # Assume:
 #   - clocks to TIM3, ADC1 and DMA1 have been enabled
+#   - the ADC clock prescaler has already been configured so ADC1 runs within
+#     the datasheet frequency limit
+#   - ADC1 power-up/calibration/ready steps required before normal conversion
+#     have already completed successfully
 #   - samples[] is aligned SRAM storage
 #   - ADC input pin is configured as analog
 #
