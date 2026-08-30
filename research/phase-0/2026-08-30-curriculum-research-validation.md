@@ -22,6 +22,22 @@ Job-market "frequency" below is **qualitative role-family frequency**, not a sta
 
 ---
 
+## Revision Changelog — Leader Review v1.2
+
+Review result addressed: **MAJOR REVISION**.
+
+This revision intentionally preserves the existing research/resource/source work and changes only the reviewed scope:
+
+1. **Job-market evidence language:** replaced market-like China/International frequency labels with sampled-role signal labels; explicitly prohibits interpreting them as market percentages.
+2. **2027 scope/budget:** introduced MUST / SHOULD / STRETCH; reduced mandatory planned work to **330 h** and preserved **120–150 h (26.7–31.3%)** unscheduled capacity under the 450–480 h gross assumption.
+3. **Proficiency claims:** replaced broad L4 claims with scope-aware levels; overall Linux Driver is **L3**, selected device/MMIO/debug chains may earn **L4-local** only under explicit independent-task/fault/debug/trade-off criteria.
+4. **Board selection:** removed any early purchase recommendation; BeaglePlay is now only one candidate in a future board-selection research task that must compare existing hardware first.
+5. **Gate decoupling:** Zynq capstone, Yocto orientation, upstream patch workflow, C++ L2, additional xv6 labs, deep U-Boot/Buildroot and deep perf/ftrace are non-blocking SHOULD items.
+
+**Source Ledger is retained.** No new runtime/hardware verification is claimed.
+
+---
+
 # Part 1 — Executive Findings
 
 ## Verdict
@@ -52,7 +68,7 @@ Examples:
 
 The roadmap currently delays the highest-value Linux BSP/Driver practice until too much prerequisite material has been "completed."
 
-From 2026-09 to 2027-06, a nominal 2 h/day budget is about 600 hours, but a realistic scheduled curriculum budget should be closer to **430–480 hours** after school workload, exam periods, failed experiments, repeated Gates and project-debug time.
+From 2026-09 to 2027-06, a nominal 2 h/day budget is about 600 hours. For planning, use a conservative **450–480 h gross available capacity**, but schedule only **330 mandatory hours**. This deliberately preserves **120–150 h (26.7–31.3%) unscheduled capacity** for school workload, failed experiments, repeated Gates, hardware faults, project rework and internship activity.
 
 That budget cannot support deep completion of all of the following before internship season:
 
@@ -89,54 +105,67 @@ Additional underweighted skills: testing/validation, static/dynamic analysis, tr
 
 # Part 2 — Job Market Skill Matrix
 
-| Skill | China Frequency | International Frequency | Depth Expected | Career Value | Recommended Level by 2027-06 |
+## Evidence language
+
+This revision deliberately **does not use market-frequency labels** such as "China Frequency = Very High / High / Medium."
+
+The current official-JD set is a qualitative, purposefully sampled role-family dataset, not a census and not large enough to support market-share or frequency claims. The two evidence columns therefore mean only:
+
+- **Repeated in sampled roles** — explicitly appears as a core/required responsibility in multiple sampled official roles in that geography;
+- **Present in sampled roles** — explicitly appears in at least one sampled official role;
+- **Role-specific in sample** — appears mainly in a narrower BSP/kernel/SoC/firmware subset;
+- **Not established by current sample** — the current sample is insufficient to make even a qualitative repeated-signal claim.
+
+These labels describe **observed sampled evidence only**. They do not represent overall employer percentages, hiring-market prevalence, or probability of being tested in an interview.
+
+| Skill | Observed Signal in Sampled China Roles | Observed Signal in Sampled International Roles | Typical Depth Signal from Sample | Career Value for Target Path | Recommended Pre-internship Scope |
 |---|---|---|---|---|---|
-| C | Very high | Very high | L4 | 5/5 | **L4** |
-| C++ | High | High | L2-L4 by role | 4/5 | **L2 reading/modification** |
-| Linux userspace | Very high | Very high | L3-L4 | 5/5 | **L4** |
-| Git/build workflow | High | High | L3 | 4/5 | **L3** |
-| Debugging/root cause | Very high | Very high | L4 | 5/5 | **L4** |
-| RTOS | High in firmware/embedded OS | Medium-high | L3-L4 | 4/5 | **L3** |
-| OS fundamentals | High | Very high | L3-L4 | 5/5 | **L3** |
-| Linux Kernel | High in target family | Very high in target family | L3-L4 | 5/5 | **L3, moving toward L4** |
-| Linux Driver | Very high | Very high | L4 for driver roles | 5/5 | **L4 for at least one real device** |
-| BSP | High | Very high | L3-L4 | 5/5 | **L3** |
-| Board bring-up | High | Very high | L4 in platform roles | 5/5 | **L3 pre-internship** |
-| Device Tree | High in Linux BSP | High in Linux BSP | L3 | 4.5/5 | **L3** |
-| Bootloader / U-Boot | High in BSP | High in BSP | L3 | 4/5 | **L2-L3** |
-| ARM architecture | Very high | Very high | L3-L4 | 5/5 | **L3** |
-| RISC-V | Medium / strategic | Medium / strategic | L3 | 4/5 | **L2-L3** |
-| MMIO/registers | Very high | Very high | L4 | 5/5 | **L4** |
-| Interrupt/exception | Very high | Very high | L4 | 5/5 | **L4** |
-| DMA | High | High | L3-L4 | 4.5/5 | **L3** |
-| Cache/MMU/TLB | High | High | L3-L4 | 5/5 | **L3** |
-| Memory ordering/coherency | Medium-high | High in SoC/platform | L3-L4 | 5/5 long-term | **L2-L3** |
-| I2C/SPI/UART | Very high | High | L3-L4 | 4/5 | **L4 use/debug** |
-| USB/Ethernet | High | High | L3+ | 4/5 | **L2** |
-| PCIe | Medium-high in AI/SoC | High in platform/AI | L3-L4 | 4.5/5 | **L2** |
-| DDR | Medium | Medium-high | L3-L4 | 4/5 | **L2** |
-| JTAG/SWD | High | High | L3-L4 | 4.5/5 | **L3** |
-| Scope/logic analyzer | High | High | L3 | 4.5/5 | **L3-L4** |
-| perf/ftrace/trace tools | Medium-high | High | L3 | 4/5 | **L2-L3** |
-| Buildroot | Medium | Medium | L3 | 3.5/5 | **L3** |
-| Yocto/OpenEmbedded | Medium-high in BSP vendors | High in BSP vendors | L3+ | 4/5 | **L2 initially** |
-| Upstream workflow | Medium | High | L3-L4 | 5/5 differentiator | **L2: complete patch workflow** |
-| FPGA / HW-SW co-design | Medium | Medium-high in SoC | L3+ | 4.5/5 | **L3** |
-| Secure Boot | Low-medium entry | Medium | L3+ | 4/5 later | **L1-L2** |
-| Virtualization | Low-medium entry | Medium-high platform | L3+ | 4/5 later | **L1** |
-| Testing/static analysis/CI | High but often implicit | High | L3 | 4/5 | **L3** |
-| Data structures/algorithms | High for interviews | High | L2-L3 | 4/5 | **L2-L3** |
-| Technical English | High | Very high | L3+ | 4.5/5 | **L3** |
+| C | Repeated in sampled roles | Repeated in sampled roles | implementation + debugging | 5/5 | **L3 overall; L4-local for memory/debug scope** |
+| C++ | Repeated in sampled roles | Repeated in sampled roles | role-dependent | 4/5 | **L1 MUST; L2 SHOULD** |
+| Linux userspace | Repeated in sampled roles | Repeated in sampled roles | use + system debugging | 5/5 | **L3** |
+| Git/build workflow | Present in sampled roles | Repeated/present in sampled roles | normal engineering workflow | 4/5 | **L3** |
+| Debugging/root cause | Repeated in sampled roles | Repeated in sampled roles | independent fault isolation | 5/5 | **L3 -> L4-local on defined fault classes** |
+| RTOS | Repeated in firmware/embedded sampled roles | Present in sampled firmware roles | scheduler/sync/interrupt/timing | 4/5 | **L3 mechanism scope** |
+| OS fundamentals | Repeated in sampled roles | Repeated in sampled roles | explain execution mechanisms | 5/5 | **L3 selected mechanisms** |
+| Linux Kernel | Repeated in target sampled roles | Repeated in target sampled roles | source navigation, build, debug, APIs | 5/5 | **L2-L3 overall** |
+| Linux Driver | Repeated in target sampled roles | Repeated in target sampled roles | real subsystem/device integration | 5/5 | **L3 overall; L4-local on one selected device chain** |
+| BSP | Present/repeated in target sample | Repeated in BSP/platform sample | boot/integration/bring-up | 5/5 | **L2-L3** |
+| Board bring-up | Present in sampled low-level roles | Repeated in BSP/platform sample | HW/SW boundary debugging | 5/5 | **L3 on scoped board tasks** |
+| Device Tree | Present in Linux/BSP sample | Present/repeated in Linux/BSP sample | describe resources + driver matching | 4.5/5 | **L3** |
+| Bootloader / U-Boot | Present in BSP sample | Repeated in BSP sample | boot-chain understanding; porting at higher levels | 4/5 | **L2 MUST; deeper work SHOULD** |
+| ARM architecture | Repeated/present in sampled roles | Repeated in sampled roles | architecture + low-level integration | 5/5 | **L2-L3 essential spine** |
+| RISC-V | Role-specific in sample | Role-specific in sample | architecture/platform specialization | 4/5 strategic | **L2 selected concepts** |
+| MMIO/registers | Repeated in embedded/low-level sample | Repeated in low-level sample | implementation + fault isolation | 5/5 | **L4-local** |
+| Interrupt/exception | Repeated/present in low-level sample | Repeated in low-level sample | mechanism + debug | 5/5 | **L3** |
+| DMA | Present in sampled embedded roles | Present/role-specific in platform sample | device/data-path integration | 4.5/5 | **L2-L3; advanced DMA post-gate** |
+| Cache/MMU/TLB | Present in kernel/platform sample | Repeated/present in kernel/platform sample | mechanism + performance reasoning | 5/5 | **L2-L3** |
+| Memory ordering/coherency | Role-specific in sample | Role-specific/repeated in SoC sample | advanced platform reasoning | 5/5 long-term | **L1-L2 MUST concepts; deeper SHOULD/STRETCH** |
+| I2C/SPI/UART | Repeated in sampled embedded roles | Present/repeated in embedded roles | use + debug + driver integration | 4/5 | **L3 overall; selected chain may be L4-local** |
+| USB/Ethernet | Present in sampled embedded roles | Present in sampled roles | role-dependent driver/BSP work | 4/5 | **L1-L2** |
+| PCIe | Role-specific in sample | Role-specific in platform/AI sample | advanced platform/driver work | 4.5/5 | **STRETCH** |
+| DDR | Role-specific in sample | Role-specific in platform sample | bring-up/performance specialization | 4/5 | **STRETCH** |
+| JTAG/SWD | Present in sampled roles | Present/repeated in BSP sample | bring-up/debug | 4.5/5 | **L3 on available hardware** |
+| Scope/logic analyzer | Present in sampled roles | Present in sampled embedded roles | HW/SW evidence collection | 4.5/5 | **L3** |
+| perf/ftrace/trace tools | Not established as repeated | Present/role-specific in kernel/perf sample | performance/kernel debugging | 4/5 | **basic exposure SHOULD; depth post-gate** |
+| Buildroot | Not established as repeated | Role-specific in embedded Linux ecosystem | image/build integration | 3.5/5 | **L2-L3 shallow MUST** |
+| Yocto/OpenEmbedded | Not established as repeated | Repeated/present in BSP vendor sample | production BSP/distribution engineering | 4/5 | **SHOULD orientation; deeper post-gate** |
+| Upstream workflow | Present as differentiator | Repeated/present in Linux vendor sample | patch/review/mainline collaboration | 5/5 differentiator | **SHOULD** |
+| FPGA / HW-SW co-design | Role-specific in sample | Role-specific in SoC sample | differentiation for platform roles | 4.5/5 | **SHOULD** |
+| Secure Boot | Not established by current sample | Role-specific in platform sample | security/platform specialization | 4/5 later | **STRETCH** |
+| Virtualization | Not established by current sample | Role-specific in platform sample | advanced platform software | 4/5 later | **STRETCH** |
+| Testing/static analysis/CI | Often implicit; present | Present/repeated as engineering expectation | engineering quality | 4/5 | **L3 within projects** |
+| Data structures/algorithms | Repeated/present in campus sample | Common interview foundation; sample not census | interview implementation/reasoning | 4/5 | **L2-L3 selected set** |
+| Technical English | Not directly measurable from China sample | Implicitly required by international roles | documentation/collaboration | 4.5/5 | **L2-L3** |
 
 ### Interpretation
 
-Do not translate high career value directly into early curriculum priority.
+The matrix is a curriculum-alignment instrument, not labor-market statistics.
 
-PCIe, DDR, Yocto, secure boot and virtualization are valuable. However, before internship season the higher-return dependency chain is:
+Before internship season, prioritize the dependency chain:
 
-`C -> ABI -> MMIO -> IRQ -> DT -> Driver -> userspace -> debug/measurement`.
+`C -> Linux fundamentals -> debugging -> ABI/exception/MMIO -> RTOS mechanisms -> Linux boot chain -> kernel fundamentals -> one real subsystem driver -> interview fundamentals`.
 
-The learner should be able to **explain and debug that chain** before collecting advanced-topic familiarity.
+High-value topics such as Yocto, Zynq co-design, upstream contribution, PCIe and DDR must not become mandatory merely because they appear in valuable roles.
 
 ---
 
@@ -230,7 +259,7 @@ Yocto has real BSP-employer value, but its BitBake/layer/recipe model should not
 - **Official:** Zynq-7000 TRM UG585; Arm AMBA AXI documentation; memory-model documentation.
 - **Open Source:** Linux/U-Boot integration examples.
 - **Lab:** AXI4-Lite register block → IRQ → DT → Linux platform driver → userspace benchmark.
-- **Scope before internship:** AXI4-Lite + interrupt required; AXI DMA/coherency is stretch.
+- **Scope before internship:** Zynq AXI4-Lite + interrupt is **SHOULD**, not an Internship Gate requirement; AXI DMA/coherency is STRETCH.
 
 ## FPGA
 
@@ -488,54 +517,221 @@ Must satisfy all:
 
 ---
 
-# Part 7 — Roadmap v1.1
+# Part 7 — Roadmap v1.2
 
-## Planning budget
+## 7.1 Scope classes
 
-Schedule approximately **45–50 h/month**, not the full theoretical 2 h/day.
+This revision separates curriculum value from **Internship Gate criticality**.
 
-Ten months gives roughly **450–480 scheduled hours**, leaving unscheduled capacity for university work, failures, re-runs, portfolio cleanup and interviews.
+### MUST — Internship Gate
 
-| Month | Main work | Approx. hours | Gate/output |
-|---|---|---:|---|
-| **2026-09** | Baseline; pointer/lifetime/memory; struct/alignment/endian; UB; callbacks; warnings/sanitizers; GDB; Git. Begin stack/PC/SP/calling convention/ABI. | 45 | independently root-cause segfault + corruption |
-| **2026-10** | Linux FD/process/fork/exec/pipe/signal/mmap/pthread/socket basics; `/proc`, `/sys`, `strace`; Make; compile/link/ELF. Begin Project 1. | 48 | systems-C/Linux Gate |
-| **2026-11** | STM32 startup/vector/linker/NVIC/timer/DMA; FreeRTOS scheduler/context switch/queues/semaphore/mutex/inversion/stack; selected source. Project 2. | 48 | measured RTOS/debug Gate |
-| **2026-12** | cross toolchain; QEMU; kernel build; BusyBox/initramfs/rootfs; Buildroot; boot logs; basic DT. Architecture: privilege/exception/syscall/MMIO. | 45 | boot reproducible Linux image |
-| **2027-01** | OSTEP+xv6 selected syscall/trap/address-space/page-table/TLB/locks; Linux module/Kbuild/source navigation; driver model/platform driver/DT matching | 48 | first minimal platform driver |
-| **2027-02** | MMIO/resources/`devm_*`; DT; IRQ; wait queue; mutex/spinlock; short cdev model; read `timeriomem-rng` and `leds-gpio`. Start Project 3. | 50 | platform/IRQ Gate |
-| **2027-03** | real I2C/SPI subsystem driver; regmap; DT YAML binding; `dtbs_check`; error paths; concurrency; PM basics; read `tmp102`, `gpio-74x164`. | 50 | real-device driver portfolio candidate |
-| **2027-04** | U-Boot; boot sequence; kernel config; Buildroot board/package integration; BSP hardening. Yocto **orientation only**. Begin applications. | 45 | reproducible BSP demo + resume-ready project |
-| **2027-05** | Zynq AXI4-Lite peripheral → MMIO → IRQ → DT → Linux platform driver → userspace → benchmark. ILA/scope/tracing as applicable. | 48 | Project 4 v1 |
-| **2027-06** | Internship Gate; root-cause reports; README/diagrams; build reproducibility; interview C/OS/Linux/driver; DSA; English explanation; upstream patch workflow | 40 | full internship Gate |
+If these outcomes are not completed, the learner is not considered ready for serious 2027 Linux/BSP/Driver internship applications.
 
-### Explicitly deferred beyond mandatory pre-internship scope
+| MUST area | Minimum pre-internship scope | Mandatory planned hours |
+|---|---|---:|
+| System C + toolchain | pointer/lifetime, memory, UB, struct/layout/endian, callbacks, compilation/linking/ELF, GDB/sanitizers | 45 |
+| Linux fundamentals | files/FD, process, pipe, signal, pthread basics, `/proc`, `/sys`, `strace`, basic socket/IPC | 45 |
+| Debugging methodology | repeated AI-Free/AI-limited root-cause exercises across C, Linux, RTOS and driver faults | 30 |
+| Essential architecture spine | calling convention/ABI, privilege, exception/trap, MMIO, cache/TLB/VM basics, ordering concepts | 30 |
+| STM32 + FreeRTOS mechanisms | startup/vector/IRQ/timer/DMA basics; scheduler/context switch/sync/inversion/stack/timing | 35 |
+| Embedded Linux boot chain | cross-build, kernel, BusyBox/rootfs/init, QEMU/real-board boot, basic DT, shallow Buildroot use | 30 |
+| Linux Kernel fundamentals | configure/build, module/Kbuild, source navigation, driver model, resources, kernel logs/oops | 30 |
+| One real Linux subsystem driver | one bounded I2C/SPI/GPIO-class device chain with DT, probe/resources, sync/error path, verification | 55 |
+| Interview + portfolio fundamentals | selected DSA, C/OS/Linux/driver review, technical explanation, project evidence cleanup | 30 |
+| **Total MUST planned** |  | **330 h** |
 
-- AXI DMA as Project 4 v2;
-- deep cache coherency;
+### SHOULD — Differentiator
+
+These are valuable but **must not block the Internship Gate**. They are a prioritized backlog, not an additional committed 2027-06 schedule.
+
+| SHOULD item | Recommended scope before internship if schedule is healthy |
+|---|---|
+| Zynq AXI capstone | AXI4-Lite + IRQ + DT + Linux driver v1; no DMA requirement |
+| Yocto orientation | understand layer/recipe/BitBake model; optionally build or modify one small recipe |
+| Upstream patch workflow | perform one realistic patch/PR/mail-format workflow; merge/acceptance not required |
+| C++ L2 | references, lifetime/RAII, basic STL, reading/modifying system C++ |
+| Additional xv6 work | beyond the two MUST selected mechanism exercises |
+| Deeper U-Boot | source reading, board porting, driver-model exploration |
+| Deeper Buildroot | custom package/board integration beyond basic image/config workflow |
+| perf/ftrace depth | trace analysis/performance investigation beyond basic kernel logs/debug |
+| Additional subsystem driver | second device/subsystem to broaden transferability |
+| Zynq/FPGA measurement polish | ILA/tracing/benchmark work after the driver Gate is safe |
+
+**Scheduling rule:** before June 2027, select SHOULD work only when the rolling unscheduled buffer remains at or above 20%. Do not attempt to "complete all SHOULD items."
+
+### STRETCH — Post-gate
+
+Default to 2027 summer or later:
+
+- AXI DMA and deeper Linux DMAengine;
+- cache-coherency experiments beyond essential concepts;
+- deep Yocto/OE BSP engineering;
 - PCIe;
-- deep DDR tuning;
+- DDR bring-up/tuning;
 - secure boot;
-- virtualization;
-- deep Yocto/OE;
-- full Zephyr path;
-- CAQA deep study.
+- virtualization/hypervisor;
+- deep Zephyr ecosystem work;
+- CAQA advanced chapters;
+- advanced kernel performance engineering;
+- large SoC-generator ecosystems.
 
-## Roadmap audit answers
+## 7.2 Explicit decisions on disputed pre-internship items
 
-1. **Sequence reasonable?** Dependencies mostly yes; strict serial execution no.
-2. **Too early?** deep Yocto, PCIe, DDR, advanced coherency/security/virtualization.
-3. **Too late?** architecture basics, Embedded Linux, DT, Linux Driver.
-4. **Missing?** validation/testing, sanitizers/static analysis, tracing, C++ literacy, upstream workflow, interview DSA, English technical output.
-5. **Can delete?** before internship: full Zephyr, full APUE, full xv6, advanced PCIe/DDR/security/virtualization.
-6. **Finish before summer 2027?** v1.1: plausible; full original scope: not plausible at quality.
-7. **2 h/day realistic?** yes for a 450–480 h curated plan, not for exhaustive coverage.
-8. **RTOS/Linux/Driver weighting?** reduce RTOS breadth; increase Linux/Driver.
-9. **Move DT earlier?** yes: introduce during first Linux boot, deepen during driver work.
-10. **Move architecture earlier?** yes: begin in 2026-09 as a recurring spine.
-11. **Zynq as flagship before 2027 internship?** yes as capstone, no as the only driver proof.
-12. **Raspberry Pi 5 for driver teaching?** useful for Linux/kernel/tracing/modules; not ideal as the single canonical BSP lab platform.
-13. **Buy another board?** optional single-board purchase only. Recommend evaluating **BeaglePlay** because current Bootlin kernel-driver labs support it and expose common peripheral interfaces. Purchase should wait until the Project 3 hardware decision.
+| Item | Classification | Decision |
+|---|---|---|
+| Zynq AXI capstone | **SHOULD** | strong differentiator, but schedule/tool risk makes it non-blocking |
+| Yocto orientation | **SHOULD** | useful BSP signal; not needed to prove the core driver chain |
+| upstream patch workflow | **SHOULD** | high-value differentiator; not a Gate prerequisite |
+| C++ L2 | **SHOULD** | C++ reading literacy is useful; C/kernel fundamentals take priority |
+| xv6 labs | **MUST: two selected mechanism exercises only** | one trap/syscall-oriented + one VM/concurrency-oriented exercise; more is SHOULD |
+| U-Boot depth | **MUST shallow / SHOULD deep** | MUST explain boot stages and operate basic boot/env flow; source/porting depth is optional |
+| Buildroot depth | **MUST shallow / SHOULD deep** | MUST create/modify a reproducible embedded image; custom package/board depth optional |
+| perf/ftrace depth | **SHOULD** | MUST can use kernel logs/oops/dynamic debug; deeper tracing/perf analysis is optional |
+
+## 7.3 Capacity and buffer
+
+Use a conservative **450–480 h gross available capacity** for 2026-09 → 2027-06.
+
+Do **not** schedule all of it.
+
+- MUST planned: **330 h**
+- Unscheduled capacity at 450 h gross: **120 h = 26.7%**
+- Unscheduled capacity at 480 h gross: **150 h = 31.3%**
+- SHOULD work: consume only from buffer that remains healthy after Gate rework, school load and project slips.
+
+This satisfies the minimum 20–25% buffer requirement and leaves enough room for a **2–3 week major-project delay (~25–35 h)** without automatically sacrificing the core Gate.
+
+Buffer is intentionally reserved for:
+
+- Gate failure/retry;
+- debugging;
+- school exams/deadlines;
+- hardware failure;
+- project rework;
+- documentation;
+- internship applications/interviews.
+
+## 7.4 Monthly MUST schedule
+
+| Month | MUST focus | Planned MUST hours | Non-blocking SHOULD only if ahead |
+|---|---|---:|---|
+| **2026-09** | Baseline; System C memory/lifetime/UB; GDB/sanitizers; ABI/calling-convention start | 36 | none |
+| **2026-10** | Linux FD/process/pipe/signal; `/proc`/`strace`; compile/link/ELF; compact systems program | 38 | C++ reading warm-up |
+| **2026-11** | STM32 startup/vector/IRQ/timer/DMA basics; FreeRTOS scheduler/context/sync/inversion/stack | 34 | none |
+| **2026-12** | QEMU/kernel/rootfs/BusyBox; basic DT; shallow Buildroot; privilege/exception/MMIO spine | 32 | extra architecture reading |
+| **2027-01** | two selected xv6 mechanism exercises; module/Kbuild; driver model/platform resources; kernel logs/oops | 34 | deeper xv6 |
+| **2027-02** | real-driver core: DT/matching, I2C/SPI or GPIO path, resources, synchronization, error paths | 38 | basic ftrace exposure |
+| **2027-03** | Project 3 real subsystem driver implementation, fault injection, userspace verification | 42 | second driver only if P3 Gate is green |
+| **2027-04** | Project 3 hardening/rework; boot-chain review; shallow U-Boot/Buildroot operation; portfolio evidence | 32 | Yocto orientation / upstream workflow |
+| **2027-05** | internship interview fundamentals + reserved Project 3 spill/retry capacity | 24 | **Zynq v1 may start only if MUST Gates are green** |
+| **2027-06** | final Internship Gate, project documentation, applications/interviews | 20 | continue Zynq/C++ only if non-blocking |
+| **Total** |  | **330 h** |  |
+
+### Acceptance criterion for schedule robustness
+
+A 2–3 week delay in Project 3 must be absorbable by April/May buffer without:
+
+- deleting the real subsystem-driver Gate;
+- skipping C/Linux/debugging fundamentals;
+- compressing final interview preparation to near zero;
+- requiring Zynq/Yocto/C++/upstream work to be completed first.
+
+If that condition stops being true, **SHOULD work is dropped before MUST work is compressed**.
+
+## 7.5 Scope-aware proficiency matrix
+
+Levels are scoped to a defined task family. A successful project does **not** imply global L4 mastery of a field.
+
+| Skill area | Pre-internship target | Scope boundary |
+|---|---|---|
+| System C overall | **L3** | explain and use core C/toolchain mechanisms across normal systems tasks |
+| C pointer/lifetime/memory debugging | **L4-local** | bounded native-C memory faults and ownership/lifetime reasoning |
+| Linux userspace | **L3** | process/FD/IPC/signal/debug workflow; not full POSIX breadth |
+| Debug methodology | **L3 -> L4-local** | defined C/Linux/RTOS/driver fault families |
+| Essential computer architecture | **L2-L3** | ABI, privilege, exception, MMIO, cache/TLB/VM essentials; not full microarchitecture |
+| FreeRTOS overall | **L3** | scheduler/context/synchronization/interrupt/timing mechanisms |
+| Embedded Linux boot chain | **L3** | kernel/rootfs/init/DT/basic Buildroot boot path; not distribution engineering |
+| Linux Kernel architecture | **L2-L3** | build/navigation/modules/driver model/basic debug; not broad subsystem internals |
+| Linux Driver overall | **L3** | can implement/explain one subsystem chain and transfer concepts with documentation |
+| Selected I2C/hwmon (or equivalent approved) device chain | **L4-local** | one explicitly bounded device + subsystem implementation/debug path |
+| Device Tree | **L3** | hardware description, matching/resources, basic binding validation |
+| MMIO/register interaction | **L4-local** | selected MCU/SoC/peripheral scope |
+| Interrupt handling | **L3** | MCU + selected Linux-driver path; not every interrupt architecture |
+| DMA | **L2-L3** | STM32/basic data path; Linux DMAengine depth is post-gate |
+| Cache/MMU/TLB | **L2-L3** | explain core mechanism and common implications |
+| U-Boot | **L2** | boot flow/env/basic operation; porting is SHOULD |
+| Buildroot | **L2-L3** | configure/build/inspect image pipeline; deep package/board work is SHOULD |
+| Git | **L3** | branch/commit/rebase/conflict/bisect/review workflow |
+| DSA/interview algorithms | **L2-L3** | selected standard data structures/problems |
+| Technical English | **L2-L3** | read docs/JDs and explain project; not professional writing mastery |
+| C++ | **L1 MUST / L2 SHOULD** | reading literacy first; no C++-heavy project required |
+| Zynq co-design | **SHOULD, L2-L3 if completed** | not part of Internship Gate |
+
+### L4 / L4-local qualification criteria
+
+An L4-local label is granted only when **all five** columns below are satisfied.
+
+| L4-local scope | Scope | Independent Task | Fault Scenario | Expected Debug Ability | Design Trade-off Question |
+|---|---|---|---|---|---|
+| C pointer/lifetime/memory | native C program/component with dynamic/static storage, structs, callbacks | implement and review ownership/lifetime without AI solution generation | delayed heap overwrite, UAF/dangling pointer or alias/lifetime bug | form hypotheses; use GDB/sanitizer/watchpoints as appropriate; identify root cause; add regression | API ownership vs copying; stack vs heap; safety vs complexity |
+| MMIO/register interaction | one STM32 peripheral or one approved SoC MMIO block | configure/access the device from documentation and explain accessor/volatile assumptions | wrong clock/reset/bitfield/order/IRQ acknowledgment causing non-operation or repeated IRQ | correlate register state + scope/JTAG/log evidence and isolate HW vs SW configuration | polling vs interrupt; register abstraction vs direct control; ordering/barrier cost |
+| Selected Linux subsystem driver chain | one approved I2C/hwmon, SPI/IIO, GPIO or equivalent bounded chain | implement DT + probe/resources + subsystem registration + userspace validation from upstream/docs | bad DT property, bus error, IRQ/sync bug, error-path/resource issue, or incorrect register handling | use kernel logs plus appropriate bus/trace/hardware evidence; localize fault across DT/bus/driver/userspace boundaries | subsystem choice; regmap vs direct access; mutex/spinlock/workqueue; polling vs IRQ |
+| Debug methodology on defined fault set | required C/Linux/RTOS/driver diagnostic cases | independently run the full `Symptom -> Hypothesis -> Evidence -> Experiment -> Root Cause -> Fix -> Regression` loop | at least three materially different seeded/real failures, including one concurrency/timing or driver-boundary failure | select evidence tools deliberately, reject weak hypotheses, and produce reproducible root-cause report | observability vs perturbation; fastest test vs strongest discriminating experiment |
+
+**Prohibited inference:** completing one I2C/hwmon driver at L4-local does not justify "Linux Driver = L4." Overall Linux Driver remains L3 until competence transfers across multiple unfamiliar subsystems and design contexts.
+
+## 7.6 Future Board Selection Research Task
+
+**Status:** future research task. This report makes **no canonical purchase decision**.
+
+**Trigger:** run before Project 3 hardware is frozen, after its exact subsystem/device/lab requirements are known.
+
+### Required candidates
+
+Compare at minimum:
+
+1. existing Raspberry Pi 5;
+2. existing K230-class board;
+3. existing Zynq-7020;
+4. BeaglePlay **as a candidate only**;
+5. at most 1–2 additional boards, and only when there is a documented reason they may close a specific gap.
+
+### Required comparison fields
+
+| Criterion | Question to answer |
+|---|---|
+| mainline Linux support | what works in the target mainline/LTS baseline without large downstream dependency? |
+| upstream friendliness | can examples map cleanly to upstream kernel APIs/subsystems and normal patch workflow? |
+| schematics availability | are complete, usable schematics publicly available? |
+| TRM/documentation | is SoC/peripheral documentation sufficient for bring-up/debug? |
+| U-Boot | what is upstream support status and boot-path transparency? |
+| Device Tree | are upstream DTS/bindings available and understandable? |
+| UART/JTAG/debug access | what low-level recovery/debug channels are practically exposed? |
+| I2C/SPI/GPIO/IRQ accessibility | can Project 3 attach/debug a real peripheral without awkward expansion hardware? |
+| Buildroot support | is there direct or low-friction support? |
+| Yocto support | is there a maintained BSP/layer if later needed? |
+| Bootlin/course ecosystem | are current high-quality labs/materials available for the board/SoC? |
+| cost | total board + required debug/adapter cost |
+| overlap with existing hardware | does the new board add capability or mostly duplicate current equipment? |
+
+### Decision rule
+
+Prefer an **existing board** when it satisfies the Project 3 requirements with acceptable upstream/documentation/debug friction.
+
+A purchase may be proposed only if the comparison identifies a concrete capability or teaching-maintenance gap that existing hardware cannot reasonably close. BeaglePlay has no privileged status beyond being one candidate with current teaching ecosystem support.
+
+### Deliverable before any purchase
+
+Produce:
+
+- evidence table with source/date/version for each board;
+- known blockers;
+- project-specific lab fit;
+- maintenance risk;
+- cost/overlap analysis;
+- recommendation: `use existing`, `purchase justified`, or `defer decision`.
+
+No board purchase is authorized by this Phase 0 package.
 
 ---
 
@@ -550,7 +746,7 @@ Ten months gives roughly **450–480 scheduled hours**, leaving unscheduled capa
 | Custom peripheral + Linux Driver | too ambiguous and can duplicate Zynq |
 | Zynq AXI + Linux Driver | high value, but risky/too complex as the only driver proof |
 
-## Project 1 — Linux Systems Telemetry Service
+## Project 1 — Linux Systems Telemetry Service — MUST (bounded)
 
 Required elements:
 
@@ -568,7 +764,7 @@ Required elements:
 
 Career proof: C + Linux systems programming + engineering hygiene.
 
-## Project 2 — STM32 FreeRTOS Acquisition Node
+## Project 2 — STM32 FreeRTOS Acquisition Node — MUST (bounded)
 
 Suggested flow:
 
@@ -587,7 +783,7 @@ Required experiments:
 
 Career proof: RTOS mechanism + hardware + measurable debugging.
 
-## Project 3 — Real Peripheral Linux Driver
+## Project 3 — Real Peripheral Linux Driver — MUST / Gate project
 
 Prefer a real I2C/SPI device or a small self-designed board.
 
@@ -604,9 +800,9 @@ Required:
 - tracing;
 - measurement/test.
 
-This should be the **primary pre-internship Linux Driver portfolio item**.
+This is the **primary pre-internship Linux Driver Gate project**. Scope must remain bounded enough that a 2–3 week delay can be absorbed without sacrificing the Internship Gate.
 
-## Project 4 — Zynq AXI Co-design Capstone
+## Project 4 — Zynq AXI Co-design Capstone — SHOULD differentiator
 
 v1:
 
@@ -635,149 +831,186 @@ This removes the overlap between the original Projects 3 and 4.
 
 # Part 9 — 2027 Internship Gate
 
-## C
+This Gate tests only **MUST** scope. SHOULD/STRETCH items may strengthen a portfolio but cannot compensate for a failed MUST Gate and are not required to pass.
 
-AI-Free learner must be able to:
+## C / Toolchain — overall L3, memory/debug L4-local
 
-- implement a 500–1000 LOC C component cleanly;
-- reason about pointer/lifetime;
-- use callbacks/function pointers;
-- explain alignment/padding/endian;
-- identify common UB;
-- use GDB and sanitizer evidence;
-- read simple disassembly;
-- use `readelf/nm/objdump`;
-- explain compile → assemble → link.
+AI-Free learner must:
 
-## Linux
+- implement a bounded C component with clear ownership/lifetime;
+- correctly use pointers, structs, callbacks and storage duration;
+- explain common UB and layout/endian issues;
+- debug a memory fault with evidence;
+- use `readelf/nm/objdump` on a small program;
+- explain compile → assemble → link at mechanism level.
 
-Must independently implement/use/debug:
+Pass requires the scoped L4-local memory-debug criteria from Part 7; it does **not** claim whole-language L4.
 
-- `fork/exec/wait`;
-- pipe and FD redirection;
-- signals;
-- pthread basics;
-- Unix/TCP socket basics;
-- `mmap` basics;
-- `/proc` and `/sys`;
-- `strace`.
+## Linux userspace — L3
 
-Given a process that hangs or leaks FDs, the learner must independently find evidence and root cause.
+Must independently:
 
-## RTOS
+- use/debug files and FDs;
+- implement `fork/exec/wait`;
+- connect processes with pipe/FD redirection;
+- handle a signal safely at basic level;
+- use pthread synchronization at basic level;
+- use `/proc`, `/sys`, `strace`;
+- demonstrate one basic IPC/socket path.
 
-Must:
+Given a hang, FD leak or process-lifecycle bug, the learner must collect evidence and reach root cause without direct AI solution generation.
 
-- explain a preemptive scheduler;
-- explain a context switch;
-- build an ISR→task data path;
-- choose queue/semaphore/mutex correctly;
-- reproduce priority inversion;
-- demonstrate priority inheritance;
-- measure stack usage;
-- debug stack overflow;
-- measure latency/jitter with a scope or equivalent observable signal.
+## Debugging — L3 -> L4-local on required cases
 
-## OS
+Maintain at least four formal root-cause reports covering:
 
-Must explain from execution behavior:
+1. C memory corruption/lifetime;
+2. Linux userspace process/FD failure;
+3. RTOS concurrency/timing or STM32 peripheral failure;
+4. Linux driver/DT/bus/resource failure.
 
-- process/thread;
-- address space;
-- syscall;
-- exception/trap;
-- page table;
-- TLB;
-- context switch;
-- race;
-- locks.
-
-Complete selected xv6 tasks spanning syscall/trap, page-table and concurrency categories.
-
-## Kernel
-
-Must:
-
-- configure/build Linux;
-- boot in QEMU;
-- boot at least one real board;
-- build/load a module;
-- understand basic Kbuild;
-- navigate source;
-- read oops/backtrace;
-- use kernel logs/dynamic debug;
-- use basic ftrace/perf.
-
-## Driver
-
-Hard Gate for "seriously applying to Linux Driver":
-
-one complete real driver demonstrating:
-
-- DT;
-- matching;
-- `probe()`;
-- resources;
-- MMIO or I2C/SPI;
-- IRQ when applicable;
-- synchronization;
-- error handling;
-- subsystem integration;
-- userspace verification.
-
-The learner must answer, with mechanism-level reasoning:
-
-- why mutex vs spinlock here?
-- can this interrupt path sleep?
-- why use an MMIO accessor instead of ordinary pointer dereference?
-- what should and should not be represented in Device Tree?
-
-## Hardware
-
-Must:
-
-- read schematic;
-- identify power/clock/reset/pins;
-- use datasheet/RM;
-- reason about I2C/SPI/UART signals;
-- verify timing/electrical behavior with scope where useful;
-- trace an IRQ signal through hardware to kernel handling;
-- explain a DMA data path at a basic systems level.
-
-## Debugging
-
-Maintain at least five formal root-cause reports:
-
-1. C memory bug;
-2. RTOS concurrency/timing bug;
-3. STM32 peripheral/DMA bug;
-4. Linux userspace bug;
-5. Kernel/Driver bug.
-
-Each report must contain:
+Each report:
 
 `Symptom -> Hypotheses -> Evidence -> Experiment -> Root Cause -> Fix -> Regression`.
 
-At least two reports must be completed fully AI-Free.
+At least **two** must be fully AI-Free. At least one must involve concurrency/timing or a HW/SW boundary.
 
-## Git
+## Essential architecture / OS — L2-L3
 
-Demonstrate actual use of:
+Must explain and connect to observed execution:
 
-- feature branches;
+- function call, PC/SP and ABI basics;
+- privilege and exception/trap;
+- syscall boundary;
+- process/thread;
+- virtual address, page table and TLB basics;
+- cache/locality basics;
+- MMIO;
+- interrupt control flow;
+- basic ordering/coherency concepts relevant to device access.
+
+### xv6 requirement
+
+Only **two selected mechanism exercises are MUST**:
+
+- one syscall/trap/control-flow exercise;
+- one VM **or** concurrency/locking exercise.
+
+Additional xv6 labs are SHOULD.
+
+## STM32 + FreeRTOS — L3
+
+Must:
+
+- explain reset/startup/vector-table path;
+- configure or meaningfully modify timer/interrupt/DMA behavior from RM evidence;
+- explain preemptive scheduling/context switch;
+- build an ISR→task data path;
+- choose queue/semaphore/mutex appropriately;
+- reproduce and explain priority inversion/inheritance;
+- measure stack usage;
+- debug one timing/stack/concurrency fault;
+- collect at least one physical timing observation with scope/logic instrumentation where practical.
+
+## Embedded Linux boot chain — L3 bounded scope
+
+Must:
+
+- cross-build or use a defined cross toolchain;
+- configure/build a kernel baseline;
+- boot Linux in QEMU;
+- boot one real supported board;
+- build/use a BusyBox/rootfs or equivalent minimal userspace;
+- explain kernel → rootfs/init flow;
+- read and modify a basic Device Tree node;
+- use Buildroot to produce/reproduce one image/configuration.
+
+Not required for Gate:
+
+- custom Buildroot board/package depth;
+- Yocto;
+- full U-Boot porting.
+
+## U-Boot — L2 bounded scope
+
+Must:
+
+- explain where U-Boot sits in the selected board's boot chain when applicable;
+- inspect/basic-use boot environment and boot commands;
+- connect kernel/DT/rootfs artifacts to the boot flow.
+
+Source-level U-Boot driver/board porting is SHOULD.
+
+## Linux Kernel — L2-L3
+
+Must:
+
+- configure/build a pinned kernel;
+- build/load a module;
+- use basic Kbuild;
+- navigate source/docs to answer an API/mechanism question;
+- understand driver-model/platform-resource basics;
+- read a kernel oops/backtrace;
+- use kernel logs and dynamic debug or equivalent basic debug facility.
+
+Deep perf/ftrace analysis is **not** a Gate requirement.
+
+## Linux Driver — L3 overall; one device chain L4-local
+
+Hard Gate:
+
+complete **one approved real subsystem-driver chain** (for example I2C + hwmon, SPI + IIO, GPIO expander, or equivalent) demonstrating:
+
+- DT description/matching where relevant;
+- `probe()` and managed resources;
+- bus/MMIO access;
+- subsystem registration;
+- synchronization/error handling appropriate to the device;
+- IRQ path if the selected device meaningfully supports it;
+- userspace verification;
+- at least one injected/real fault diagnosed to root cause.
+
+Pass requires the Part 7 L4-local driver criteria.
+
+The learner must answer design questions such as:
+
+- why this subsystem instead of a misc/char interface?
+- regmap or direct access, and why?
+- mutex/spinlock/workqueue/polling/IRQ — what trade-off applies here?
+- what belongs in Device Tree versus driver policy?
+- how would the design change for a second device with different timing/interrupt constraints?
+
+**Passing this Gate means Linux Driver overall L3 + selected-chain L4-local, not global Linux Driver L4.**
+
+## Hardware/debug instrumentation — L3
+
+Within the selected boards/projects, must:
+
+- read schematic and datasheet/RM;
+- identify power/clock/reset/pins relevant to a fault;
+- inspect I2C/SPI/UART or interrupt behavior when applicable;
+- use multimeter/scope/logic/JTAG/SWD evidence where it discriminates hypotheses;
+- trace one HW signal/configuration issue into software behavior.
+
+No requirement to demonstrate broad board-bring-up mastery across multiple SoCs.
+
+## Git / engineering workflow — L3
+
+Must demonstrate actual use of:
+
+- feature branch;
 - atomic commits;
-- rebase;
+- rebase or equivalent history cleanup;
 - conflict resolution;
-- `git bisect` on a seeded regression;
-- patch/PR;
-- review revision;
-- release tag.
+- `git bisect` on a seeded or real regression;
+- PR/review revision;
+- release/tag or reproducible milestone.
 
-## Algorithms
+An upstream Linux/U-Boot/Buildroot contribution is **SHOULD**, not Gate-required.
 
-No competitive-programming requirement.
+## Algorithms / interview fundamentals — L2-L3
 
-Required basics:
+Must handle a selected set covering:
 
 - array/string;
 - linked list;
@@ -785,43 +1018,50 @@ Required basics:
 - hash table;
 - binary search;
 - bit operations;
-- simple trees;
-- BFS/DFS basics;
-- Big-O.
+- basic tree/BFS/DFS;
+- Big-O reasoning.
 
-Target roughly 20–30 selected easy/medium problems written cleanly in C/C++.
+Target roughly **20–30 curated easy/medium problems**, adjusted downward if interview performance is already clearly demonstrated. Problem count is not the Gate by itself.
 
-## English
+## Technical English — L2-L3
 
 Must:
 
-- read kernel documentation without full translation;
-- read datasheet/TRM;
-- interpret English job descriptions;
-- read patch/RFC discussion at a basic level;
-- write one English README;
-- write one English root-cause summary;
-- explain a driver architecture orally for 5–10 minutes.
+- read kernel/device documentation without full translation;
+- read an English JD;
+- write a concise English README section or root-cause summary;
+- explain the selected driver architecture in English for approximately 5 minutes.
 
-## Portfolio
+Reading mailing-list RFC/patch discussion is useful but belongs to SHOULD/upstream-workflow scope.
 
-Minimum:
+## Portfolio minimum
 
-- Linux systems project;
-- STM32/FreeRTOS project;
-- real-device Linux driver;
-- Zynq capstone completed or at least a stable prototype as differentiator.
+MUST evidence:
 
-Each serious project must contain:
+1. one Linux systems-programming artifact or compact project showing process/FD/debug capability;
+2. one measured STM32/FreeRTOS artifact;
+3. **one real Linux subsystem driver project** with root-cause evidence.
 
-- architecture;
-- reproducible build;
-- test plan;
-- debug story;
-- measurements where relevant;
+Every serious artifact should include:
+
+- build/reproduction instructions;
+- architecture/data-flow explanation;
+- test or verification plan;
+- at least one debug story;
 - known limitations;
-- demo evidence;
-- clean Git history.
+- clean enough Git history to review.
+
+### Non-blocking differentiators
+
+The following strengthen the portfolio but are **not required to pass**:
+
+- Zynq AXI capstone;
+- Yocto orientation;
+- upstream contribution workflow;
+- C++ L2;
+- additional xv6 labs;
+- deep U-Boot/Buildroot work;
+- deeper perf/ftrace analysis.
 
 ---
 
@@ -949,11 +1189,13 @@ Therefore:
 - Project 4 uses Zynq to differentiate.
 - Failure to finish AXI DMA v2 must **not** invalidate internship readiness.
 
-## 8. Raspberry Pi 5 should not be forced to serve every lab
+## 8. Board choice must remain an evidence task, not a purchase conclusion
 
-Keep Pi 5 for Linux, kernel build, tracing, modules and general experiments.
+Do not force Raspberry Pi 5, K230 or Zynq-7020 to serve every lab, but also do not assume a new board is required.
 
-For a single additional canonical driver-lab board, evaluate BeaglePlay because current Bootlin driver labs explicitly support it. Do not buy multiple boards without a defined experiment.
+Before Project 3 hardware is frozen, run the **Future Board Selection Research Task** defined in Part 7. It must compare the existing Raspberry Pi 5, K230-class board and Zynq-7020 against BeaglePlay and at most 1–2 justified additional candidates.
+
+BeaglePlay is only a **candidate**. No canonical purchase recommendation is made in this report.
 
 ## 9. Software-quality engineering is underweighted
 
@@ -977,7 +1219,7 @@ These distinguish an engineering project from a tutorial reproduction.
 
 Do not turn the curriculum into C++-first.
 
-Before internship, target approximately L2:
+C++ L2 is a **SHOULD differentiator**, not an Internship Gate requirement. If schedule health allows, target approximately L2:
 
 - references;
 - object lifetime/basic RAII;
@@ -990,11 +1232,11 @@ This is enough to reduce job-screening risk without stealing the C/kernel main l
 
 ## 11. Upstream contribution must not become a vanity KPI
 
-The Gate should require the workflow:
+A SHOULD-level upstream exercise should demonstrate the workflow:
 
 `find subsystem guidance -> make a justified change -> build/test -> style/checkpatch as applicable -> commit message -> format patch/PR -> review response`.
 
-A merged patch is a bonus, not a course pass condition.
+A merged patch is a bonus. The entire upstream exercise is non-blocking for the Internship Gate.
 
 ## 12. Job-sample limitations
 
@@ -1008,7 +1250,7 @@ Do not convert the qualitative matrix in this report into precise percentages wi
 
 - No proposed baseline task has been executed by the learner yet.
 - No proposed project has been built from this research package.
-- No BeaglePlay purchase is authorized by this package; it is a recommendation to evaluate.
+- No board purchase is authorized or recommended by this package; BeaglePlay is only one candidate for the future board-selection study.
 - Exact Linux 6.18.y **tutorial patch version** remains intentionally unset until lab validation.
 - xv6 exact commit remains intentionally unset until the selected 6.1810 labs are frozen.
 - License strings above are project-level guidance; each copied code excerpt or vendored component must still receive per-file/per-component license review.
@@ -1020,6 +1262,8 @@ Do not convert the qualitative matrix in this report into precise percentages wi
 
 The central change is:
 
-`Foundations + architecture spine -> RTOS mechanism -> Embedded Linux early -> Linux Driver early -> real subsystem driver -> BSP -> Zynq co-design`.
+`Foundations + architecture spine -> RTOS mechanisms -> Embedded Linux boot chain -> Kernel fundamentals -> one real subsystem driver -> interview/portfolio Gate`.
+
+Zynq co-design remains a high-value **SHOULD** differentiator after the MUST chain is safe.
 
 The pre-internship goal should be **verified capability across a small number of deep chains**, not completion of every advanced embedded topic.
