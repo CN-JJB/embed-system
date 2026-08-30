@@ -113,6 +113,7 @@ TIM3 update
 
 The intended design is:
 
+- the ADC clock is already within the datasheet limit and ADC1 has completed the required power-up/calibration readiness steps;
 - TIM3 TRGO drives ADC1 external regular conversion;
 - ADC1 conversion result is transferred from `ADC1_DR`;
 - DMA writes halfword samples into SRAM;
