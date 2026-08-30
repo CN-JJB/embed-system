@@ -1,0 +1,49 @@
+# STM32F103C8T6 — seeded Timer -> ADC -> DMA snapshot
+#
+# Goal:
+#   TIM3 update -> ADC1 regular conversion -> DMA1 -> uint16_t samples[32]
+#
+# Assume:
+#   - clocks to TIM3, ADC1 and DMA1 have been enabled
+#   - samples[] is aligned SRAM storage
+#   - ADC input pin is configured as analog
+#
+# Values below are a deliberately inconsistent proposed configuration.
+# Use RM0008 to identify the causal mistakes and design discriminating checks.
+
+Clock summary:
+  HCLK  = 72 MHz
+  PCLK1 = 36 MHz
+  PCLK2 = 72 MHz
+
+TIM3:
+  PSC       = 71
+  ARR       = 999
+  CR2.MMS   = 010        # update event selected as TRGO
+  CR1.CEN   = 1
+
+ADC1:
+  SQR1.L    = 0          # one regular conversion
+  SQR3.SQ1  = 5          # ADC channel 5
+  CR2.EXTTRIG = 1
+  CR2.EXTSEL  = 111      # deliberately not TIM3_TRGO
+  CR2.DMA     = 0        # deliberately disabled
+  CR2.ADON    = 1
+
+DMA1 proposed channel:
+  Channel = 3            # verify mapping for ADC1 on this MCU
+  CPAR    = &ADC1_DR
+  CMAR    = &samples[0]
+  CNDTR   = 32
+  CCR.DIR   = 1          # deliberately memory->peripheral
+  CCR.CIRC  = 0
+  CCR.PINC  = 0
+  CCR.MINC  = 1
+  CCR.PSIZE = 10         # deliberately 32-bit
+  CCR.MSIZE = 10         # deliberately 32-bit
+  CCR.EN    = 1
+
+Observed symptom supplied to learner:
+  - samples[] remains at its initialization pattern
+  - no DMA transfer-complete flag is observed in the proposed channel
+  - no hardware measurement has been performed
