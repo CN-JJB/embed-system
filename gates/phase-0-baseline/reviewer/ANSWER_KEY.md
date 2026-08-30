@@ -90,6 +90,7 @@ See `reviewer/reference/event_bus.c`.
 
 The reference uses:
 
+- a deliberately non-re-entrant baseline contract: callback-driven register/unregister/destroy during `emit` is outside the scored scope;
 - `calloc()` for owned state;
 - non-zero registration tokens;
 - inactive slot represented by `handler == NULL`;
@@ -666,6 +667,8 @@ Whether the learner understands MMIO as a hardware contract rather than a keywor
 ### Expected reasoning
 
 The supplied snapshot deliberately breaks multiple links in the path.
+
+The fixture explicitly assumes that ADC clock prescaling and ADC power-up/calibration readiness are already valid. Those are important real bring-up checks, but they are not hidden seeded faults in this 25-minute exercise.
 
 High-priority findings should include:
 
