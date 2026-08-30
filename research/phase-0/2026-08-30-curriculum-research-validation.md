@@ -1256,14 +1256,14 @@ Do not convert the qualitative matrix in this report into precise percentages wi
 - License strings above are project-level guidance; each copied code excerpt or vendored component must still receive per-file/per-component license review.
 - The job matrix is qualitative and evidence-weighted, not a market census.
 
-## Researcher Recommendation
+## Researcher Recommendation — v1.2
 
-**APPROVE the career direction, but require MAJOR REVISION of the schedule before canonicalization.**
+**APPROVE the revised Phase 0 research package for Leader canonicalization work.**
 
-The central change is:
+The validated pre-internship main chain is:
 
 `Foundations + architecture spine -> RTOS mechanisms -> Embedded Linux boot chain -> Kernel fundamentals -> one real subsystem driver -> interview/portfolio Gate`.
 
 Zynq co-design remains a high-value **SHOULD** differentiator after the MUST chain is safe.
 
-The pre-internship goal should be **verified capability across a small number of deep chains**, not completion of every advanced embedded topic.
+The pre-internship goal remains **verified capability across a small number of deep chains**, not completion of every advanced embedded topic.
