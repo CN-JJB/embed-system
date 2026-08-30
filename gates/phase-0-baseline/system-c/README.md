@@ -56,7 +56,8 @@ Required semantics:
 - reject invalid arguments and capacity exhaustion cleanly;
 - `event_bus_destroy(&bus)` releases owned storage and sets the caller's pointer to `NULL`;
 - the bus **borrows** `ctx`; it never frees or copies the pointed-to object;
-- `data` passed to `event_bus_emit` is read-only and valid only for the duration of the call unless the caller documents a longer lifetime.
+- `data` passed to `event_bus_emit` is read-only and valid only for the duration of the call unless the caller documents a longer lifetime;
+- callback-driven mutation of the bus (register/unregister/destroy from inside a handler) is **out of scope for this baseline**. You may reject/document it or leave it unsupported; you are not graded on re-entrant mutation semantics.
 
 ### Explain in your submission
 
