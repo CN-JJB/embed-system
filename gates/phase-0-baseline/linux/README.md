@@ -56,7 +56,7 @@ Use evidence from at least:
 
 - `ps`
 - `/proc/<pid>/fd` (or equivalent `/proc` inspection)
-- `strace` (attach or start-under-trace, depending on local ptrace policy)
+- `strace` from process start for the lifecycle syscalls. Attaching after the program reaches its final `pause()` can still inspect the current blocked state, but it cannot reconstruct earlier `pipe/fork/read` history; restart the fixture under `strace` when historical syscall evidence is needed.
 
 Answer:
 
