@@ -19,7 +19,7 @@ This preserves the approved v1.2 allocation by treating A+B as the original 25-p
 A Baseline pass requires **all** of the following:
 
 - total score **>= 70/100**;
-- A+B combined (System C + toolchain) **>= 17/25** (at least 65% after integer rounding);
+- A+B combined (System C + toolchain) **>= 17/25** (68%; the smallest integer threshold above the intended ~65% floor);
 - Debugging **>= 17/25**;
 - no individual module below 50%: A >= 8/15, B >= 5/10, C >= 10/20, D >= 13/25, E >= 8/15, F >= 8/15;
 - at least **3 of 4 Debugging faults** reach the actual root cause with evidence;
