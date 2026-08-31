@@ -9,7 +9,7 @@
 
 ## Inputs and constraints
 
-This design is constrained by the repository governance, source/resource/lab/review/AI/version/maintenance policies, the canonical resource registry, Phase 0 curriculum research v1.2, and the approved-but-not-yet-merged Phase 0 Baseline branch `assessment/phase-0-baseline` (PR #2, Leader disposition: APPROVED WITH MINOR FIXES APPLIED). It intentionally does **not** modify Phase 0 Baseline.
+This design is constrained by the repository governance, source/resource/lab/review/AI/version/maintenance policies, the canonical resource registry, Phase 0 curriculum research v1.2, and the Leader-approved Phase 0 Baseline content from PR #2. Once canonicalized, that assessment lives at `gates/phase-0-baseline/`; this Phase 1 design consumes its approved capability/evidence model but does **not** modify the Baseline.
 
 Phase 0 already diagnoses pointer/lifetime defects, callback + `void *ctx`, compile/link/ELF failures, `fork/pipe/dup2/exec/waitpid`, FD/zombie investigation, memory corruption, pthread race, linking faults, ABI reasoning, and STM32 reasoning. Therefore Phase 1 must not repeat the diagnostic as a larger quiz. It must convert those same foundations into durable, independently executable engineering capability.
 
@@ -634,7 +634,7 @@ Checked 2026-08-31 unless noted. Version-sensitive tutorial publication must pin
 | S14 | BusyBox upstream | BusyBox | upstream source | `coreutils/cat.c`, selected normal path | real embedded Linux utility/FD path |
 | S15 | strace manual/upstream docs | strace project | official upstream docs | syscall tracing/filtering/follow-fork basics | process/FD evidence |
 | S16 | Phase 0 Curriculum Research & Validation | this repo | approved research input | `research/phase-0/2026-08-30-curriculum-research-validation.md` v1.2 | career priorities, time-buffer philosophy |
-| S17 | Phase 0 Baseline Assessment approved branch | this repo | approved gate input | `assessment/phase-0-baseline` head at 2026-08-31; PR #2 approved with minor fixes | avoid duplicate diagnostic; calibrate Phase 1 evidence expectations |
+| S17 | Phase 0 Baseline Assessment | this repo | approved gate input | PR #2 Leader-approved content; canonical path `gates/phase-0-baseline/` after merge | avoid duplicate diagnostic; calibrate Phase 1 evidence expectations |
 | S18 | Editorial policies | this repo | governance | `.editorial/*` required files | source hierarchy, lab/gate/AI/version/maintenance rules |
 
 ## Web/source checks performed for this design
