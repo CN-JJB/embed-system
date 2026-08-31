@@ -1,0 +1,6 @@
+flowchart LR
+  E["emitter"] --> F["function pointer: behavior"]
+  E --> C["void *ctx: object/state"]
+  F --> I["synchronous invocation"]
+  C --> I
+  I --> R["borrowed record valid for call only"]
