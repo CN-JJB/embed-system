@@ -86,6 +86,15 @@ static int install_handlers(void)
     return sigaction(SIGTERM, &sa, NULL) == 0 && sigaction(SIGINT, &sa, NULL) == 0 ? 0 : -1;
 }
 
+static int reset_child_stop_signals(void)
+{
+    struct sigaction sa;
+    sa.sa_handler = SIG_DFL;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    return sigaction(SIGTERM, &sa, NULL) == 0 && sigaction(SIGINT, &sa, NULL) == 0 ? 0 : -1;
+}
+
 int main(int argc, char **argv)
 {
     int pipefd[2];
@@ -115,6 +124,11 @@ int main(int argc, char **argv)
     }
     if (producer == 0) {
         (void)close(pipefd[0]);
+        /*
+         * The parent owns stop-request handling. This child does not exec,
+         * so it would otherwise inherit the parent's caught dispositions.
+         */
+        if (reset_child_stop_signals() != 0) _exit(126);
         producer_loop(pipefd[1], slow);
     }
 
@@ -149,8 +163,8 @@ int main(int argc, char **argv)
         break;
     }
 
-    (void)close(pipefd[0]);
     if (stop_requested) (void)kill(producer, SIGTERM);
+    (void)close(pipefd[0]);
     while (waitpid(producer, &status, 0) < 0) {
         if (errno != EINTR) {
             perror("waitpid");
