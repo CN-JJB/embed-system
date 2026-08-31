@@ -192,6 +192,8 @@ M01 的 `span_u8` 默认是 **non-owning view**：它描述 `data + len` 的可�
 4. `d++ / s++`、`d[n] / s[n]` 在哪里体现 pointer arithmetic；
 5. word-at-a-time / alignment branch 为什么是 implementation optimization。
 
+**Portability warning:** 这是 libc implementation source，不是普通应用 C 的“可直接照抄范式”。Pinned musl 代码包含 address-to-integer reasoning，并在受控路径里使用 pointer ordering 来决定方向；这些写法依赖 musl 支持的 compiler/ABI implementation assumptions。不要从这里推出“任意两个无关 object pointer 都可以在 strictly portable ISO C 中随意做 `<` / `>` 比较”。
+
 阅读问题：
 
 - 为什么 overlap 会改变 copy direction？
