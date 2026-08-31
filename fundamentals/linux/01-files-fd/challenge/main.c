@@ -11,9 +11,12 @@
 static int parse_limit(const char *s, uintmax_t *out)
 {
     char *end = NULL;
+    if (s == NULL || out == NULL || *s == '\0' || *s == '-') return -1;
+
     errno = 0;
     uintmax_t v = strtoumax(s, &end, 10);
     if (errno == ERANGE || end == s || *end != '\0') return -1;
+
     *out = v;
     return 0;
 }
