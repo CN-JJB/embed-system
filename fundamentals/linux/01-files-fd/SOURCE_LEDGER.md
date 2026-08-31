@@ -1,6 +1,6 @@
 # P1-M02 Source Ledger
 
-> Checked: **2026-08-30**. Linux API facts are grounded in current Linux man-pages; source reading pins a release/commit instead of following moving master.
+> Checked: **2026-08-30**. Tutorial API references are deliberately pinned to the **man-pages 6.18** snapshot rendered by the cited man7 pages; the man-pages project released 6.19 later in August 2026, so “pinned tutorial baseline” and “latest upstream release” are kept separate. Source reading also pins a release/commit instead of following moving master.
 
 | ID | Title | Organization / Author | Type | URL | Version / exact section/path | Why used |
 |---|---|---|---|---|---|---|
@@ -23,10 +23,10 @@
 - Release artifact: `busybox-1.38.0.tar.bz2` from `busybox.net/downloads/`.
 - Upstream-tag caveat: contemporaneous BusyBox mailing-list discussion states the `1_38_0` git tag was not present at release time. This tutorial therefore **does not invent a tag**.
 - Exact source cross-check pin: maintainer mirror commit `fc71374dfccd46448c62947269a35f1420d7ee28`.
-- License: **GPL-2.0-only** for this release (`LICENSE`).
-- `coreutils/cat.c`: 217 physical lines; blob cross-check `558869b2a721998d410183b0ef4714d6f3848060`.
-- `libbb/bb_cat.c`: 33 physical lines; actual `bb_cat()` implementation; blob `0a4a350fb3f22a6397b09f33a325b32dd1f88c90`.
-- `libbb/copyfd.c`: 162 physical lines; `bb_copyfd_eof()` → copy helper; blob `7f9d92ea95db796efd30ea1acca6797d63f3b1b4`.
+- Project distribution includes the BusyBox `LICENSE`; **file-level notices are recorded separately rather than flattened into one SPDX-style claim**.
+- `coreutils/cat.c`: 217 physical lines; header says “Licensed under GPLv2”; blob cross-check `558869b2a721998d410183b0ef4714d6f3848060`.
+- `libbb/bb_cat.c`: 33 physical lines; header says “Licensed under GPLv2”; actual `bb_cat()` implementation; blob `0a4a350fb3f22a6397b09f33a325b32dd1f88c90`.
+- `libbb/copyfd.c`: 162 physical lines; header says “Licensed under GPLv2 or later”; `bb_copyfd_eof()` → copy helper; blob `7f9d92ea95db796efd30ea1acca6797d63f3b1b4`.
 - Teaching use: normal `cat_main → bb_cat → bb_copyfd_eof` data/error path only. Kconfig/applet generation, feature-macro matrix, sendfile optimization and build internals are explicitly out of scope.
 
 ## Copyright / license note
