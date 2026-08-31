@@ -1,0 +1,7 @@
+flowchart TD
+    E[ELF file] -->|exec| P[process]
+    P --> PID[PID]
+    P --> AS[address space]
+    P --> FD[FD table]
+    P --> AE[argv / environment]
+    P --> XS[execution state]
