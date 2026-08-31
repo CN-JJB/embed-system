@@ -2,7 +2,6 @@
 #include <errno.h>
 #include <signal.h>
 #include <stdio.h>
-#include <stdlib.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -20,7 +19,8 @@ static int install_handlers(void)
     sa.sa_handler = on_signal;
     sigemptyset(&sa.sa_mask);
     sa.sa_flags = 0;
-    return sigaction(SIGTERM, &sa, NULL) == 0 && sigaction(SIGINT, &sa, NULL) == 0 ? 0 : -1;
+    return sigaction(SIGTERM, &sa, NULL) == 0 &&
+           sigaction(SIGINT, &sa, NULL) == 0 ? 0 : -1;
 }
 
 static void close_if_open(int *fd)
@@ -33,9 +33,7 @@ static void close_if_open(int *fd)
 
 static void request_child_stop(pid_t pid)
 {
-    if (pid > 0) {
-        (void)kill(pid, SIGTERM);
-    }
+    if (pid > 0) (void)kill(pid, SIGTERM);
 }
 
 static int reap_child(pid_t pid, const char *name)
@@ -43,20 +41,16 @@ static int reap_child(pid_t pid, const char *name)
     int status;
     pid_t r;
 
-    if (pid <= 0) {
-        return 0;
-    }
-    do {
-        r = waitpid(pid, &status, 0);
-    } while (r < 0 && errno == EINTR && !stop_requested);
+    if (pid <= 0) return 0;
+    if (stop_requested) request_child_stop(pid);
 
-    if (r < 0 && errno == EINTR && stop_requested) {
-        request_child_stop(pid);
-        do {
-            r = waitpid(pid, &status, 0);
-        } while (r < 0 && errno == EINTR);
-    }
-    if (r < 0) {
+    for (;;) {
+        r = waitpid(pid, &status, 0);
+        if (r >= 0) break;
+        if (errno == EINTR) {
+            if (stop_requested) request_child_stop(pid);
+            continue;
+        }
         perror("waitpid");
         return -1;
     }
@@ -92,9 +86,7 @@ int main(void)
         return 2;
     }
     if (consumer == 0) {
-        if (dup2(pipefd[0], STDIN_FILENO) < 0) {
-            _exit(126);
-        }
+        if (dup2(pipefd[0], STDIN_FILENO) < 0) _exit(126);
         if (pipefd[0] != STDIN_FILENO) (void)close(pipefd[0]);
         if (pipefd[1] != STDIN_FILENO) (void)close(pipefd[1]);
         execl("./consumer", "consumer", (char *)NULL);
@@ -111,9 +103,7 @@ int main(void)
         return 2;
     }
     if (producer == 0) {
-        if (dup2(pipefd[1], STDOUT_FILENO) < 0) {
-            _exit(126);
-        }
+        if (dup2(pipefd[1], STDOUT_FILENO) < 0) _exit(126);
         if (pipefd[0] != STDOUT_FILENO) (void)close(pipefd[0]);
         if (pipefd[1] != STDOUT_FILENO) (void)close(pipefd[1]);
         execl("./producer", "producer", (char *)NULL);
@@ -123,15 +113,9 @@ int main(void)
     close_if_open(&pipefd[0]);
     close_if_open(&pipefd[1]);
 
-    if (reap_child(producer, "producer") != 0) {
-        rc = 1;
-    }
-    if (stop_requested) {
-        request_child_stop(consumer);
-    }
-    if (reap_child(consumer, "consumer") != 0) {
-        rc = 1;
-    }
+    if (reap_child(producer, "producer") != 0) rc = 1;
+    if (stop_requested) request_child_stop(consumer);
+    if (reap_child(consumer, "consumer") != 0) rc = 1;
 
     puts("supervisor: normal-context cleanup complete");
     return rc;

@@ -31,7 +31,7 @@ static int parse_record(char *line, struct record *out)
     long value;
     if (line == NULL || out == NULL) return EINVAL;
     eq = strchr(line, '=');
-    if (eq == NULL || eq == line || strlen(line) >= sizeof out->name + 24U) return EINVAL;
+    if (eq == NULL || eq == line) return EINVAL;
     *eq = '\0';
     if (strlen(line) >= sizeof out->name) return EINVAL;
     errno = 0;
@@ -97,38 +97,67 @@ int main(int argc, char **argv)
     int parse_failures = 0;
     int status;
 
-    if ((argc > 2) || (argc == 2 && !slow)) { fprintf(stderr, "usage: %s [--slow]\n", argv[0]); return 2; }
-    if (install_handlers() != 0 || pipe(pipefd) != 0) { perror("setup"); return 2; }
+    if ((argc > 2) || (argc == 2 && !slow)) {
+        fprintf(stderr, "usage: %s [--slow]\n", argv[0]);
+        return 2;
+    }
+    if (install_handlers() != 0 || pipe(pipefd) != 0) {
+        perror("setup");
+        return 2;
+    }
 
     producer = fork();
-    if (producer < 0) { perror("fork"); (void)close(pipefd[0]); (void)close(pipefd[1]); return 2; }
-    if (producer == 0) { (void)close(pipefd[0]); producer_loop(pipefd[1], slow); }
+    if (producer < 0) {
+        perror("fork");
+        (void)close(pipefd[0]);
+        (void)close(pipefd[1]);
+        return 2;
+    }
+    if (producer == 0) {
+        (void)close(pipefd[0]);
+        producer_loop(pipefd[1], slow);
+    }
 
     (void)close(pipefd[1]);
-    pipefd[1] = -1;
     while (!stop_requested) {
         char ch;
         ssize_t n = read(pipefd[0], &ch, 1U);
         if (n == 1) {
-            if (used + 1U >= sizeof line) { fprintf(stderr, "line too long\n"); parse_failures = 1; break; }
+            if (used + 1U >= sizeof line) {
+                fprintf(stderr, "line too long\n");
+                parse_failures = 1;
+                break;
+            }
             line[used++] = ch;
             if (ch == '\n') {
                 line[used] = '\0';
-                if (emit_line(line, stats_sink, &stats) != 0) { fprintf(stderr, "record rejected\n"); parse_failures = 1; }
+                if (emit_line(line, stats_sink, &stats) != 0) {
+                    fprintf(stderr, "record rejected\n");
+                    parse_failures = 1;
+                }
                 used = 0;
             }
             continue;
         }
         if (n == 0) break;
-        if (errno == EINTR) { if (stop_requested) break; continue; }
-        perror("read"); parse_failures = 1; break;
+        if (errno == EINTR) {
+            if (stop_requested) break;
+            continue;
+        }
+        perror("read");
+        parse_failures = 1;
+        break;
     }
 
     (void)close(pipefd[0]);
     if (stop_requested) (void)kill(producer, SIGTERM);
     while (waitpid(producer, &status, 0) < 0) {
-        if (errno != EINTR) { perror("waitpid"); return 2; }
+        if (errno != EINTR) {
+            perror("waitpid");
+            return 2;
+        }
     }
-    printf("stats: count=%zu sum=%ld stop=%s\n", stats.count, stats.sum, stop_requested ? "yes" : "no");
+    printf("stats: count=%zu sum=%ld stop=%s\n",
+           stats.count, stats.sum, stop_requested ? "yes" : "no");
     return parse_failures ? 1 : 0;
 }
