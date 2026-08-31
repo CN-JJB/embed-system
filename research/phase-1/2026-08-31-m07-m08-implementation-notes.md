@@ -178,6 +178,23 @@ A casual close-helper pattern that could distract with `close(2)`/EINTR semantic
 
 The fixture writes a `uint32_t` host representation into bytes and compares against the declared LE golden vector. On this authoring host they match, which is itself the teaching point: same-host success is not a portability proof.
 
+## Leader review S1 corrections
+
+### 1. Failure-state regression must compare semantic fields, not whole struct bytes
+
+The initial M07 challenge and Gate reviewer regressions used whole-struct `memcmp()` to check that decode failure left the destination unchanged. That contradicts this module's own object-representation lesson: struct padding bytes can take unspecified values and structure assignment need not preserve padding bytes.
+
+Leader correction:
+
+- compare protocol/record fields member-by-member for semantic output-state equality;
+- keep `memcmp()` only for byte arrays whose representation is the actual wire contract.
+
+The corrected challenge reviewer regression and M07 Gate reference were rebuilt and executed with strict warnings during review.
+
+### 2. M07 Gate reference now states the 8-bit-octet support contract
+
+The challenge reference already had `_Static_assert(CHAR_BIT == 8, ...)`, but the Gate reference used 8-bit shift/offset logic without the same explicit support boundary. Leader added the same octet-width assertion so the reference implementation and tutorial contract agree.
+
 ## Source pins
 
 ### C / WG14
