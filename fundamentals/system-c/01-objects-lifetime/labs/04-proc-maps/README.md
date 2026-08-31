@@ -28,6 +28,8 @@ make clean && make
 
 ## Procedure
 
+> **Host/ABI note:** 本实验为了把 function address 与 Linux mapping 对照，会把 function pointer 转成整数地址用于查询。这是 **Linux/WSL target 上的 implementation/ABI-level observation**，不要把它当成 strictly portable ISO C 对 function-pointer representation 的保证。
+
 1. 预测 5 个地址会落在哪类 mapping，特别写下你对 function/static/global 的猜测。
 2. 运行：
 
