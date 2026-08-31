@@ -1,0 +1,8 @@
+flowchart TB
+    H[high address] --> S[stack-like mapping]
+    S --> D1[...]
+    D1 --> M[shared / file / anonymous mappings]
+    M --> HP[heap-ish mapping]
+    HP --> WD[writable image data]
+    WD --> RX[executable / read-only image]
+    RX --> L[low address]

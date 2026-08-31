@@ -1,0 +1,4 @@
+flowchart LR
+    P["process"] --> T["FD table\n0 stdin\n1 stdout\n2 stderr\n3 ..."]
+    T -->|"FD 3"| O["open-file state\ncurrent offset\nstatus flags\nreference state"]
+    O --> F["filesystem object"]
