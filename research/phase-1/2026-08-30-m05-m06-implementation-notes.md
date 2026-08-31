@@ -135,8 +135,25 @@ This preserves the intended lifetime fault while keeping the seeded source `-Wer
 | Gate reviewer normal | strict build; EOF arrives; both children reaped | **VERIFIED** |
 | Gate reviewer SIGTERM | fixture-controlled slow path; stop request handled by normal context; children terminated/reaped | **VERIFIED** |
 | M05↔M06 integration normal | strict build; four records → synchronous callback → stats | **VERIFIED** |
-| M05↔M06 integration SIGTERM | slow mode + external SIGTERM; normal context closes/stops/waits/reports | **VERIFIED** |
+| M05↔M06 integration SIGTERM | authoring path completed; Leader post-review found the non-exec producer inherited the supervisor SIGTERM handler, fixed child disposition reset + stop-before-close ordering, then re-ran shutdown and observed producer termination by SIGTERM | **VERIFIED after Leader S1 fix** |
 | all M06 strace evidence | tool absent | **UNVERIFIED** |
+
+## Leader post-review S1 correction — non-exec child signal disposition
+
+The integration exercise installed SIGINT/SIGTERM handlers before `fork()`. Because its producer child does **not** call `exec`, it inherited the supervisor's caught dispositions. The parent later sent SIGTERM, but the child handler merely set the child's private `stop_requested`; `producer_loop()` did not consume that flag. The original path could therefore appear to shut down only because closing the parent's read end caused a later producer write to receive SIGPIPE.
+
+Leader correction:
+
+```text
+fork
+→ child restores SIGINT/SIGTERM to SIG_DFL
+→ parent receives stop request
+→ parent sends SIGTERM while read end is still open
+→ child terminates by the declared stop signal
+→ parent closes/reaps/reports
+```
+
+Leader re-ran the corrected source with strict warnings. The parent completed normally and the producer wait status showed **termination by SIGTERM (15)**. This verification is explicitly post-review evidence; it does not retroactively claim the original authoring run proved the same mechanism.
 
 ## Important M06 authoring correction — `dup2(oldfd == newfd)`
 
