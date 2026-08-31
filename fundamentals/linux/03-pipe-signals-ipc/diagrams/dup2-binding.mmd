@@ -1,0 +1,5 @@
+
+flowchart LR
+    O["oldfd = pipe write descriptor"] --> OFD["pipe write open-file description"]
+    N["newfd = 1 (stdout)"] -->|"after dup2"| OFD
+    O -->|"still open until close(oldfd)"| OFD

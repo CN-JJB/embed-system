@@ -1,0 +1,8 @@
+
+flowchart LR
+    P["parent fd table"] --> R["pipe read endpoint"]
+    P --> W["pipe write endpoint"]
+    C1["producer child"] --> W
+    C2["consumer child"] --> R
+    W --> K["kernel byte stream"]
+    K --> R

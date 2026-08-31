@@ -1,0 +1,4 @@
+flowchart LR
+  O["owned object"] -->|"borrow pointer"| B["callee / callback"]
+  B -->|"must not release or retain past contract"| O
+  O -->|"transfer only when API says so"| N["new owner"]
