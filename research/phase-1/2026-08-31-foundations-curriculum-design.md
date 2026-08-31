@@ -27,12 +27,13 @@ Every module uses the repository chapter arc: Why -> Mental Model -> Minimal The
 
 ## Planned scope
 
-- **Mandatory:** 10 modules, about **61 h** total.
-- **SHOULD:** about 8–12 h of selective reading/reconstruction, used only if schedule remains healthy.
+- **Core modules + distributed integration project:** about **62 h MUST**.
+- **Phase 1 Final Gate:** an additional **5–6 h MUST**, for about **67–68 h total mandatory planned work**.
+- **SHOULD:** selective reading/reconstruction only when the rolling buffer remains healthy; these hours are not pre-committed.
 - **STRETCH:** optional source archaeology, static analysis, and deeper socket/process variants.
-- **Calendar:** 7 weeks recommended; 6 weeks is possible for a strong Phase 0 result, 8 weeks for remediation/gate retry.
-- **Weekly planned load:** generally **8–9.5 h**, never filling the nominal 14 h/week gross capacity.
-- **Unscheduled buffer:** approximately 4.5–6 h/week remains for school workload, debugging, failed labs, Gate retry, reading spillover, and project rework.
+- **Calendar:** 7 weeks recommended; 6 weeks is possible only for a strong Phase 0 result, 8 weeks for remediation/gate retry.
+- **Weekly planned load:** roughly **9–10 h average including the Final Gate**, never filling the nominal 14 h/week gross capacity.
+- **Unscheduled buffer:** roughly 4 h/week on average remains for school workload, debugging, failed labs, Gate retry, reading spillover, and project rework.
 
 ## Phase exit capability
 
@@ -251,10 +252,10 @@ Sequence implication: files/FDs appear before process pipelines; linking appears
 **Career relevance:** RTOS/Kernel/Driver/Linux 5/5; Firmware/BSP/SoC 4/5.  
 **Prerequisites:** M01, M04, M05, M08.  
 **Target depth:** L3.  
-**Concepts:** process vs thread resource sharing; `pthread_create/join`; mutex ownership; critical section; race/data race; deadlock/lock misuse; condition variable only SHOULD if project queue requires blocking.  
+**Concepts:** process vs thread resource sharing; `pthread_create/join`; mutex ownership; critical section; race/data race; deadlock/lock misuse; minimal condition-variable wait/signal semantics. Because the integration project uses a blocking producer/consumer queue, the **minimal condition-variable pattern is MUST for that bounded scope**; broader condition-variable API coverage remains SHOULD.  
 **Canonical sources:** Official: `pthread_create(3)`, `pthread_join(3)`, `pthread_mutex_lock(3p)`/POSIX equivalent; TLPI Ch. 29 and Ch. 30 selected mutex sections; OSTEP Ch. 26 and Ch. 28 selected.  
 **Required reading:** TLPI Ch. 29 §§thread model/create/join; Ch. 30 mutex fundamentals; OSTEP concurrency intro and locks.  
-**Lab:** parallel counters and queue access; reproduce lost updates; repair with mutex; run TSan; deliberately create lock-order misuse or self-deadlock in a tiny fixture.  
+**Lab:** parallel counters and queue access; reproduce lost updates; repair with mutex; run TSan; implement one predicate + mutex + condition-variable wait loop for the bounded queue; deliberately create lock-order misuse or self-deadlock in a tiny fixture.  
 **Observation:** shared address space changes ownership assumptions; “works repeatedly” is not evidence of race freedom; synchronization establishes constraints `volatile` does not.  
 **Challenge:** define and document lock ownership for two shared fields without coarse global locking everywhere.  
 **Fault injection:** race + one deadlock/lock misuse.  
@@ -278,12 +279,12 @@ Sequence implication: files/FDs appear before process pipelines; linking appears
 **Fault injection:** FD leak + shutdown hang + queue race or bad record length.  
 **Debug skills:** complete diagnostic loop and tool selection.  
 **Gate:** project acceptance + Final Gate components, not “demo runs once”.  
-**Estimated hours:** 9.5 h mandatory project work counted across weeks (not an extra ninth-week block).  
+**Estimated hours:** about 10.5 h mandatory project work counted across weeks (not an extra ninth-week block).  
 **AI Mode:** milestone first implementations AI-Free where foundational; AI-Assisted review/docs/tests after working evidence; final project fault gate AI-Free.
 
 ### Module hour total
 
-Core teaching/lab/gate time is about **61 h MUST**. Some M10 hours are distributed during M03–M09 rather than appended after all modules.
+Core module/lab/project time is about **62 h MUST**. The separate Phase 1 Final Gate adds another **5–6 h**, yielding about **67–68 h total mandatory planned work**. Some M10 hours are distributed during M03–M09 rather than appended after all modules.
 
 ---
 
@@ -324,12 +325,12 @@ LOC ranges below are approximate nonblank implementation ranges, intended for as
 
 | Project/object | Upstream / license | Exact path | Expected LOC | Prerequisite | Why suitable | Learning goal |
 |---|---|---|---:|---|---|---|
-| musl `memmove` | `git.musl-libc.org/cgit/musl`; MIT | `src/string/memmove.c` | ~40–60 | pointer/extent/lifetime, integer casts | single function, real overlap constraints, small enough to annotate | reason about source/destination ranges, overlap direction, alignment optimization without copying it |
-| BusyBox `cat` entry path | `git.busybox.net/busybox`; GPL-2.0-only for file/tree convention | `coreutils/cat.c`, focus `cat_main()` normal path and call to `bb_cat` | ~30–60 focused lines inside ~200+ file | FD I/O, argv, errors | real embedded Linux utility with recognizable behavior | map CLI -> argv -> open/read/write abstraction -> exit/error path; learn to ignore unrelated feature macros |
-| musl syscall wrapper comparison | musl; MIT | choose one pinned small wrapper such as `src/unistd/dup2.c` or `src/process/waitpid.c` after tag verification | ~10–30 | syscall/library distinction | shows thin libc boundary without giant glibc internals | distinguish libc API wrapper from kernel mechanism and inspect errno translation contract |
+| musl `memmove` | `git.musl-libc.org/cgit/musl`; MIT | `src/string/memmove.c` | ~30–50 depending pinned revision | pointer/extent/lifetime, integer casts | single function, real overlap constraints, small enough to annotate | reason about source/destination ranges, overlap direction, alignment optimization without copying it |
+| BusyBox `cat` entry path | `git.busybox.net/busybox`; GPL-2.0-only for file/tree convention | `coreutils/cat.c`, focus `cat_main()` and `bb_cat()` normal path | ~30–60 focused lines | FD I/O, argv, errors | real embedded Linux utility with recognizable behavior | map CLI -> argv -> FD copy abstraction -> close/error/exit path; learn to ignore unrelated feature macros |
 
 ## Tier B — recommended selected reading
 
+- One tiny musl libc/syscall-boundary wrapper such as `src/process/waitpid.c` or `src/unistd/dup2.c`. Pin the exact release/commit before assignment; keep it Tier B until the Leader confirms which wrapper best exposes the intended boundary rather than hidden helper complexity.
 - BusyBox `libbb/copyfd.c` selected copy loop after M02, focusing partial read/write/error flow; expected ~100–200 focused LOC.
 - musl `src/stdio/__stdio_read.c` after FD model is solid, to see buffered stdio sitting above descriptors; expected ~20–50 LOC.
 - GNU/coreutils source only for a specific comparison question (e.g. why production `cat` is much more complex), not as first reading target.
@@ -423,8 +424,8 @@ A ring buffer is chosen only when the threaded milestone needs a **bounded FIFO 
 - input: file or stdin; pipe input must work.
 - parser with explicit length/range errors.
 - bounded ring buffer introduced only with worker thread.
-- one worker thread + mutex; condition variable MAY be used if blocking queue design requires it.
-- signal-triggered graceful shutdown, with signal handler doing minimal safe work.
+- one worker thread + mutex + a minimal condition-variable predicate/wait loop for the bounded blocking queue.
+- signal-triggered graceful shutdown with a deliberately narrow safety contract: the asynchronous handler may only set a `volatile sig_atomic_t` stop flag (and preserve `errno` if needed). The main thread reacts at a normal execution boundary, then acquires normal synchronization, marks the queue closed, wakes the worker, joins it, and performs cleanup. Do not call pthread mutex/condition APIs or stdio from the asynchronous handler. A dedicated `sigwait()` design is SHOULD, not required.
 - explicit FD and allocation ownership.
 - logging to stderr/file; no logging framework.
 - unit-style parser/codec tests + one integration script.
@@ -434,16 +435,16 @@ A ring buffer is chosen only when the threaded milestone needs a **bounded FIFO 
 
 ## Milestones
 
-**M0 — contract skeleton (M01/M02, ~1 h):** record struct, parser signature, ownership rules, sample input. AI-Free.  
-**M1 — single-thread parser (M05/M07, ~1.5 h):** parse/validate/serialize tests; no threads/sockets.  
-**M2 — multi-file + Make + ELF inspection (M03, ~1.5 h):** split modules, build modes, inspect symbols/sections.  
-**M3 — FD input + lifecycle (M02/M04, ~1.5 h):** file/stdin/pipe input, error propagation, leak audit.  
-**M4 — bounded ring + worker (M09, ~2 h):** one producer/main thread, one worker, mutex-protected queue/invariants.  
-**M5 — signal shutdown + observability (M06/M08, ~1 h):** SIGINT/SIGTERM request, orderly close/join, strace evidence.  
-**M6 — fault campaign + postmortem (M08/M10, ~1 h):** inject malformed length + FD leak or race/shutdown fault; regression.  
-**Final acceptance (~1 h):** clean clone/build, tests, sanitizer passes on valid paths, documented known limits, README evidence.
+**M0 — contract skeleton (M01/M02, ~0.5 h):** ownership rules, record/API boundary, sample input. AI-Free.  
+**M1 — single-thread parser + multi-file build (M01/M03, ~1.5 h):** minimal validated textual record path, tests, module split, Make, first ELF inspection.  
+**M2 — FD input + process-facing lifecycle (M02/M04, ~1.5 h):** file/stdin/pipe input, error propagation, leak audit.  
+**M3 — callback/context API (M05, ~1 h):** introduce explicit `void *ctx` boundary and failure-safe construction without changing the data model unnecessarily.  
+**M4 — binary/layout boundary upgrade (M07, ~1 h):** add one bounded binary codec or equivalent byte-layout exercise with explicit endian/length validation.  
+**M5 — bounded ring + worker (M09, ~2 h):** one producer/main thread, one worker, mutex + condition-variable predicate loop, documented queue invariants.  
+**M6 — signal shutdown + observability + fault campaign (M06/M08/M10, ~2 h):** minimal async-safe stop request, normal-context queue close/wakeup/join, strace/GDB evidence, then inject one resource or concurrency fault and write a postmortem.  
+**Final acceptance (~1 h):** clean clone/build, tests, sanitizer modes on valid paths, documented known limits, README evidence.
 
-Total mandatory project time is intentionally about **9.5 h**, spread across the phase.
+Total mandatory project time is intentionally about **10.5 h**, spread across the phase.
 
 ### Explicit non-goals
 
@@ -605,7 +606,7 @@ Hard rule: **do not paste the whole project into AI immediately after an error.*
 
 1. Should the course baseline standardize on the Phase 0 authoring versions (GCC 14.2/binutils 2.44/Linux 6.18.35) or freeze the learner’s WSL versions after first calibration run? Recommendation: record actual learner versions first; avoid pretending GDB/strace are verified until run there.
 2. Should Unix-domain socket status be SHOULD or MUST? Recommendation: SHOULD; it adds little foundation value compared with correct FD/thread/shutdown behavior.
-3. Should condition variables be mandatory in the ring buffer? Recommendation: no. Mutex correctness is mandatory; a simple bounded polling/block strategy can be replaced by condvar only if it improves the project without consuming a new module.
+3. Condition-variable decision: **resolved for the project scope**. A minimal predicate + mutex + condition-variable wait/signal pattern is MUST because the chosen service architecture uses a blocking bounded producer/consumer queue. Broader condvar study remains optional.
 4. Which exact musl tag/commit should be canonical? Recommendation: pin after Leader verifies the chosen files have not changed pedagogically; do not cite `master` in final tutorial material.
 5. Should Effective C or Modern C become the single C companion? Recommendation: at most one SHOULD companion; official semantics + experiments remain canonical.
 
