@@ -169,7 +169,7 @@ static int write_all(int fd, const uint8_t *buf, size_t len)
 
 ## Source Walkthrough — BusyBox `cat`
 
-**Pinned reading baseline:** BusyBox **1.38.0 release (2026-05-13)**。当次发布时 upstream Git tag `1_38_0` 尚未建立；为避免虚构 tag，本章同时 pin release tarball 与 maintainer mirror commit `fc71374dfccd46448c62947269a35f1420d7ee28`。License: **GPL-2.0-only** for this BusyBox release. Details in [SOURCE_LEDGER.md](SOURCE_LEDGER.md).
+**Pinned reading baseline:** BusyBox **1.38.0 release (2026-05-13)**。当次发布时 upstream Git tag `1_38_0` 尚未建立；为避免虚构 tag，本章同时 pin release tarball 与 maintainer mirror commit `fc71374dfccd46448c62947269a35f1420d7ee28`。License/provenance: BusyBox project distribution license plus the **file-level notices** recorded in [SOURCE_LEDGER.md](SOURCE_LEDGER.md); notably, the selected files do not all use identical “only/or-later” wording.
 
 只跟 normal `cat` path：
 
