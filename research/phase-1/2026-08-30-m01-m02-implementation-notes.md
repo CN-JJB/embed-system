@@ -151,3 +151,13 @@ Tutorial copy does not reproduce either upstream implementation; it gives exact 
 - Title: `tutorial: implement P1 M01-M02 foundations`
 - Head: `tutorial/p1-m01-m02`
 - Base: `curriculum/phase-1-foundations` (stacked PR because Phase 1 design is not yet on `main` at implementation time).
+
+
+## Leader review corrections — 2026-08-30
+
+During code-level Leader review, two reference-contract issues were corrected without changing module scope:
+
+1. The `--limit` parser now explicitly rejects negative text such as `-1`. C `strtoumax()` accepts an optional sign, so checking only `ERANGE` is insufficient for a nonnegative byte-count CLI contract.
+2. The reviewer `copy_fd_limit()` reference now updates `*copied` after **each successful write**, not only after an entire read chunk has been written. Therefore an error after partial output cannot under-report bytes that were already successfully written.
+
+The previous verification record predates these small corrections. The parser rule was independently checked during Leader review; the modified full challenge/reference path should be rerun on the learner/reviewer WSL environment before its status is promoted to a post-review VERIFIED baseline.
