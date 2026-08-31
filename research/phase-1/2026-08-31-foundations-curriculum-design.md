@@ -253,8 +253,8 @@ Sequence implication: files/FDs appear before process pipelines; linking appears
 **Prerequisites:** M01, M04, M05, M08.  
 **Target depth:** L3.  
 **Concepts:** process vs thread resource sharing; `pthread_create/join`; mutex ownership; critical section; race/data race; deadlock/lock misuse; minimal condition-variable wait/signal semantics. Because the integration project uses a blocking producer/consumer queue, the **minimal condition-variable pattern is MUST for that bounded scope**; broader condition-variable API coverage remains SHOULD.  
-**Canonical sources:** Official: `pthread_create(3)`, `pthread_join(3)`, `pthread_mutex_lock(3p)`/POSIX equivalent; TLPI Ch. 29 and Ch. 30 selected mutex sections; OSTEP Ch. 26 and Ch. 28 selected.  
-**Required reading:** TLPI Ch. 29 §§thread model/create/join; Ch. 30 mutex fundamentals; OSTEP concurrency intro and locks.  
+**Canonical sources:** Official: `pthread_create(3)`, `pthread_join(3)`, `pthread_mutex_lock(3p)`/POSIX equivalent, and condition-variable wait/signal documentation for the project predicate loop; TLPI Ch. 29 and Ch. 30 selected synchronization sections; OSTEP Ch. 26 and Ch. 28 selected.  
+**Required reading:** TLPI Ch. 29 §§thread model/create/join; Ch. 30 mutex fundamentals plus only the condition-variable material needed to understand a mutex-protected predicate/wait loop; OSTEP concurrency intro and locks.  
 **Lab:** parallel counters and queue access; reproduce lost updates; repair with mutex; run TSan; implement one predicate + mutex + condition-variable wait loop for the bounded queue; deliberately create lock-order misuse or self-deadlock in a tiny fixture.  
 **Observation:** shared address space changes ownership assumptions; “works repeatedly” is not evidence of race freedom; synchronization establishes constraints `volatile` does not.  
 **Challenge:** define and document lock ownership for two shared fields without coarse global locking everywhere.  
@@ -472,15 +472,15 @@ The default map is 7 weeks. A learner may stretch to 8 weeks by splitting Week 6
 
 | Week | MUST | SHOULD | Gate | Planned hours |
 |---|---|---|---|---:|
-| 1 | M01 + start M02; first GDB/ASan/UBSan use | Effective C/Modern C selected | memory/lifetime + FD ownership | 8.5–9 h |
-| 2 | finish M02 + M03; project M0/M2 | CS61C selected linker lecture | ELF/link + Make gate | 9–9.5 h |
-| 3 | M04 + project M3 | APUE Ch. 8 selected comparison | process/zombie/exec gate | 8–9 h |
-| 4 | M05 + M06 + project M1 | TLPI Ch. 21 selected signal safety | ownership/callback + hanging-pipe gate | 9–9.5 h |
-| 5 | M07 + M08 + project codec/fault evidence | core dump setup; cppcheck/clang-tidy one trial | binary boundary + unknown-bug station | 8–9 h |
-| 6 | M09 + project M4/M5 | condition variable; Unix-domain socket status endpoint | race/mutex gate | 9–9.5 h |
-| 7 | project M6/final acceptance + spaced reconstruction + Phase 1 Final Gate | source Tier B | Final Gate | 8.5–10 h |
+| 1 | M01 + start M02 + project M0; first GDB/ASan/UBSan use | one modern-C companion excerpt | memory/lifetime + FD ownership | 8.5–9.5 h |
+| 2 | finish M02 + M03 + project M1 | CS61C selected linker lecture | ELF/link + Make gate | 9–10 h |
+| 3 | M04 + project M2 | APUE Ch. 8 selected comparison | process/zombie/exec gate | 8.5–9.5 h |
+| 4 | M05 + M06 + project M3 | TLPI Ch. 21 selected signal safety | ownership/callback + hanging-pipe gate | 9–10 h |
+| 5 | M07 + M08 + project M4 | core dump setup; one static-analyzer trial | binary boundary + unknown-bug station | 9–10 h |
+| 6 | M09 + project M5 | Unix-domain socket orientation | race/mutex/condvar-predicate gate | 9–10 h |
+| 7 | project M6/final acceptance + spaced reconstruction + 5–6 h Phase 1 Final Gate | Tier B source reading only if buffer remains healthy | Final Gate | 10–11 h |
 
-**Mandatory planned total:** approximately **61–65 h**, depending on gate retries included in planned time. This leaves substantial capacity under the gross “~2 h/day” availability rather than filling every day.
+**Mandatory planned total:** approximately **67–68 h**, consisting of about 62 h of modules/project work plus the separate 5–6 h Final Gate. This stays inside the approved 55–70 h Phase 1 envelope while preserving meaningful buffer under the gross “~2 h/day” availability.
 
 ### 6-week compression
 
