@@ -12,12 +12,13 @@
 
 必须满足：
 
-- parsing `N` 能识别 invalid/overflow；
+- parsing `N` 能识别 invalid/overflow，且负数（例如 `-1`）必须拒绝；
 - `remaining` 与 buffer request 的计算不 overflow；
 - `read()==0` 是 normal EOF；
 - short read 不丢数据；short write 必须写完当前 read chunk；
 - `-` 使用 borrowed stdin/stdout；只 close 自己 open 的 descriptors；
-- error cleanup 不覆盖最初 errno。
+- error cleanup 不覆盖最初 errno；
+- `*copied` 表示**实际已经成功写入 output 的 byte 数**；即使随后发生 write error，也不能把已经成功完成的 partial write 从计数中“抹掉”。
 
 ## Build / Procedure
 
@@ -31,6 +32,7 @@ wc -c out.bin
 ./fdcopy-limit --limit 999 input.bin out.bin
 cmp input.bin out.bin
 ./fdcopy-limit --limit 999999999999999999999999999 input.bin out.bin
+./fdcopy-limit --limit -1 input.bin out.bin
 ```
 
 自己再写 stdin/stdout、zero limit、empty input tests。
