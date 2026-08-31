@@ -1,0 +1,15 @@
+flowchart TD
+ S[Symptom + own description] --> H[3-5 hypotheses]
+ H --> Q{Highest-information question?}
+ Q -->|C state / control flow| G[GDB]
+ Q -->|memory safety / selected UB| A[ASan / UBSan]
+ Q -->|OS boundary timeline| T[strace]
+ Q -->|live process / FD snapshot| P[/proc]
+ Q -->|build / ELF| E[compiler / linker / nm / readelf / objdump]
+ Q -->|binary contract| X[golden bytes / od / codec]
+ G --> N[Narrow scope -> root cause -> fix -> regression]
+ A --> N
+ T --> N
+ P --> N
+ E --> N
+ X --> N
