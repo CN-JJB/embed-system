@@ -1,0 +1,4 @@
+flowchart LR
+    A[main.o<br/>call foo<br/>UND foo] --> L[linker]
+    B[foo.o<br/>GLOBAL foo] --> L
+    L --> R[resolve symbol<br/>apply relocation]

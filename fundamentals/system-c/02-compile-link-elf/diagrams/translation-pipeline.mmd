@@ -1,0 +1,6 @@
+flowchart TD
+    A[main.c] -->|preprocessor| B[main.i]
+    B -->|compiler| C[main.s]
+    C -->|assembler| D[main.o<br/>relocatable object]
+    D --> E[symbols + relocations]
+    E -->|linker + other .o| F[app.elf<br/>ELF executable]

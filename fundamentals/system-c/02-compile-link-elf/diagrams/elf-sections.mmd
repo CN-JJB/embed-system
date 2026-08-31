@@ -1,0 +1,8 @@
+flowchart TD
+    E[ELF / object file]
+    E --> T[.text]
+    E --> R[.rodata]
+    E --> D[.data]
+    E --> B[.bss]
+    E --> S[symbol table]
+    E --> X[relocation info<br/>especially object stage]
