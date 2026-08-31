@@ -13,7 +13,8 @@
 - `len == 0` 时允许 `data == NULL`；`len > 0` 时 `data` 必须 non-NULL；
 - `slice` 必须避免 `offset + len` overflow：优先用 `offset <= src.len && len <= src.len - offset`；
 - `copy` 只有在 destination extent 足够时成功，并写出 `copied`；底层区域可能 overlap，因此选择符合 contract 的 copy primitive；
-- `compare` 做 lexicographic byte comparison，公共前缀相同后再比较 length。
+- `compare` 做 lexicographic byte comparison，公共前缀相同后再比较 length；
+- **input-span precondition:** 除 `span_u8_make()` 正在验证的 raw `data + len` pair 外，传给 `slice/copy/compare` 的 span 必须已经满足 invariant：`len == 0` 可配 NULL，`len > 0` 必须配一个在该 extent/lifetime contract 下有效的 non-NULL pointer。直接手写一个 `{NULL, 3}` 再传给 `compare` 属于 caller contract violation；本 API 的 `compare` 返回类型没有额外 error channel。
 
 ## Build / Procedure
 
