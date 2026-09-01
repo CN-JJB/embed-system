@@ -1,0 +1,7 @@
+flowchart LR
+  A[C field values] --> B[object representation]
+  B --> C[implementation layout: offsets / padding / alignment]
+  A --> D[explicit encoder]
+  D --> E[declared byte order]
+  E --> F[stable wire bytes]
+  B -. not a portable serialization contract .-> F
