@@ -1,0 +1,2 @@
+# M10 Project Acceptance Gate
+**AI-Free first pass. This is not the Phase 1 Final Gate.** Audit clean strict build; parser/codec/queue/integration tests; ownership table; queue invariants/predicate loops/close semantics; SIGTERM while input remains open; worker join before destroy; cleanup order; ASan/UBSan; separate TSan status; owned-FD audit; one full fault postmortem. “Program runs once” is insufficient.
