@@ -1,0 +1,2 @@
+# M09 Gate — Shared State & Predicate Audit
+**AI-Free first pass.** Submit: (1) shared-state ownership/lifetime table; (2) named invariants; (3) 3–5 hypotheses before tools; (4) evidence choice with falsification target; (5) race repair naming the invariant protected; (6) condition-variable repair using a predicate `while` plus close/empty handling; (7) regression evidence for repeated run, queue close, consumer exit, join, and destroy; (8) separate TSan evidence where available. A correct patch without invariant/evidence reasoning does not pass.

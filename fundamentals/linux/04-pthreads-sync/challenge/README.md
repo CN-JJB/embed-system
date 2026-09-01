@@ -1,0 +1,2 @@
+# Shared Statistics Contract Challenge
+First pass **AI-Free**. Implement/review `struct shared_stats` so `count/sum/min/max/initialized` form one coherent mutex-protected invariant. No global mutex, atomics, rwlock, or caller reads of protected members. `stats_snapshot` writes `out` only after it has captured a complete valid snapshot; on argument/lock failure callers must not depend on partial output. Explain lifetime: the object and mutex must outlive every caller; destroy only after all threads join.
