@@ -296,3 +296,32 @@ Leader should especially challenge:
 - base: latest canonical `main` rechecked before publication;
 - PR title: `tutorial: implement P1 M07-M08 data layout and debugging foundations`;
 - author must **not merge** the PR.
+
+## S2 Rework — M08 Reviewer Completeness
+
+Rework execution: **2026-09-01**. Before modifying the branch, GitHub was re-read: canonical `main` remained `311471afd005248de273b79e51269a596e57d1a4`; PR #7 remained the only open PR; its head was `26f9275d305bf3e751fed5fcc3c524282829fd9d`; Leader review disposition remained S2 for M08 Challenge/Gate reviewer completeness. The Leader's M07 S1 corrections above were rechecked and preserved.
+
+The rework environment again provided GCC 14.2.0, GNU Make 4.4.1, and AddressSanitizer. `gdb` and `strace` were again absent, so no runtime transcript is claimed for either tool.
+
+| Path | Evidence actually executed | Status |
+|---|---|---|
+| Challenge memory fixed | strict build; repaired mode; ASan exercised with no memory-safety diagnostic | **VERIFIED** for exercised repaired memory path |
+| Challenge endian fixed | explicit LE decode; `78 56 34 12` → `0x12345678` | **VERIFIED** |
+| Challenge state fixed | strict runtime; sequence remains `0x90abcdef` after processing | **VERIFIED** |
+| Challenge GDB watchpoint | documented target/workflow only; GDB absent | **UNVERIFIED** |
+| Challenge valid file | actual 12-byte read succeeds | **VERIFIED** |
+| Challenge missing file | `open` failure reported coherently; nonzero program result | **VERIFIED** |
+| Challenge short file | EOF at 5/12 bytes reported as short input; nonzero program result | **VERIFIED** |
+| Challenge strace file workflow | strace absent | **UNVERIFIED** |
+| Gate memory fixed | strict build; repaired mode; ASan exercised with no memory-safety diagnostic | **VERIFIED** for exercised repaired memory path |
+| Gate bytes fixed | explicit LE decode; golden value `0x12345678` | **VERIFIED** |
+| Gate FD fixed | parent/child unused ends closed; intended write completes; final writer closes; child reads to EOF, exits 0; parent `waitpid()` reaps | **VERIFIED** |
+| Gate FD repeated run | repaired FD mode completed **20/20** consecutive executions; each completed EOF/exit/reap path | **VERIFIED** |
+| Gate `fork()` failure cleanup | code review: both pipe FDs closed before coherent failure return; no failure shim injected | **PARTIALLY VERIFIED** — failure branch not runtime-injected |
+| Gate file valid | actual existing path opens and closes successfully | **VERIFIED** |
+| Gate file missing | `open` failure reported coherently; nonzero program result | **VERIFIED** |
+| Gate strace | strace absent | **UNVERIFIED** |
+
+Reviewer references now map every learner-facing domain to a repaired behavior and regression: Challenge covers `memory/endian/state/file`; Gate covers `memory/bytes/fd/file`. Reviewer documentation continues to require the evidence-selection chain—tool choice, observation, hypothesis elimination/falsification, violated contract, repair, and regression—rather than treating reference code as the M08 answer.
+
+ASan status is intentionally narrow: the two **exercised repaired memory paths produced no ASan diagnostic**. That does not establish byte-order semantics, FD correctness beyond the executed regression, file correctness beyond exercised paths, or whole-program correctness.
