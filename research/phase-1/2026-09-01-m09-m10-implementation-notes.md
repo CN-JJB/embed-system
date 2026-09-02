@@ -64,3 +64,56 @@ During first Leader review of PR #9, three localized issues were corrected direc
 3. **Source metadata.** M09/M10 Linux man-pages pins were aligned to the Phase 1 6.18 baseline, and Linux man-pages/GCC/GNU Make entries were classified as T2 official documentation rather than T0 specifications.
 
 Leader independently strict-built and ran focused parser/codec/queue regressions after these edits. Result: **PASS**. This focused review execution is separate from the author's broader environment verification and does not create new GDB/strace/TSan claims.
+
+## S2 Rework — Gate and Fault Executability
+
+During second iteration following Leader Rework #1 on Issue #8 / PR #9, the assessment layers of P1-M09 and P1-M10 were reworked into fully executable learner and reviewer artifacts:
+
+1. **M09 Challenge Executability**:
+   - `fundamentals/linux/04-pthreads-sync/challenge/shared_stats.c` converted to a true learner starter fixture that compiles under strict flags (`-std=c17 -O0 -g3 -Wall -Wextra -Wpedantic -Werror -pthread`) with clear invariant contracts and TODO boundaries.
+   - Runnable regression harness added in `challenge/test_challenge.c` covering: invalid arguments & canary preservation, first value initialization of min/max, coherent multi-updates, sum overflow/underflow policy (`INT64_MAX` / `INT64_MIN`), atomic snapshot without partial publication, and concurrent stress testing.
+   - Fixed reference solution placed in hidden reviewer directory `reviewer/challenge_solution.c`.
+   - Verification: `make test-challenge-starter` compiles and fails on incomplete contracts; `make test-challenge-solution` compiles and passes all tests (VERIFIED).
+
+2. **M09 Gate Executability**:
+   - `fundamentals/linux/04-pthreads-sync/gate/gate_seeded.c` implements runnable seeded stations for:
+     - `race`: unsynchronized shared access leading to lost updates and TSan data race warnings.
+     - `invariant`: multi-field transfer releasing lock between balance updates, caught by concurrent auditor.
+     - `condvar`: condition variable missing-wake on close with bounded watchdog timer.
+   - `reviewer/gate_solution.c` implements the clean synchronized reference passing all domains.
+   - `reviewer/M09_GATE_SOLUTION.md` documents full postmortem mapping each seeded fault to evidence, root contract, repair, and regression proof.
+   - Verification: `./build/gate_seeded` reproduces all 3 failure modes; `./build/gate_solution all` passes all domains (VERIFIED).
+
+3. **M10 Fault Campaign Executability**:
+   - Four standalone runnable fault stations implemented:
+     - `faults/f1_queue_race/`: Unsynchronized queue count update outside lock reproducing lost updates and TSan warning.
+     - `faults/f2_shutdown_hang/`: Queue close omitting broadcast with bounded watchdog timer reproducing shutdown hang.
+     - `faults/f3_fd_leak/`: Error return path omitting `close(fd)`, verified via `/proc/self/fd` growth.
+     - `faults/f4_bad_boundary/`: Byte-level truncation, version mismatch, delimiter errors, and range errors verified via parser/codec return codes.
+   - Hidden diagnoses and reference fixes documented in `reviewer/FAULTS_SOLUTION.md`.
+   - Verification: All four stations build and run; F1, F2, F3 reproduce faults; F4 verifies boundary assertions (VERIFIED).
+
+4. **Unknown Fault Answer Isolation & Bounded Regression**:
+   - Removed all seed disclosures from learner-visible `faults/UNKNOWN_FAULT.md`.
+   - Added runnable broken fixture with bounded watchdog timer in `faults/unknown/repro.c` reproducing shutdown hang in <= 3 seconds.
+   - Added hidden reviewer reference in `reviewer/unknown_solution.c` and postmortem in `reviewer/UNKNOWN_FAULT_SOLUTION.md`.
+   - Reviewer regression proves close → wake → exit → join → destroy across 100 consecutive cycles without timing failure (VERIFIED).
+
+5. **M10 Project Acceptance Evidence Mapping**:
+   - Expanded `projects/linux-systems-telemetry/gate/README.md` into a 12-item operational checklist.
+   - Updated `reviewer/M10_ACCEPTANCE_SOLUTION.md` with complete operational evidence mapping table:
+     `Requirement → Command / Path → What Observation Counts as Evidence → What the Evidence Does NOT Prove → Pass / Fail Condition`.
+
+6. **Preserved Leader S1 Corrections**:
+   - Verified that pre-read stop check in `src/parser.c`, `INT32_MIN` bit-preserving decode in `src/codec.c`, Linux man-pages 6.18 baseline, and T2 source classifications remain intact and verified.
+
+7. **Environment & Tool Availability Audit**:
+   - Linux kernel: 6.18.33.2-microsoft-standard-WSL2 x86_64.
+   - GCC: 13.3.0 (Ubuntu) / 14.2.0 (MinGW) — AVAILABLE + EXECUTED.
+   - GNU Make: 4.3 / 4.4.1 — AVAILABLE + EXECUTED.
+   - ASan + UBSan: AVAILABLE + EXECUTED (`make san` passed with `detect_leaks=1`).
+   - TSan: AVAILABLE + EXECUTED under Linux with `setarch x86_64 -R` (address space layout workaround for WSL2 environment). Both M09 and M10 passed `make tsan`.
+   - GDB: AVAILABLE in WSL environment (`/usr/bin/gdb`); minimal thread inspection verified.
+   - strace: UNAVAILABLE in environment; marked UNVERIFIED.
+   - `/proc`: AVAILABLE + EXECUTED for FD audit.
+

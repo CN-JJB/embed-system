@@ -1,4 +1,65 @@
 #include "shared_stats.h"
-#include <limits.h>
 #include <string.h>
-int stats_init(struct shared_stats*s){if(!s)return -1;memset(s,0,sizeof(*s));return pthread_mutex_init(&s->mutex,0)==0?0:-1;}int stats_add(struct shared_stats*s,int32_t v){if(!s)return -1;if(pthread_mutex_lock(&s->mutex))return -1;if((v>0&&s->sum>INT64_MAX-v)||(v<0&&s->sum<INT64_MIN-v)){pthread_mutex_unlock(&s->mutex);return -1;}s->sum+=v;s->count++;if(!s->initialized){s->min=v;s->max=v;s->initialized=1;}else{if(v<s->min)s->min=v;if(v>s->max)s->max=v;}return pthread_mutex_unlock(&s->mutex)==0?0:-1;}int stats_snapshot(struct shared_stats*s,struct stats_snapshot*out){if(!s||!out)return -1;struct stats_snapshot tmp;if(pthread_mutex_lock(&s->mutex))return -1;tmp.count=s->count;tmp.sum=s->sum;tmp.min=s->min;tmp.max=s->max;tmp.initialized=s->initialized;if(pthread_mutex_unlock(&s->mutex))return -1;*out=tmp;return 0;}int stats_destroy(struct shared_stats*s){return s&&pthread_mutex_destroy(&s->mutex)==0?0:-1;}
+
+/*
+ * LEARNER STARTER FIXTURE — Shared Statistics Challenge
+ *
+ * Requirements:
+ * 1. The internal mutex must protect {count, sum, min, max, initialized} as one
+ *    coherent invariant.
+ * 2. First added value initializes min and max (initialized becomes 1).
+ * 3. Adding a value must check for 64-bit sum overflow/underflow without state mutation.
+ * 4. stats_snapshot must capture a coherent view under lock and write to *out only
+ *    upon full success (no partial publication on error).
+ * 5. stats_destroy must cleanly destroy the mutex after caller threads have joined.
+ *
+ * Current state: SKELETON / INCOMPLETE.
+ * Must be implemented by learner to pass challenge regression tests.
+ */
+
+int stats_init(struct shared_stats *s) {
+    if (!s) {
+        return -1;
+    }
+    memset(s, 0, sizeof(*s));
+    /* LEARNER TODO: Initialize internal mutex and verify return status */
+    return -1;
+}
+
+int stats_add(struct shared_stats *s, int32_t value) {
+    if (!s) {
+        return -1;
+    }
+    (void)value;
+    /*
+     * LEARNER TODO:
+     * - Acquire internal mutex.
+     * - Check for 64-bit signed integer overflow (INT64_MAX) or underflow (INT64_MIN).
+     * - If overflow would occur, unlock and return -1 without modifying state.
+     * - Update count, sum, min, max, and initialized flag.
+     * - Release mutex and return 0 on success.
+     */
+    return -1;
+}
+
+int stats_snapshot(struct shared_stats *s, struct stats_snapshot *out) {
+    if (!s || !out) {
+        return -1;
+    }
+    /*
+     * LEARNER TODO:
+     * - Acquire internal mutex.
+     * - Copy current statistics atomically to temporary snapshot.
+     * - Release mutex.
+     * - Write temporary snapshot to *out only after successful capture.
+     */
+    return -1;
+}
+
+int stats_destroy(struct shared_stats *s) {
+    if (!s) {
+        return -1;
+    }
+    /* LEARNER TODO: Destroy internal mutex and return status */
+    return -1;
+}
