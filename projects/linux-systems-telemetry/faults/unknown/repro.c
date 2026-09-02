@@ -11,10 +11,10 @@
 /*
  * Unknown Fault Bounded Reproduction Fixture
  *
- * Implements a broken queue shutdown sequence and bounded harness.
+ * Reproduces the intermittent shutdown hang symptom under a bounded harness.
  */
 
-struct broken_queue {
+struct service_queue {
     struct telemetry_record ring[8];
     size_t count;
     int closed;
@@ -24,23 +24,23 @@ struct broken_queue {
     pthread_cond_t waiter_ready;
 };
 
-static struct broken_queue g_bq;
+static struct service_queue g_queue;
 
 static void watchdog_handler(int sig) {
     (void)sig;
-    const char msg[] = "\n>>> UNKNOWN FAULT REPRODUCED: Consumer thread remained blocked after queue close! <<<\n";
+    const char msg[] = "\n>>> TIMEOUT: Telemetry service shutdown hung! Process failed to exit within 3s. <<<\n";
     write(STDOUT_FILENO, msg, sizeof(msg) - 1);
     _exit(2);
 }
 
-static void broken_queue_init(struct broken_queue *q) {
+static void queue_init(struct service_queue *q) {
     memset(q, 0, sizeof(*q));
     pthread_mutex_init(&q->lock, NULL);
     pthread_cond_init(&q->not_empty, NULL);
     pthread_cond_init(&q->waiter_ready, NULL);
 }
 
-static int broken_queue_pop(struct broken_queue *q, struct telemetry_record *out) {
+static int queue_pop(struct service_queue *q, struct telemetry_record *out) {
     (void)out;
     pthread_mutex_lock(&q->lock);
     q->waiter_count++;
@@ -60,9 +60,8 @@ static int broken_queue_pop(struct broken_queue *q, struct telemetry_record *out
     return ok;
 }
 
-static void broken_queue_close(struct broken_queue *q) {
+static void queue_close(struct service_queue *q) {
     pthread_mutex_lock(&q->lock);
-    /* HIDDEN SEED: Marks closed, but omits waking sleeping waiters */
     q->closed = 1;
     pthread_mutex_unlock(&q->lock);
 }
@@ -70,16 +69,15 @@ static void broken_queue_close(struct broken_queue *q) {
 static void *consumer_worker(void *arg) {
     (void)arg;
     struct telemetry_record rec;
-    /* This will block because queue is empty and close fails to wake it */
-    while (broken_queue_pop(&g_bq, &rec)) {
-        /* Process record */
+    while (queue_pop(&g_queue, &rec)) {
+        /* Process incoming telemetry record */
     }
     return NULL;
 }
 
 int main(void) {
     printf("=== Unknown Fault Reproduction Harness ===\n");
-    broken_queue_init(&g_bq);
+    queue_init(&g_queue);
 
     /* Arm 3-second watchdog timer to bound execution */
     signal(SIGALRM, watchdog_handler);
@@ -88,24 +86,24 @@ int main(void) {
     pthread_t worker;
     pthread_create(&worker, NULL, consumer_worker, NULL);
 
-    /* Deterministic coordination: wait until worker has reached wait state */
-    pthread_mutex_lock(&g_bq.lock);
-    while (g_bq.waiter_count == 0) {
-        pthread_cond_wait(&g_bq.waiter_ready, &g_bq.lock);
+    /* Coordination: wait until worker has entered polling state */
+    pthread_mutex_lock(&g_queue.lock);
+    while (g_queue.waiter_count == 0) {
+        pthread_cond_wait(&g_queue.waiter_ready, &g_queue.lock);
     }
-    pthread_mutex_unlock(&g_bq.lock);
+    pthread_mutex_unlock(&g_queue.lock);
 
-    printf("[main] Worker started and waiting on queue...\n");
-    printf("[main] Initiating queue close...\n");
+    printf("[main] Ingestion worker started...\n");
+    printf("[main] Initiating service shutdown...\n");
     fflush(stdout);
 
-    /* Initiate broken shutdown */
-    broken_queue_close(&g_bq);
+    /* Trigger shutdown sequence */
+    queue_close(&g_queue);
 
     printf("[main] Waiting for worker thread to join...\n");
     fflush(stdout);
 
-    /* Blocks here indefinitely until watchdog fires */
+    /* If shutdown hangs, watchdog fires after 3 seconds */
     pthread_join(worker, NULL);
 
     alarm(0);

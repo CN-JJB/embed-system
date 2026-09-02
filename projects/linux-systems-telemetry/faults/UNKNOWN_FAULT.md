@@ -32,12 +32,10 @@ When run against the broken implementation, the watchdog terminates the process 
 
 ## Regression Requirements
 Your fix must be accompanied by a regression test proving the complete shutdown lifecycle:
-1. An empty consumer thread blocked waiting for data is woken when `queue_close` is called.
-2. The consumer thread re-evaluates its predicate, observes `closed && count == 0`, and exits its processing loop.
-3. The consumer thread terminates cleanly.
-4. `pthread_join` in the main thread returns successfully without blocking.
-5. All queue synchronization objects (mutex and condition variables) are destroyed cleanly without errors.
-6. The test must execute cleanly across 100 repeated cycles without timing failures.
+1. When shutdown or EOF is triggered while the pipeline is idle, all active worker threads terminate promptly without stalls.
+2. Thread join in the main/coordinator thread completes successfully without timeouts.
+3. All synchronization primitives and allocated pipeline resources are destroyed cleanly.
+4. The regression suite must run cleanly across repeated cycles (e.g. 100 iterations) without intermittent deadlocks or timing failures.
 
 ## Safety & Cleanup
 Do not leave stray background processes or indefinite sleeps. Always clean up temporary build artifacts:

@@ -9,7 +9,7 @@
 
 ### 1. Symptom
 The telemetry service hangs on shutdown. Running the bounded reproduction harness `./build/unknown_repro` times out after 3 seconds:
-`>>> UNKNOWN FAULT REPRODUCED: Consumer thread remained blocked after queue close! <<<`
+`>>> TIMEOUT: Telemetry service shutdown hung! Process failed to exit within 3s. <<<`
 
 ### 2. Own Description
 When the input stream finishes or shutdown begins, the worker thread is waiting on an empty queue. The main thread signals shutdown by closing the queue, but the worker thread remains asleep and does not terminate, blocking the main thread's `pthread_join`.

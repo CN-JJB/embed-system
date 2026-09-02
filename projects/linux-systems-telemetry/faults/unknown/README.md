@@ -10,18 +10,21 @@ make build/unknown_repro
 ```
 
 ## Expected Observation
-The test launches a consumer worker thread which blocks on an empty queue. The main thread coordinates deterministically with the consumer and initiates queue shutdown.
+The reproduction harness runs a simulated ingestion pipeline and initiates service shutdown.
 
-Because of the hidden defect, the worker never awakens from its wait state. After 3 seconds, the safety watchdog fires and reports the failure:
+Under the fault condition, the service fails to terminate within normal limits. After 3 seconds of shutdown stall, the safety watchdog terminates the process to prevent an indefinite hang:
 ```
 === Unknown Fault Reproduction Harness ===
-[main] Worker started and waiting on queue...
-[main] Initiating queue close...
->>> UNKNOWN FAULT REPRODUCED: Consumer thread remained blocked after queue close! <<<
+[main] Ingestion worker started...
+[main] Initiating service shutdown...
+[main] Waiting for worker thread to join...
+
+>>> TIMEOUT: Telemetry service shutdown hung! Process failed to exit within 3s. <<<
 ```
 Exit code: `2`.
 
 ## Diagnostic Strategy
-1. Attach GDB or inspect backtraces where supported: what function and synchronization primitive is the consumer thread sleeping on?
-2. Trace the shutdown sequence in source code: when the queue transition to `closed` occurs, how is the sleeping consumer notified?
-3. Apply the 8-step postmortem protocol.
+1. Formulate 3–5 hypotheses based on the observed symptom before running diagnostic tools.
+2. Inspect thread states and backtraces (using GDB, core dumps, or code tracing) to determine where execution is stalled.
+3. Complete the 8-step postmortem protocol:
+   `Symptom → Own Description → 3–5 Hypotheses → First Evidence + Why → Observation → Narrow Scope → Root Cause → Fix → Regression`.
