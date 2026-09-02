@@ -1,0 +1,9 @@
+flowchart LR
+  FD[input FD] --> P[bounded text parser / explicit codec]
+  P -->|record_sink_fn + ctx| Q[bounded ring by value]
+  Q --> W[one worker]
+  W --> S[checked stats]
+  S --> O[final status]
+  SIG[SIGINT/SIGTERM] --> F[sig_atomic_t stop flag]
+  F --> M[main normal-context shutdown]
+  M --> Q

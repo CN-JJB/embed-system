@@ -1,0 +1,7 @@
+flowchart TD
+  S[lock mutex] --> P{predicate true?}
+  P -- no --> W[pthread_cond_wait atomically releases + waits]
+  W --> P
+  P -- yes --> C[change shared state under invariant]
+  C --> N[signal/broadcast if predicate for peer changed]
+  N --> U[unlock]
