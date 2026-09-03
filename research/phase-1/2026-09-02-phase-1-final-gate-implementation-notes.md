@@ -94,7 +94,7 @@ strace: UNAVAILABLE
   ```
 * **What it proves:**
   1. Compiles strictly under `-std=c17 -O0 -g3 -Wall -Wextra -Wpedantic -Werror`.
-  2. Divided across 6 files (`main.c`, `app_lifecycle.c`, `app_lifecycle.h`, `sifter.c`, `sifter.h`, `parser.c`, `parser.h`).
+  2. Divided across 7 source/header files (`main.c`, `app_lifecycle.c`, `app_lifecycle.h`, `sifter.c`, `sifter.h`, `parser.c`, `parser.h`).
   3. Dispatches records to caller-provided `sifter_record_cb` and `void *ctx`, and propagates callback failures immediately.
   4. Enforces strict input validation: rejects negative unsigned values, rejects trailing non-whitespace, validates exact 128-byte accepted and 129-byte rejected physical record boundaries (both newline-terminated and EOF-terminated).
   5. In-process descriptor lifecycle audit confirms that opened owned descriptors in the reusable application lifecycle helper (`app_lifecycle.c`) are explicitly closed before function return and on error paths (including output open failure after input open), while borrowed descriptors (0 and 1) remain active.
@@ -145,7 +145,7 @@ strace: UNAVAILABLE
   --- 2. Verifying Fixed Solution Across 100 Cycles ---
   --- 3. Verifying Fixed Solution Under ThreadSanitizer (TSan) ---
   PASS: ThreadSanitizer reported no data races in this execution.
-  >>> SUCCESS: Variant B3 verified (bug reproduces, solution passes 100/100, TSan clean) <<<
+  >>> SUCCESS: Variant B3 verified (bug reproduces, solution passes 100/100, recorded TSan run reported no races) <<<
   ```
 * **What it proves:**
   1. The unpatched fixture detects multi-field invariant violation under concurrent worker and auditor threads within milliseconds.
