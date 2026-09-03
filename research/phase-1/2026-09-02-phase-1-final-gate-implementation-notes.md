@@ -42,7 +42,7 @@ strace: UNAVAILABLE
 | **strace (Syscall Tracing)** | `UNVERIFIED` (Unavailable) | Not installed in host WSL2. Approved equivalent channel: runtime audits via `/proc/<pid>/fd` and explicit return/errno harness logs. |
 | **Process Filesystem (`/proc`)** | `VERIFIED` | Inspects open descriptors (`/proc/self/fd`), thread states, and status tables. |
 | **AddressSanitizer (ASan) & UBSan** | `VERIFIED` | Validates zero heap/stack memory errors, use-after-free, and undefined behaviors. |
-| **LeakSanitizer (LSan)** | `VERIFIED` | Runs via `ASAN_OPTIONS=detect_leaks=1:halt_on_error=1`, proving zero memory leaks. |
+| **LeakSanitizer (LSan)** | `VERIFIED` | Runs via `ASAN_OPTIONS=detect_leaks=1:halt_on_error=1`; the recorded executions reported no memory leaks on the exercised paths. |
 | **ThreadSanitizer (TSan)** | `VERIFIED` (via wrapper) | Verified using `setarch x86_64 -R` wrapper to accommodate WSL2 memory layout. |
 
 ---
@@ -75,7 +75,7 @@ strace: UNAVAILABLE
   ```text
   --- 1. Testing Strict Build ---
   --- 2. Verifying File Count (>= 4 files) ---
-  PASS: Module file count is 5.
+  PASS: Module file count is 7.
   --- 3. Testing Functional Processing ---
   PASS: Functional stream processing verified.
   --- 4. Testing CLI Filter Range Boundaries ---
@@ -202,7 +202,7 @@ strace: UNAVAILABLE
   1. The unpatched fixture stalls indefinitely and is safely terminated by the 3-second watchdog timer (exit code 2).
   2. The two defect boundaries genuinely interact: resolving only the Process/FD fault leaves a deterministic residual concurrency drain failure (exit code 1); resolving only the concurrency fault leaves an unresolved stream EOF stall (exit code 2).
   3. The fixed reference implementation resolves both boundaries, passing 50 consecutive cycles cleanly.
-  4. Both diagnostic channels are experimentally demonstrated on actual target executions: OS descriptor table inspection captures open pipe descriptors in `/proc/<target_pid>/fd` during a live stall, and the concurrency channel captures unjoined thread and lifecycle state.
+  4. Both diagnostic channels are experimentally demonstrated on actual target executions: OS descriptor inspection correlates the exact communication `pipe:[inode]` in `/proc/<target_pid>/fd`, and the concurrency channel captures unjoined thread and lifecycle state.
 * **What it does not prove:** Watchdog timeout proves execution safety; it does not constitute diagnostic proof of root cause. Root-cause proof requires tracing the descriptor table and live thread states.
 * **Status:** `VERIFIED`.
 
