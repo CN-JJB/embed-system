@@ -1,7 +1,7 @@
 # Implementation & Verification Notes: Phase 1 Final Gate
 
 > **Document Date:** 2026-09-02  
-> **Status:** Implementation Complete & Validated  
+> **Status:** Implementation Complete & Validated (S2 Rework Applied)  
 > **Repository:** `CN-JJB/embed-system`  
 > **Issue Reference:** Issue #12 (`Phase 1: implement Final Gate`)  
 > **Canonical Specification:** `gates/phase-1-final-gate-design.md`  
@@ -10,7 +10,7 @@
 
 ## 1. Host Execution Environment
 
-All verification commands were executed directly on the local host environment running Ubuntu 24.04 inside WSL2:
+All verification commands were executed natively on the local host environment running Ubuntu 24.04 inside WSL2:
 
 ```bash
 $ uname -a
@@ -43,7 +43,7 @@ strace: UNAVAILABLE
 | **Process Filesystem (`/proc`)** | `VERIFIED` | Inspects open descriptors (`/proc/self/fd`), thread states, and status tables. |
 | **AddressSanitizer (ASan) & UBSan** | `VERIFIED` | Validates zero heap/stack memory errors, use-after-free, and undefined behaviors. |
 | **LeakSanitizer (LSan)** | `VERIFIED` | Runs via `ASAN_OPTIONS=detect_leaks=1:halt_on_error=1`, proving zero memory leaks. |
-| **ThreadSanitizer (TSan)** | `PARTIALLY VERIFIED` | Supported in WSL2 via `setarch x86_64 -R` wrapper to accommodate memory layout. |
+| **ThreadSanitizer (TSan)** | `VERIFIED` (via wrapper) | Verified using `setarch x86_64 -R` wrapper to accommodate WSL2 memory layout. |
 
 ---
 
@@ -61,6 +61,7 @@ strace: UNAVAILABLE
   1. The exported package strictly contains learner-facing materials (`part-a`, selected `part-b` variant, `part-c`, `part-d`, documentation, and `SUBMISSION_TEMPLATE.md`).
   2. The `reviewer/` tree, answer keys, golden solutions, and postmortems are completely excluded.
   3. `grep -rn "reviewer"` yields zero matches in the exported learner package.
+* **What it does not prove:** Does not prove that learner submissions will pass; verifies delivery boundary isolation.
 * **Status:** `VERIFIED`.
 
 ---
@@ -77,21 +78,28 @@ strace: UNAVAILABLE
   PASS: Module file count is 5.
   --- 3. Testing Functional Processing ---
   PASS: Functional stream processing verified.
-  --- 4. Testing Memory Safety & LeakSanitizer ---
+  --- 4. Testing CLI Filter Range Boundaries ---
+  PASS: CLI rejected out-of-range filter thresholds.
+  --- 5. Testing Parser Grammar & Exact Length Boundaries ---
+  PASS: All numeric, overflow, and exact 128/129-byte boundaries verified.
+  --- 6. Testing Callback & Context Decoupling ---
+  PASS: Custom caller callback and void *ctx verified.
+  --- 7. Testing In-Process FD Ownership & Lifecycle ---
+  PASS: In-process descriptor audit confirmed zero leaked descriptors.
+  --- 8. Testing Memory Safety & LeakSanitizer ---
   PASS: Zero memory leaks or undefined behavior detected.
-  --- 5. Testing File Descriptor Table Audit ---
-  PASS: Zero leaked owned file descriptors verified.
-  --- 6. Verifying Header Dependency Tracking ---
+  --- 9. Verifying Header Dependency Tracking ---
   PASS: Header dependency tracking verified.
   >>> ALL PART A VALIDATION CHECKS PASSED <<<
   ```
 * **What it proves:**
-  1. The reference implementation compiles strictly under `-std=c17 -O0 -g3 -Wall -Wextra -Wpedantic -Werror`.
-  2. The architecture is cleanly divided into 5 files (`main.c`, `sifter.c`, `sifter.h`, `parser.c`, `parser.h`).
-  3. Valid, invalid, empty, and stdin pipe streams are parsed correctly without buffer overflow.
-  4. AddressSanitizer and LeakSanitizer confirm 0 memory errors and 0 memory leaks.
-  5. `/proc/self/fd` audit confirms 0 leaked owned descriptors.
-  6. Touching a header file forces Make to recompile dependent object files.
+  1. Compiles strictly under `-std=c17 -O0 -g3 -Wall -Wextra -Wpedantic -Werror`.
+  2. Divided across 5 files (`main.c`, `sifter.c`, `sifter.h`, `parser.c`, `parser.h`).
+  3. Dispatches records to caller-provided `sifter_record_cb` and `void *ctx`.
+  4. Enforces strict input validation: rejects negative unsigned values, rejects trailing non-whitespace, validates exact 128/129-byte boundaries.
+  5. In-process descriptor lifecycle audit confirms that opened owned descriptors are explicitly closed before function return and on error paths, while borrowed descriptors (0 and 1) remain active.
+  6. AddressSanitizer and LeakSanitizer confirm zero memory errors and zero leaks.
+* **What it does not prove:** An external shell `/proc/self/fd` check does not prove application code cleanup (since the kernel forcibly closes file descriptors upon process termination). True application cleanup is proven through the in-process descriptor lifecycle harness.
 * **Status:** `VERIFIED`.
 
 ---
@@ -108,8 +116,9 @@ strace: UNAVAILABLE
   >>> SUCCESS: Variant B1 verified (bug reproduces, solution passes 100/100) <<<
   ```
 * **What it proves:**
-  1. The unpatched code triggers an AddressSanitizer `heap-use-after-free` within the 3-second watchdog window.
-  2. The fixed solution (`solution.c` using `strdup` deep copy and `free` on destroy) executes 100 consecutive cycles cleanly under AddressSanitizer and LeakSanitizer.
+  1. The unpatched fixture safely reproduces an address boundary violation under AddressSanitizer within the 3-second watchdog limit.
+  2. The fixed reference implementation runs 100 consecutive cycles cleanly under AddressSanitizer and LeakSanitizer.
+* **What it does not prove:** Does not prove that arbitrary memory corruptions across all compilers will produce identical traces; proves deterministic reproducibility on the supported toolchain.
 * **Status:** `VERIFIED`.
 
 #### Variant B2 (Family `B-FD`: File Descriptor & Process Boundaries)
@@ -122,8 +131,9 @@ strace: UNAVAILABLE
   >>> SUCCESS: Variant B2 verified (bug reproduces, solution passes 100/100) <<<
   ```
 * **What it proves:**
-  1. The unpatched code accumulates unclosed file descriptors in `/proc/self/fd` across rotation cycles and fails the harness within 3 seconds.
-  2. The fixed solution closes the old descriptor prior to handle reassignment, maintaining a constant descriptor count across 100 cycles.
+  1. The unpatched fixture detects descriptor table growth in `/proc/self/fd` across rotation cycles and fails the harness within 3 seconds.
+  2. The fixed reference maintains a strictly constant descriptor count across 100 consecutive cycles.
+* **What it does not prove:** Does not prove kernel inode deallocation; proves process descriptor table stability.
 * **Status:** `VERIFIED`.
 
 #### Variant B3 (Family `B-CONC`: Concurrency Invariant & Synchronization)
@@ -133,11 +143,15 @@ strace: UNAVAILABLE
   --- 1. Verifying Buggy Reproduction ---
   PASS: Buggy harness detected invariant violation as expected (exit code 1).
   --- 2. Verifying Fixed Solution Across 100 Cycles ---
-  >>> SUCCESS: Variant B3 verified (bug reproduces, solution passes 100/100) <<<
+  --- 3. Verifying Fixed Solution Under ThreadSanitizer (TSan) ---
+  PASS: ThreadSanitizer confirmed zero data races.
+  >>> SUCCESS: Variant B3 verified (bug reproduces, solution passes 100/100, TSan clean) <<<
   ```
 * **What it proves:**
-  1. Dropping the mutex mid-transfer immediately triggers invariant violations (`pool_a + pool_b != TOTAL`), caught within milliseconds by the auditor thread.
-  2. The fixed solution holds the mutex across both balance updates in a single critical section, running 100 consecutive cycles without a single invariant anomaly or lost update.
+  1. The unpatched fixture detects multi-field invariant violation under concurrent worker and auditor threads within milliseconds.
+  2. The harness control state is thread-safe, and ThreadSanitizer confirms zero data races on both shared state and harness control flags.
+  3. The fixed reference passes 100 consecutive cycles without a single invariant violation.
+* **What it does not prove:** 100 non-TSan runs alone do not prove absence of all possible data races; TSan execution combined with stress iterations confirms synchronization integrity.
 * **Status:** `VERIFIED`.
 
 ---
@@ -160,8 +174,10 @@ strace: UNAVAILABLE
   >>> ALL PART C VERIFICATION CHECKS PASSED <<<
   ```
 * **What it proves:**
-  1. `calc.o`, `state.o`, and `main.o` are generated on the host and inspectable with standard tools.
-  2. All five tasks (LOCAL/GLOBAL/UND symbols, unresolved relocations, `.text/.rodata/.data/.bss` placement, link-time diagnostic failure vs resolution, and disassembly lowering) are demonstrably functional and host-tolerant.
+  1. Host relocatable objects (`calc.o`, `state.o`, `main.o`) are generated and inspectable via standard tools.
+  2. All five canonical tasks (symbols, relocations, section placement, linker diagnostic failure vs resolution, and instruction disassembly lowering) are functional and host-tolerant.
+  3. Learner-facing source contains neutral code without answer annotations.
+* **What it does not prove:** Tool execution by the script proves that the binary artifacts contain the required evidentiary features; it does not prove that a learner understands them (which is evaluated via the grading rubric).
 * **Status:** `VERIFIED`.
 
 ---
@@ -172,15 +188,22 @@ strace: UNAVAILABLE
   ```text
   --- 1. Verifying Broken Fixture Stall & Watchdog Timeout ---
   PASS: Broken fixture stalled and was terminated by safety watchdog (exit code 2).
-  --- 2. Building Fixed Reference Implementation ---
-  --- 3. Running 50-Cycle Clean Regression Test on Fixed Reference ---
-  PASS: 50/50 consecutive clean cycles completed with zero hangs or crashes.
+  --- 2. Verifying Single-Fix 1 (Process/FD Fixed Only) ---
+  PASS: Partial FD fix cleanly produced residual concurrency drain failure (exit code 1).
+  --- 3. Verifying Single-Fix 2 (Concurrency Fixed Only) ---
+  PASS: Partial concurrency fix cleanly stalled on stream boundary (exit code 2).
+  --- 4. Demonstrating Dual Diagnostic Evidence Channels ---
+  PASS: Both OS/FD descriptor table audit and thread lifecycle drain channels demonstrated.
+  --- 5. Verifying Fixed Reference Implementation (50 Cycles) ---
+  PASS: 50/50 consecutive clean cycles completed with zero hangs, leaks, or crashes.
   >>> ALL PART D REGRESSION & INTERACTION CHECKS PASSED <<<
   ```
 * **What it proves:**
-  1. The unpatched fixture stalls indefinitely due to the unclosed inherited write pipe descriptor in the child process, and is safely terminated by the 3-second watchdog timer (exit code 2).
-  2. The fixed reference implementation resolves both the inherited descriptor leak in the child process and the thread join/destroy ordering inversion in the pipeline.
-  3. The regression test passes 50 consecutive clean cycles with zero hangs, zero crashes, zero descriptor leaks, and clean thread joins.
+  1. The unpatched fixture stalls indefinitely and is safely terminated by the 3-second watchdog timer (exit code 2).
+  2. The two defect boundaries genuinely interact: resolving only the Process/FD fault leaves a residual concurrency drain failure (exit code 1); resolving only the concurrency fault leaves an unresolved stream EOF stall (exit code 2).
+  3. The fixed reference implementation resolves both boundaries, passing 50 consecutive cycles cleanly.
+  4. Both diagnostic channels (OS descriptor inspection via `/proc` and thread lifecycle drain state) are experimentally demonstrated.
+* **What it does not prove:** Watchdog timeout proves execution safety; it does not constitute diagnostic proof of root cause. Root-cause proof requires tracing the descriptor and thread states.
 * **Status:** `VERIFIED`.
 
 ---
@@ -195,4 +218,4 @@ In strict compliance with the Phase 1 Final Gate specification:
    * Passing score threshold is set to 75/100, with part floors of 60% and Part B at 70%.
    * **Status:** `UNVERIFIED — Pending First Real Learner Attempt`.
 3. **strace Syscall Tracing on Host:**
-   * **Status:** `UNVERIFIED` due to tool absence in host WSL2; `/proc/<pid>/fd` runtime audit and harness diagnostics serve as the verified equivalent channel.
+   * **Status:** `UNVERIFIED` due to tool absence in host WSL2; `/proc/<pid>/fd` runtime audits and harness logs serve as the verified equivalent channel.

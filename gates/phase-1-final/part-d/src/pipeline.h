@@ -16,5 +16,6 @@ struct telemetry_pipeline {
 
 int pipeline_start(struct telemetry_pipeline *pl, int in_fd);
 int pipeline_stop(struct telemetry_pipeline *pl);
+void pipeline_destroy(struct telemetry_pipeline *pl);
 
 #endif /* PART_D_PIPELINE_H */

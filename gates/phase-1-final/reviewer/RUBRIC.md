@@ -39,31 +39,43 @@ Reviewers must verify that **all six** hard criteria are satisfied before granti
 - [ ] **Total Score:** $\ge 75 / 100$.
 - [ ] **Part Floors:** Each part achieves $\ge 60\%$ (Part A $\ge 18$, Part B $\ge 15$, Part C $\ge 12$, Part D $\ge 15$).
 - [ ] **Diagnostic Mastery Bar:** Part B $\ge 70\%$ ($\ge 17.5 / 25$).
-- [ ] **Part D Runtime Root-Cause Proof:** Live evidence proving both faults are resolved.
-- [ ] **Part A Zero Leaks:** Zero ASan memory leaks and zero leaked owned file descriptors in `/proc/<pid>/fd`.
+- [ ] **Part D Runtime Root-Cause Proof:** Live evidence proving both faults are resolved and both single-fix variants fail as designed.
+- [ ] **Part A Zero Leaks:** Zero ASan memory leaks and in-process descriptor audit confirming zero leaked owned file descriptors before termination.
 - [ ] **Attestation:** Signed AI-Free attestation is present.
 
 ---
 
-## 3. Evidence Mapping Standard
+## 3. Evidence Mapping Standard: What It Proves vs What It Does Not Prove
 
 Every evaluated claim must follow the canonical mapping:
 ```text
 requirement → path/command → expected observation → what it proves → what it does not prove → pass/fail
 ```
 
-### Example 1: Part A File Descriptor Audit
-* **Requirement:** No leaked owned file descriptors.
-* **Command:** `ls -l /proc/self/fd` (or baseline vs post-run comparison in `validate.sh`).
-* **Expected Observation:** The set of open descriptors before invocation matches the set after invocation.
-* **What it proves:** All file descriptors opened for input/output files were explicitly closed.
-* **What it does not prove:** Does not prove that borrowed descriptors (`stdin`, `stdout`) were untouched (verified via source audit).
-* **Pass/Fail:** Pass if descriptor count delta is zero; Fail if count grows.
+### Example 1: Part A In-Process File Descriptor Lifecycle Audit
+* **Requirement:** All owned file descriptors opened by the application are explicitly closed before termination.
+* **Command:** In-process descriptor audit (`reviewer/part-a/test_lifecycle.c`) measuring `/proc/self/fd` active descriptor delta across stream processing, error paths, and exit.
+* **Expected Observation:** The active descriptor count in `/proc/self/fd` before opening owned files strictly matches the count after explicit cleanup, on both success and error paths.
+* **What it proves:** Proves that the C application logic explicitly invokes `close()` on every owned descriptor it allocated, and that borrowed descriptors (`stdin`, `stdout`) remain open.
+* **What it does not prove:** An external parent-shell `/proc/self/fd` comparison does NOT prove child application cleanup (because kernel process tear-down forcibly closes descriptors on exit regardless of code quality). Evidence must be captured via in-process descriptor tracking.
+* **Pass/Fail:** Pass if in-process active descriptor count returns to baseline; Fail if descriptors are retained.
 
-### Example 2: Part D Interacting Root-Cause Proof
-* **Requirement:** Live evidence proving child receives EOF and threads join before destroy.
-* **Command:** `/proc/<child_pid>/fd` audit and ThreadSanitizer run on fixed binary.
-* **Expected Observation:** Child process closes write pipe end, receives EOF, drains queue, and exits cleanly.
-* **What it proves:** Both process/FD boundary and thread lifecycle were resolved.
-* **What it does not prove:** One clean run does not prove all thread interleavings are impossible (hence 50-cycle regression).
-* **Pass/Fail:** Pass if both evidence channels confirm root cause resolution and 50/50 regression passes.
+### Example 2: Part B Concurrency Synchronization & TSan
+* **Requirement:** Multi-field invariant synchronization free of data races.
+* **Command:** Execution under ThreadSanitizer (`setarch x86_64 -R make tsan`) and 100-cycle stress regression.
+* **Expected Observation:** TSan reports zero data races on shared state and harness control flags (`exit=0`).
+* **What it proves:** Confirms that memory accesses observed during execution were properly synchronized under POSIX mutexes without data races.
+* **What it does not prove:** 100 clean non-TSan runs do not prove absence of races under arbitrary thread scheduling. TSan execution with thread-safe harness state is required.
+* **Pass/Fail:** Pass if TSan reports zero races and invariant check succeeds.
+
+### Example 3: Part D Interacting Root-Cause & Residual Failure Proof
+* **Requirement:** Demonstration that two distinct defect boundaries interact, such that single-fix repairs leave residual failure while the integrated fix restores clean operation.
+* **Command:** `reviewer/part-d/regression.sh` running broken fixture, `partial_fd_fixed`, `partial_conc_fixed`, and reference implementation.
+* **Expected Observation:**
+  1. Broken fixture hits watchdog timeout (exit code 2).
+  2. Process/FD-only repair fails with residual concurrency drain error (exit code 1).
+  3. Concurrency-only repair stalls on stream EOF (exit code 2).
+  4. Fully fixed reference passes 50/50 consecutive cycles (exit code 0).
+* **What it proves:** Proves genuine interaction between the process stream boundary and internal concurrency drain.
+* **What it does not prove:** A single fixed run alone does not prove interaction; both partial-fix failures must be demonstrated. Watchdog timeout proves bounded execution safety, not root-cause diagnosis.
+* **Pass/Fail:** Pass if all four execution states match expected results and two evidence channels are documented.

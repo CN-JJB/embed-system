@@ -17,14 +17,24 @@ struct sifter_stats {
     size_t error_records;
 };
 
+/* Callback signature accepting record and caller-provided context pointer */
 typedef int (*sifter_record_cb)(const struct sifter_record *rec, void *ctx);
 
 /*
- * Process stream from in_fd, filtering records by threshold and writing
- * accepted records to out_fd. Updates stats if non-NULL.
+ * Process stream from in_fd, dispatching each valid record to caller-supplied callback cb.
+ * Updates stats if non-NULL.
  * Returns 0 on success, or non-zero error code.
  */
-int sifter_process_stream(int in_fd, int out_fd, int32_t filter_threshold,
+int sifter_process_stream(int in_fd, sifter_record_cb cb, void *ctx,
                           struct sifter_stats *stats);
+
+/* Default standard filter context and callback implementation */
+struct sifter_filter_ctx {
+    int out_fd;
+    int32_t threshold;
+    size_t emitted_records;
+};
+
+int sifter_filter_cb(const struct sifter_record *rec, void *ctx);
 
 #endif /* SIFTER_H */

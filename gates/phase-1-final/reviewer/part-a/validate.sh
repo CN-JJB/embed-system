@@ -31,17 +31,54 @@ echo "PASS: Module file count is $FILE_COUNT."
 
 # 3. Functional Execution Tests
 echo "--- 3. Testing Functional Processing ---"
-./sifter --input "$FIXTURES_DIR/valid.txt" --filter 0 --stats 2>&1 | grep -q "valid=6"
-./sifter --input "$FIXTURES_DIR/invalid.txt" --stats 2>&1 | grep -q "errors="
-./sifter --input "$FIXTURES_DIR/empty.txt" --stats 2>&1 | grep -q "total=0"
+./sifter --input "$FIXTURES_DIR/valid.txt" --filter 0 --stats 2>&1 | grep "valid=6" >/dev/null
+./sifter --input "$FIXTURES_DIR/invalid.txt" --stats 2>&1 | grep "errors=" >/dev/null
+./sifter --input "$FIXTURES_DIR/empty.txt" --stats 2>&1 | grep "total=0" >/dev/null
 
 # Test stdin pipeline
 cat "$FIXTURES_DIR/valid.txt" | ./sifter --filter 50 --stats >/dev/null
-
 echo "PASS: Functional stream processing verified."
 
-# 4. Sanitizer Execution (ASan + UBSan + LeakSanitizer)
-echo "--- 4. Testing Memory Safety & LeakSanitizer ---"
+# 4. CLI Option Range Validation
+echo "--- 4. Testing CLI Filter Range Boundaries ---"
+set +e
+./sifter --filter 2147483648 >/dev/null 2>&1
+OVERFLOW_STATUS=$?
+./sifter --filter -2147483649 >/dev/null 2>&1
+UNDERFLOW_STATUS=$?
+set -e
+if [ "$OVERFLOW_STATUS" -eq 0 ] || [ "$UNDERFLOW_STATUS" -eq 0 ]; then
+    echo "FAIL: CLI permitted out-of-range filter threshold."
+    exit 1
+fi
+echo "PASS: CLI rejected out-of-range filter thresholds."
+
+# 5. Comprehensive Parser & Grammar Boundaries
+echo "--- 5. Testing Parser Grammar & Exact Length Boundaries ---"
+gcc -std=c17 -O0 -g3 -Wall -Wextra -Wpedantic -Werror -I"$TARGET_DIR" \
+    "$SCRIPT_DIR/test_boundaries.c" "$TARGET_DIR/parser.c" -o "$SCRIPT_DIR/run_boundaries"
+"$SCRIPT_DIR/run_boundaries" >/dev/null
+rm -f "$SCRIPT_DIR/run_boundaries"
+echo "PASS: All numeric, overflow, and exact 128/129-byte boundaries verified."
+
+# 6. Callback & Context Decoupling Test
+echo "--- 6. Testing Callback & Context Decoupling ---"
+gcc -std=c17 -O0 -g3 -Wall -Wextra -Wpedantic -Werror -I"$TARGET_DIR" \
+    "$SCRIPT_DIR/test_callback.c" "$TARGET_DIR/sifter.c" "$TARGET_DIR/parser.c" -o "$SCRIPT_DIR/run_callback"
+"$SCRIPT_DIR/run_callback" "$FIXTURES_DIR/valid.txt" >/dev/null
+rm -f "$SCRIPT_DIR/run_callback"
+echo "PASS: Custom caller callback and void *ctx verified."
+
+# 7. In-Process Descriptor Lifecycle Audit
+echo "--- 7. Testing In-Process FD Ownership & Lifecycle ---"
+gcc -std=c17 -O0 -g3 -Wall -Wextra -Wpedantic -Werror -I"$TARGET_DIR" \
+    "$SCRIPT_DIR/test_lifecycle.c" "$TARGET_DIR/sifter.c" "$TARGET_DIR/parser.c" -o "$SCRIPT_DIR/run_lifecycle"
+"$SCRIPT_DIR/run_lifecycle" "$FIXTURES_DIR/valid.txt" >/dev/null
+rm -f "$SCRIPT_DIR/run_lifecycle"
+echo "PASS: In-process descriptor audit confirmed zero leaked descriptors."
+
+# 8. Sanitizer Execution (ASan + UBSan + LeakSanitizer)
+echo "--- 8. Testing Memory Safety & LeakSanitizer ---"
 make clean >/dev/null
 make san
 export ASAN_OPTIONS=detect_leaks=1:halt_on_error=1
@@ -50,20 +87,8 @@ export ASAN_OPTIONS=detect_leaks=1:halt_on_error=1
 ./sifter_san --input "$FIXTURES_DIR/empty.txt" >/dev/null
 echo "PASS: Zero memory leaks or undefined behavior detected."
 
-# 5. File Descriptor Audit
-echo "--- 5. Testing File Descriptor Table Audit ---"
-make all >/dev/null
-BASELINE_FDS=$(ls -1 /proc/self/fd | wc -l)
-./sifter --input "$FIXTURES_DIR/valid.txt" --filter 100 >/dev/null
-AFTER_FDS=$(ls -1 /proc/self/fd | wc -l)
-if [ "$BASELINE_FDS" -ne "$AFTER_FDS" ]; then
-    echo "FAIL: Baseline FD count $BASELINE_FDS differs from post-run $AFTER_FDS."
-    exit 1
-fi
-echo "PASS: Zero leaked owned file descriptors verified."
-
-# 6. Rebuild Dependency Check
-echo "--- 6. Verifying Header Dependency Tracking ---"
+# 9. Rebuild Dependency Check
+echo "--- 9. Verifying Header Dependency Tracking ---"
 make clean >/dev/null
 make all >/dev/null
 PRE_TIME=$(stat -c %Y sifter)

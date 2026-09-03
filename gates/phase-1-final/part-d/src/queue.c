@@ -35,18 +35,12 @@ int queue_push(struct bounded_queue *q, const struct queue_item *item) {
 
 int queue_pop(struct bounded_queue *q, struct queue_item *out_item) {
     pthread_mutex_lock(&q->lock);
-    /* BUGGY CONCURRENCY: Uses 'if' instead of 'while' predicate loop */
-    if (q->count == 0 && !q->closed) {
+    while (q->count == 0 && !q->closed) {
         pthread_cond_wait(&q->not_empty, &q->lock);
     }
     if (q->count == 0 && q->closed) {
         pthread_mutex_unlock(&q->lock);
-        return -1; /* Closed and empty */
-    }
-    if (q->count == 0) {
-        /* Spurious wakeup or underflow occurred */
-        pthread_mutex_unlock(&q->lock);
-        return -2;
+        return -1;
     }
     *out_item = q->items[q->head];
     q->head = (q->head + 1) % QUEUE_CAPACITY;

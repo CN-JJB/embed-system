@@ -10,7 +10,7 @@
 
 static void timeout_handler(int sig) {
     (void)sig;
-    const char msg[] = "\n>>> TIMEOUT: Part D streaming pipeline hung during shutdown! <<<\n";
+    const char msg[] = "\n>>> TIMEOUT: Telemetry pipeline exceeded safety watchdog timer! <<<\n";
     write(STDERR_FILENO, msg, sizeof(msg) - 1);
     _exit(2);
 }
@@ -20,7 +20,7 @@ int main(int argc, char **argv) {
     (void)argv;
 
     signal(SIGALRM, timeout_handler);
-    alarm(3); /* 3-second watchdog timer against indefinite stalls */
+    alarm(3);
 
     printf("=== Starting Part D Telemetry Streaming Service ===\n");
 
@@ -39,16 +39,7 @@ int main(int argc, char **argv) {
     }
 
     if (pid == 0) {
-        /*
-         * CHILD (Worker Daemon)
-         *
-         * BUGGY PROCESS / FD LIFECYCLE:
-         * Child inherits p_fd[1] (write descriptor) but fails to close it!
-         * Because the child retains an open write end to its own input pipe,
-         * read() on p_fd[0] never receives EOF even after parent closes its write end.
-         */
         int in_fd = p_fd[0];
-        /* close(p_fd[1]); <-- BUG: Omitted! Leaked inherited write descriptor */
 
         struct telemetry_pipeline pipeline;
         if (pipeline_start(&pipeline, in_fd) != 0) {
@@ -56,18 +47,24 @@ int main(int argc, char **argv) {
             _exit(1);
         }
 
-        /* Wait for pipeline shutdown and join */
         pipeline_stop(&pipeline);
+
+        if (pipeline.processed_count != 50) {
+            fprintf(stderr, "[child] Drain verification failed: processed %lu of 50 items\n",
+                    (unsigned long)pipeline.processed_count);
+            pipeline_destroy(&pipeline);
+            close(in_fd);
+            _exit(1);
+        }
+
+        pipeline_destroy(&pipeline);
         close(in_fd);
         printf("[child] Clean shutdown complete. Processed=%lu, Sum=%ld\n",
                (unsigned long)pipeline.processed_count, (long)pipeline.accumulated_sum);
         _exit(0);
     }
 
-    /*
-     * PARENT (Supervisor)
-     */
-    close(p_fd[0]); /* Parent does not read from pipe */
+    close(p_fd[0]);
 
     printf("[parent] Streaming 50 telemetry items to worker daemon...\n");
     for (uint64_t i = 1; i <= 50; i++) {

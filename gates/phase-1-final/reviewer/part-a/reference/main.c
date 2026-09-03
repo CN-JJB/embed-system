@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <limits.h>
 
 int main(int argc, char **argv) {
     const char *input_path = NULL;
@@ -20,8 +21,9 @@ int main(int argc, char **argv) {
             output_path = argv[++i];
         } else if (strcmp(argv[i], "--filter") == 0 && i + 1 < argc) {
             char *endptr = NULL;
+            errno = 0;
             long val = strtol(argv[++i], &endptr, 10);
-            if (*endptr != '\0') {
+            if (*endptr != '\0' || errno == ERANGE || val < (long)INT32_MIN || val > (long)INT32_MAX) {
                 fprintf(stderr, "Error: Invalid filter threshold '%s'\n", argv[i]);
                 return 1;
             }
@@ -59,8 +61,14 @@ int main(int argc, char **argv) {
         out_owned = 1;
     }
 
+    struct sifter_filter_ctx fctx = {
+        .out_fd = out_fd,
+        .threshold = filter_threshold,
+        .emitted_records = 0
+    };
+
     struct sifter_stats stats;
-    int res = sifter_process_stream(in_fd, out_fd, filter_threshold, &stats);
+    int res = sifter_process_stream(in_fd, sifter_filter_cb, &fctx, &stats);
 
     if (in_owned) {
         close(in_fd);
@@ -77,7 +85,7 @@ int main(int argc, char **argv) {
     if (show_stats) {
         fprintf(stderr, "[sifter] total=%zu valid=%zu filtered=%zu errors=%zu\n",
                 stats.total_lines, stats.valid_records,
-                stats.filtered_records, stats.error_records);
+                fctx.emitted_records, stats.error_records);
     }
 
     return 0;

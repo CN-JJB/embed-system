@@ -5,6 +5,7 @@
 #include <string.h>
 #include <errno.h>
 #include <limits.h>
+#include <ctype.h>
 
 enum parser_status sifter_parse_line(const char *line, size_t len,
                                      struct sifter_record *out_rec)
@@ -28,42 +29,78 @@ enum parser_status sifter_parse_line(const char *line, size_t len,
         return PARSE_ERR_SYNTAX;
     }
 
-    char *endptr = NULL;
-
-    /* 1. timestamp_ns: uint64 */
-    errno = 0;
-    unsigned long long ts = strtoull(buf, &endptr, 10);
-    if (errno == ERANGE || endptr == buf || *endptr != ' ') {
+    char *p = buf;
+    while (*p == ' ' || *p == '\t') {
+        p++;
+    }
+    if (*p == '\0') {
         return PARSE_ERR_SYNTAX;
     }
 
-    /* Advance past space */
-    while (*endptr == ' ') {
+    /* 1. timestamp_ns: uint64. Must NOT be negative */
+    if (*p == '-' || !isdigit((unsigned char)*p)) {
+        return PARSE_ERR_SYNTAX;
+    }
+
+    char *endptr = NULL;
+    errno = 0;
+    unsigned long long ts = strtoull(p, &endptr, 10);
+    if (errno == ERANGE) {
+        return PARSE_ERR_RANGE;
+    }
+    if (endptr == p || (*endptr != ' ' && *endptr != '\t')) {
+        return PARSE_ERR_SYNTAX;
+    }
+
+    /* Advance past delimiter */
+    while (*endptr == ' ' || *endptr == '\t') {
         endptr++;
     }
     char *p2 = endptr;
 
-    /* 2. sensor_id: uint8 */
-    errno = 0;
-    unsigned long sid = strtoul(p2, &endptr, 10);
-    if (errno == ERANGE || endptr == p2 || (*endptr != ' ' && *endptr != '\0') || sid > 255) {
-        return PARSE_ERR_RANGE;
+    /* 2. sensor_id: uint8. Must NOT be negative */
+    if (*p2 == '-' || !isdigit((unsigned char)*p2)) {
+        return PARSE_ERR_SYNTAX;
     }
 
-    /* Advance past space */
-    while (*endptr == ' ') {
+    errno = 0;
+    unsigned long sid = strtoul(p2, &endptr, 10);
+    if (errno == ERANGE || sid > 255) {
+        return PARSE_ERR_RANGE;
+    }
+    if (endptr == p2 || (*endptr != ' ' && *endptr != '\t')) {
+        return PARSE_ERR_SYNTAX;
+    }
+
+    /* Advance past delimiter */
+    while (*endptr == ' ' || *endptr == '\t') {
         endptr++;
     }
     char *p3 = endptr;
 
-    /* 3. metric_val: int32 */
+    /* 3. metric_val: int32 signed */
+    if (*p3 == '\0') {
+        return PARSE_ERR_SYNTAX;
+    }
+    if (*p3 != '-' && *p3 != '+' && !isdigit((unsigned char)*p3)) {
+        return PARSE_ERR_SYNTAX;
+    }
+
     errno = 0;
     long long mval = strtoll(p3, &endptr, 10);
-    if (errno == ERANGE || endptr == p3 || (*endptr != '\0' && *endptr != ' ' && *endptr != '\n')) {
+    if (errno == ERANGE || mval < (long long)INT32_MIN || mval > (long long)INT32_MAX) {
         return PARSE_ERR_RANGE;
     }
-    if (mval < (long long)INT32_MIN || mval > (long long)INT32_MAX) {
-        return PARSE_ERR_RANGE;
+    if (endptr == p3) {
+        return PARSE_ERR_SYNTAX;
+    }
+
+    /* Verify no trailing non-whitespace garbage exists */
+    while (*endptr == ' ' || *endptr == '\t') {
+        endptr++;
+    }
+    if (*endptr != '\0') {
+        return PARSE_ERR_SYNTAX;
     }
 
     if (out_rec != NULL) {

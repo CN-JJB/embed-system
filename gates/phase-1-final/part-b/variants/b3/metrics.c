@@ -11,7 +11,6 @@ void metrics_init(struct metrics_tracker *mt) {
 void metrics_transfer(struct metrics_tracker *mt, int64_t amount) {
     pthread_mutex_lock(&mt->lock);
     mt->pool_a -= amount;
-    /* Dropping lock mid-transfer exposes inconsistent intermediate state to auditor */
     pthread_mutex_unlock(&mt->lock);
 
     pthread_mutex_lock(&mt->lock);

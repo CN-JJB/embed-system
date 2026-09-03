@@ -47,6 +47,9 @@ The implementation must consist of **at least four source/header files** with a 
 4. **Callback Interface:** Record processing must decouple ingestion from handling via a callback function and context pointer:
    ```c
    typedef int (*sifter_record_cb)(const struct sifter_record *rec, void *ctx);
+
+   int sifter_process_stream(int in_fd, sifter_record_cb cb, void *ctx,
+                             struct sifter_stats *stats);
    ```
 
 ### 2.5 Build System Contract

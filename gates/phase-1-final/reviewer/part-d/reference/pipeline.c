@@ -1,3 +1,4 @@
+#define _DEFAULT_SOURCE
 #define _POSIX_C_SOURCE 200809L
 #include "pipeline.h"
 #include <unistd.h>
@@ -34,11 +35,12 @@ static void *consumer_worker(void *arg) {
     for (;;) {
         int res = queue_pop(&pl->queue, &item);
         if (res == -1) {
-            break; /* Queue closed and drained */
+            break;
         }
         if (res == 0) {
             pl->processed_count++;
             pl->accumulated_sum += item.value;
+            usleep(1000);
         }
     }
 
@@ -75,12 +77,14 @@ int pipeline_stop(struct telemetry_pipeline *pl) {
         return 0;
     }
 
-    /* FIXED LIFECYCLE ORDERING: Join workers first, then destroy synchronization */
+    /* Join both reader and consumer threads to guarantee clean queue drain */
     pthread_join(pl->reader_thread, NULL);
     pthread_join(pl->consumer_thread, NULL);
 
-    queue_destroy(&pl->queue);
-
     pl->active = false;
     return 0;
+}
+
+void pipeline_destroy(struct telemetry_pipeline *pl) {
+    queue_destroy(&pl->queue);
 }

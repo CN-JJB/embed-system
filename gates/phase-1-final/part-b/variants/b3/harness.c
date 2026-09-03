@@ -7,8 +7,9 @@
 #include <stdbool.h>
 
 static struct metrics_tracker g_mt;
-static volatile bool g_running = true;
-static volatile bool g_violation_found = false;
+static pthread_mutex_t g_ctrl_lock = PTHREAD_MUTEX_INITIALIZER;
+static bool g_running = true;
+static bool g_violation_found = false;
 
 static void timeout_handler(int sig) {
     (void)sig;
@@ -17,9 +18,35 @@ static void timeout_handler(int sig) {
     _exit(2);
 }
 
+static bool is_running(void) {
+    pthread_mutex_lock(&g_ctrl_lock);
+    bool r = g_running;
+    pthread_mutex_unlock(&g_ctrl_lock);
+    return r;
+}
+
+static void stop_harness(bool violation) {
+    pthread_mutex_lock(&g_ctrl_lock);
+    g_running = false;
+    if (violation) {
+        g_violation_found = true;
+    }
+    pthread_mutex_unlock(&g_ctrl_lock);
+}
+
+static bool check_violation(void) {
+    pthread_mutex_lock(&g_ctrl_lock);
+    bool v = g_violation_found;
+    pthread_mutex_unlock(&g_ctrl_lock);
+    return v;
+}
+
 static void *worker_ab(void *arg) {
     (void)arg;
-    for (int i = 0; i < 50000 && g_running; i++) {
+    for (int i = 0; i < 50000; i++) {
+        if ((i % 64 == 0) && !is_running()) {
+            break;
+        }
         metrics_transfer(&g_mt, 10);
         metrics_transfer(&g_mt, -10);
     }
@@ -28,12 +55,11 @@ static void *worker_ab(void *arg) {
 
 static void *auditor(void *arg) {
     (void)arg;
-    while (g_running) {
+    while (is_running()) {
         int64_t a = 0, b = 0;
         metrics_read_snapshot(&g_mt, &a, &b);
         if (a + b != B3_TOTAL_BALANCE) {
-            g_violation_found = true;
-            g_running = false;
+            stop_harness(true);
             break;
         }
     }
@@ -52,14 +78,15 @@ int main(void) {
     pthread_create(&ta, NULL, auditor, NULL);
 
     pthread_join(tw, NULL);
-    g_running = false;
+    stop_harness(false);
     pthread_join(ta, NULL);
 
     int64_t final_a = 0, final_b = 0;
     metrics_read_snapshot(&g_mt, &final_a, &final_b);
     metrics_destroy(&g_mt);
 
-    if (g_violation_found) {
+    bool violation = check_violation();
+    if (violation) {
         fprintf(stderr, ">>> FAULT DETECTED: Multi-field invariant violation (pool_a + pool_b != %lld) observed! <<<\n",
                 (long long)B3_TOTAL_BALANCE);
         return 1;
