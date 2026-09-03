@@ -15,14 +15,14 @@
 Phase 2 is complete when the learner can independently:
 
 - reason about MCU reset, vector table fetch, `.data` copy, `.bss` zeroing, and startup-to-`main()` execution from linker script and assembly source;
-- explain Cortex-M3 privilege, Thread vs Handler mode, MSP vs PSP, exception entry/exit stacking (`{r0-r3, r12, lr, pc, xpsr}`), and `EXC_RETURN` codes;
+- explain Cortex-M3 execution states, Thread vs Handler mode, MSP vs PSP, exception entry/exit stacking (`{r0-r3, r12, lr, pc, xpsr}`), and `EXC_RETURN` codes;
 - configure and diagnose peripheral memory-mapped registers (MMIO) using direct CMSIS register structs, reason about `volatile` semantic limits, avoid read-modify-write (RMW) hazards using atomic bit registers (BSRR/BRR), and handle memory ordering/write-buffering barriers (`DSB`/`ISB`);
-- calculate timer prescalers/periods from the internal clock tree, configure NVIC interrupt priorities, explain preemption vs subpriority, and prevent interrupt storms;
-- construct an autonomous hardware data acquisition path using Timer TRGO, ADC, and DMA circular double-buffering without CPU polling;
-- explain FreeRTOS kernel scheduling mechanics: ready/blocked/suspended task state lists, tick processing (`xTaskIncrementTick`), and the PendSV context switch mechanism (`{r4-r11}` software stacking);
-- implement robust ISR-to-task handoffs using queues and task notifications, audit NVIC priority settings against `configMAX_SYSCALL_INTERRUPT_PRIORITY`, and use `portYIELD_FROM_ISR`;
+- calculate timer prescalers/periods from the internal clock tree, configure NVIC interrupt priorities, distinguish CMSIS logical priority from encoded hardware priority bytes, and prevent interrupt storms;
+- construct an autonomous hardware data acquisition path using Timer 3 TRGO update triggers, ADC1 regular external triggering (`EXTSEL = 0b100`), and DMA1 Channel 1 circular double-buffering without CPU polling;
+- explain FreeRTOS kernel scheduling mechanics: ready/delayed/pending-ready task state lists, tick processing (`xTaskIncrementTick`), and the PendSV context switch mechanism (`{r4-r11}` software stacking on PSP);
+- implement robust ISR-to-task handoffs using queues, audit NVIC priority settings against `configMAX_SYSCALL_INTERRUPT_PRIORITY`, and use `portYIELD_FROM_ISR`;
 - distinguish mutexes from binary semaphores, reproduce and resolve unbounded priority inversion using priority inheritance, and audit code for deadlock;
-- monitor task runtime health using stack watermarks (`uxTaskGetStackHighWaterMark`), configure stack overflow hooks, and integrate an independent watchdog (IWDG);
+- monitor task runtime health using stack watermarks (`uxTaskGetStackHighWaterMark`), configure stack overflow hooks (`taskCHECK_FOR_STACK_OVERFLOW`), and integrate an independent watchdog (IWDG);
 - capture physical evidence of system timing (ISR latency, jitter, context switch duration) using GPIO toggles, oscilloscope/logic analyzer probes, and live SWD/GDB register inspection;
 - debug complex MCU/RTOS faults using the disciplined hypothesis-driven framework: `Symptom -> Own Description -> Hypotheses -> Evidence -> Narrow Scope -> Root Cause -> Fix -> Regression`.
 
@@ -54,7 +54,7 @@ Hardware-software debugging begins in Module 1. There is no isolated "RTOS debug
 |---|---|---|---:|---:|---|
 | **P2-M01** | Reset, Startup, Linker Script, and Vector Table | L3 / L4-local link & boot faults | 3.5 | 1.0 | Reconstruct minimal startup & linker; diagnose vector table alignment/offset fault |
 | **P2-M02** | MMIO, Clock Tree, Hardware Timers, and NVIC Mechanism | L3 / L4-local register & IRQ faults | 4.5 | 1.0 | Bring up timer/clock from RM; diagnose nested IRQ priority & RMW hazards |
-| **P2-M03** | Peripheral Acquisition & DMA Data Path | L2–L3 DMA / L4-local peripheral path | 4.5 | 1.0 | Build Timer+ADC+DMA circular ping-pong buffer; diagnose DMA stall & buffer lifetime |
+| **P2-M03** | Peripheral Acquisition & DMA Data Path | L2–L3 DMA / L4-local peripheral path | 4.5 | 1.0 | Build TIM3-TRGO+ADC+DMA circular ping-pong buffer; diagnose DMA stall & buffer lifetime |
 | **P2-M04** | FreeRTOS Scheduler, Task Lifecycle, and Context Switch | L3 FreeRTOS core / L3 Cortex-M port | 5.0 | 1.0 | Walk through `tasks.c` & `port.c`; verify PendSV register stacking in GDB |
 | **P2-M05** | Queue, Mutex, and ISR-Safe Synchronization Boundaries | L3 synchronization / L3 ISR handoff | 4.5 | 1.0 | Build ISR-to-Task queue pipeline; audit NVIC vs `configMAX_SYSCALL`; verify mutex vs semaphore |
 | **P2-M06** | Priority Inversion, Inheritance, Stack Watermark & Debugging | L3 concurrency / L4-local RTOS faults | 4.0 | 0.5 | Reproduce unbounded priority inversion; observe inheritance fix; detect stack overflow |
@@ -80,14 +80,15 @@ Hardware-software debugging begins in Module 1. There is no isolated "RTOS debug
 
 ## Mandatory source policy
 
-All curriculum content must derive from primary specifications and official upstream source code:
+All curriculum content must derive from primary specifications and authoritative upstream source code:
 
-- **STMicroelectronics Reference Manual RM0008** (Rev 21, Feb 2021) — Authoritative register definitions, clock tree, NVIC table, Timer TRGO, ADC regular/injected modes, and DMA channel mappings.
-- **STMicroelectronics Programming Manual PM0056** (Rev 6, May 2020) — Cortex-M3 processor programming model, core registers (CONTROL, PRIMASK, BASEPRI), NVIC register interface, and SysTick.
-- **STMicroelectronics Datasheet DS5319** (Rev 18, Mar 2021) — STM32F103x8/xB electrical characteristics, pin multiplexing, and memory mapping.
+- **STMicroelectronics Reference Manual RM0008** (DocID 13902 Rev 21, Feb 2021) — Authoritative register definitions, clock tree, NVIC table, Timer 3 TRGO, ADC regular trigger mapping (EXTSEL=0b100), and DMA1 channel mappings.
+- **STMicroelectronics Programming Manual PM0056** (DocID 15491 Rev 7, Dec 2024) — Cortex-M3 processor programming model, core registers (CONTROL, PRIMASK, BASEPRI), NVIC register interface, and SysTick.
+- **STMicroelectronics Datasheet DS5319** (DocID 13587 Rev 20, 31 Jul 2025) — STM32F103x8/xB electrical characteristics, pin multiplexing, and memory mapping.
 - **Armv7-M Architecture Reference Manual** (ARM DDI 0403E.e) — Exception model, stack alignment, instruction execution states, memory barriers (`DSB`, `ISB`, `DMB`).
 - **FreeRTOS-Kernel Upstream** (Release V11.3.0, commit `9b777ae`, MIT License) — Official kernel source for task scheduling, queues, and Cortex-M3 port.
-- **CMSIS Core / Device Headers** (CMSIS_5 v5.9.0 / `cmsis_device_f1` v4.3.4, Apache-2.0) — Vendor-neutral register structs (`core_cm3.h`, `stm32f103xb.h`).
+- **CMSIS Core / Device Headers** (CMSIS_5 v5.9.0 / `cmsis_device_f1` v4.3.5, Apache-2.0 / BSD-3-Clause) — Vendor-neutral register structs (`core_cm3.h`, `stm32f103xb.h`).
+- **Original 64 KB Linker Script Policy:** The teaching linker script (`stm32f103c8tx_flash.ld`) is an original pedagogical work written from GNU ld documentation and the physical STM32F103C8 memory map (64 KB Flash, 20 KB SRAM). The vendor template in ST repositories carries an Ac6 non-redistribution notice and specifies 128 KB Flash; it is strictly a read-only comparison reference and is not redistributed.
 
 ---
 
@@ -103,14 +104,14 @@ All curriculum content must derive from primary specifications and official upst
    - `uxTaskGetStackHighWaterMark()` in `tasks.c` and `taskCHECK_FOR_STACK_OVERFLOW()` in `include/stack_macros.h` — complementary stack-usage and overflow-detection mechanisms.
 2. **`portable/GCC/ARM_CM3/port.c` & `portmacro.h`**:
    - `xPortStartScheduler()` — NVIC priority configuration for PendSV/SysTick and SVC 0 kickoff.
-   - `prvPortStartFirstTask()` & `vPortSVCHandler()` — Starting the first task in Thread mode on PSP; the standard non-MPU ARM_CM3 port does not itself introduce unprivileged task execution.
+   - `prvPortStartFirstTask()` & `vPortSVCHandler()` — Starting the first task in Thread mode on PSP; standard non-MPU ARM_CM3 port runs tasks with privileged Thread mode.
    - `xPortPendSVHandler()` — Assembly context switch: saving `{r4-r11}` on PSP, swapping `pxCurrentTCB->pxTopOfStack`, restoring `{r4-r11}`, and returning with `0xFFFFFFFD`.
    - `vPortValidateInterruptPriority()` — Assertion checking ISR priority against `configMAX_SYSCALL_INTERRUPT_PRIORITY`.
    - `portSET_INTERRUPT_MASK_FROM_ISR()` / `portCLEAR_INTERRUPT_MASK_FROM_ISR()` — Masking interrupts via `BASEPRI`.
 3. **`queue.c`**:
    - `xQueueGenericSend()` & `xQueueGenericReceive()` — Bounded FIFO ring buffer, copying data, critical sections, and event list task unblocking.
-   - `xQueueGenericSendFromISR()` — ISR-safe enqueueing without scheduler invocation, setting `*pxHigherPriorityTaskWoken`.
-   - Mutex vs Semaphore implementation — `xQueueCreateMutex()`, `pxMutexHolder` tracking, and priority inheritance via `xTaskPriorityInherit()` and `xTaskPriorityDisinherit()`.
+   - `xQueueGenericSendFromISR()` — ISR-safe enqueueing without scheduler invocation: unblocks waiting tasks directly to `pxReadyTasksLists` if the scheduler is active, or defers to `xPendingReadyList` if the scheduler is suspended; communicates preemption requirement via `*pxHigherPriorityTaskWoken`.
+   - Mutex vs Semaphore implementation — `xQueueCreateMutex()`, `pxMutexHolder` tracking, and priority inheritance via `xTaskPriorityInherit()` and `xTaskPriorityDisinherit()` in `tasks.c`.
 4. **`list.c`**:
    - Circular doubly linked list operations: `vListInsertEnd()`, `vListInsert()`, `uxListRemove()`.
 5. **`portable/MemMang/heap_4.c`**:
@@ -127,19 +128,21 @@ All curriculum content must derive from primary specifications and official upst
 
 ## Fault recurrence contract
 
-| Fault | Introduced In | Re-tested In | Root Cause Category |
+The curriculum organizes recurring hardware/software failure modes into **competency families**. Module challenges teach diagnostic discipline within each family; the Phase 2 Final Gate evaluates *unfamiliar variants* within these families under AI-Free examination conditions:
+
+| Fault Competency Family | Introduced In | Final Gate Competency Focus | Root Cause Category |
 |---|---|---|---|
-| Vector table alignment / Thumb bit missing | P2-M01 | P2-GATE | Reset/Startup |
-| Linker script `.data` / `.bss` symbol mismatch | P2-M01 | P2-M07, P2-GATE | Linker / Runtime |
-| Peripheral clock not enabled in RCC | P2-M02 | P2-M03, P2-GATE | MMIO / Clock |
-| RMW bit hazard on GPIO / shared register | P2-M02 | P2-M05 | Concurrency / MMIO |
-| Interrupt pending flag not cleared in ISR (storm) | P2-M02 | P2-M05, P2-GATE | Interrupt Handling |
-| DMA buffer allocated on stack (lifetime bug) | P2-M03 | P2-M07 | Memory / DMA |
-| DMA data width mismatch (16-bit ADC to 8-bit RAM) | P2-M03 | P2-GATE | DMA Configuration |
-| Calling non-ISR API from interrupt handler | P2-M04 | P2-M05, P2-GATE | FreeRTOS API Boundary |
-| ISR priority higher than `configMAX_SYSCALL` | P2-M05 | P2-M07, P2-GATE | NVIC / RTOS Interaction |
-| Unbounded priority inversion (binary semaphore lock) | P2-M06 | P2-M07, P2-GATE | Concurrency / Synchronization |
-| Task stack overflow / corruption | P2-M06 | P2-M07, P2-GATE | Memory Safety |
+| Vector table alignment / Thumb bit missing | P2-M01 | Gate Part A: Startup/runtime reasoning | Reset / Startup |
+| Linker script `.data` / `.bss` symbol mismatch | P2-M01 | Gate Part A: Section & LMA/VMA bounds | Linker / Runtime |
+| Peripheral clock not enabled in RCC | P2-M02 | Gate Part B: Peripheral register diagnosis | MMIO / Clock Tree |
+| RMW bit hazard on GPIO / shared register | P2-M02 | Gate Part D: Concurrency race condition | Concurrency / MMIO |
+| Interrupt pending flag unacknowledged (storm) | P2-M02 | Gate Part B: Interrupt lifecycle diagnosis | Interrupt Handling |
+| DMA buffer allocated on stack (lifetime bug) | P2-M03 | Gate Part B: Buffer lifetime & memory safety | Memory / DMA |
+| DMA data width mismatch (16-bit ADC to 8-bit RAM) | P2-M03 | Gate Part B: Transfer configuration | DMA Configuration |
+| Calling task-context API from interrupt handler | P2-M04 | Gate Part C: Execution context audit | FreeRTOS API Boundary |
+| ISR priority higher than `configMAX_SYSCALL` | P2-M05 | Gate Part C: Priority & BASEPRI masking | NVIC / RTOS Interaction |
+| Unbounded priority inversion (binary semaphore lock) | P2-M06 | Gate Part D: Synchronization architecture | Concurrency / Real-Time |
+| Task stack overflow / corruption | P2-M06 | Gate Part D: Stack watermark & memory bounds | Memory Safety |
 
 A fix without verified register, memory, or oscilloscope evidence does not pass any module gate.
 
@@ -150,25 +153,25 @@ A fix without verified register, memory, or oscilloscope evidence does not pass 
 The canonical integration project is the **STM32 FreeRTOS Acquisition Node** (P2-M07). It represents a production-grade embedded subsystem without application bloat:
 
 ```text
-Timer Trigger (TIM2 TRGO @ 1 kHz)
-   -> ADC1 regular conversion
+Timer 3 Trigger (TIM3 TRGO update @ 1 kHz)
+   -> ADC1 regular external trigger (EXTSEL = 0b100)
    -> DMA1 Channel 1 circular ping-pong buffer (2x64 samples)
    -> Half-Transfer / Transfer-Complete ISR
    -> Acquisition Queue (xAcqQueue)
-   -> Processing Task (Task_Process) -> computes min, max, avg, rms
+   -> Processing Task (Task_Process) -> computes min, max, avg, integer RMS
    -> Logging Queue (xLogQueue)
-   -> Communication Task (Task_Comm) -> USART1 DMA/IRQ telemetry
+   -> Communication Task (Task_Comm) -> USART1 interrupt-driven / polling TX
    -> Health Monitor Task (Task_Health) -> stack watermark check & IWDG refresh
 ```
 
-- **Milestone 0 (Clock & Pinout Harness):** Configure 72 MHz SYSCLK via PLL, set up GPIO timing markers (PA1–PA4), verify basic Make build and OpenOCD SWD flashing.
-- **Milestone 1 (Autonomous DMA Data Path):** Configure TIM2 TRGO update triggers to drive ADC1 conversions into a circular ping-pong DMA buffer. Verify autonomous transfer with CPU sleeping (`WFI`).
-- **Milestone 2 (FreeRTOS Core & ISR Handoff):** Integrate FreeRTOS kernel. In DMA HT/TC ISR, post buffer tokens to `xAcqQueue` via `xQueueSendFromISR()` and yield via `portYIELD_FROM_ISR()`. Processing task unblocks and calculates batch statistics.
-- **Milestone 3 (Logging, Mutex & Priority Inversion Test):** Implement `Task_Comm` serializing telemetry packets. Protect shared telemetry buffer with a mutex. Inject an intentional lower-priority CPU load to verify priority inheritance prevents telemetry jitter.
-- **Milestone 4 (Health Monitoring & Scope Evidence):** Implement `Task_Health` inspecting `uxTaskGetStackHighWaterMark` and kicking IWDG. Connect oscilloscope/logic analyzer to GPIO markers; capture and document ISR-to-Task latency and context-switch duration.
-- **Final Project Acceptance:** Zero compiler warnings (`-Wall -Wextra -Werror`), zero memory leaks, no unhandled exceptions, verified waveform documentation, and concise English `BUILD_RUN_DEBUG.md`.
+- **Milestone 0 (Clock & Pinout Harness):** Configure 72 MHz SYSCLK via PLL (or 64 MHz HSI fallback if board lacks HSE), set up GPIO timing markers (PA1–PA4), verify Make build with Arm GNU Toolchain 13.3.rel1 and OpenOCD SWD flashing.
+- **Milestone 1 (Autonomous DMA Data Path):** Configure TIM3 update event to emit TRGO pulses driving ADC1 regular conversions (`EXTSEL = 0b100`) into a circular ping-pong DMA buffer (`2 * 64` 16-bit samples). Verify autonomous transfer with CPU sleeping (`WFI`).
+- **Milestone 2 (FreeRTOS Core & ISR Handoff):** Integrate FreeRTOS kernel. In DMA HT/TC ISR, post buffer tokens to `xAcqQueue` via `xQueueSendFromISR()` and yield via `portYIELD_FROM_ISR()`. Processing task unblocks and calculates batch statistics using integer arithmetic.
+- **Milestone 3 (Logging, Mutex & Contention Test):** Implement `Task_Comm` transmitting fixed-size telemetry packets over USART1. Guard logging output buffer with `xTelemetryMutex`. Verify priority inheritance by introducing contention between `Task_Process`, `Task_Diag`, and background compute task `Task_Compute`.
+- **Milestone 4 (Health Monitoring & Scope Evidence):** Implement `Task_Health` inspecting `uxTaskGetStackHighWaterMark` across all tasks and refreshing IWDG. Connect oscilloscope/logic analyzer to GPIO markers; capture and document ISR-to-Task latency and context-switch duration.
+- **Final Project Acceptance:** Zero compiler warnings (`-Wall -Wextra -Werror`), static initialization with zero steady-state heap allocation churn, no unhandled exceptions, verified waveform documentation, and concise English `BUILD_RUN_DEBUG.md`.
 
-**Explicit Non-Goals:** No USB stack, no TCP/IP, no FatFS, no graphical UI, no cloud/MQTT, no dynamic task creation/destruction after startup.
+**Explicit Non-Goals:** No secondary DMA path in MUST (USART DMA is SHOULD); no USB stack; no TCP/IP; no FatFS; no graphical UI; no cloud/MQTT; no dynamic task creation/destruction after startup.
 
 ---
 
@@ -186,9 +189,9 @@ Timer Trigger (TIM2 TRGO @ 1 kHz)
 | Week | MUST Modules | SHOULD Activities | Weekly Gate / Milestones | Weekly Planned Load |
 |---|---|---|---|---:|
 | **Week 1** | **P2-M01** (3.5 h) + **P2-M02** (4.5 h) | Disassemble startup file; inspect CMSIS headers | Bare-metal boot, timer ISR bring-up & RMW fix | 8.0 h MUST |
-| **Week 2** | **P2-M03** (4.5 h) + **P2-M04** (5.0 h) | Test DMA transfer error ISR; trace SysTick tickless hook | DMA circular ping-pong buffer & PendSV stack verification | 9.5 h MUST |
+| **Week 2** | **P2-M03** (4.5 h) + **P2-M04** (5.0 h) | Test DMA transfer error ISR; trace SysTick tickless hook | TIM3-TRGO ADC+DMA circular buffer & PendSV verification | 9.5 h MUST |
 | **Week 3** | **P2-M05** (4.5 h) + **P2-M06** (4.0 h) | Test counting semaphore; experiment with `heap_1` vs `heap_4` | ISR handoff validation & priority inversion reproduction/fix | 8.5 h MUST |
-| **Week 4** | **P2-M07** Project (5.0 h) + **P2-GATE** (3.5 h) | Measure jitter under heavy interrupt load | Acquisition Node acceptance & Final Gate Pass | 8.5 h MUST |
+| **Week 4** | **P2-M07** Project (5.0 h) + **P2-GATE** (3.5 h) | USART DMA transmit exploration | Acquisition Node acceptance & Final Gate Pass | 8.5 h MUST |
 
 If personal or work schedules slip, drop SHOULD activities immediately to preserve the 34.5 h MUST envelope and protect Gate review time.
 
@@ -215,20 +218,24 @@ If personal or work schedules slip, drop SHOULD activities immediately to preser
 
 ## Phase 2 Final Gate overview
 
-The Phase 2 Final Gate is an **AI-Free**, hands-on, transfer-oriented assessment (estimated **3.5 h**). It evaluates whether the learner can independently reason, configure, and debug MCU hardware and RTOS mechanisms:
+The Phase 2 Final Gate is an **AI-Free**, hands-on, transfer-oriented assessment (estimated **3.5 h**). It evaluates whether the learner can independently reason, configure, and debug MCU hardware and RTOS mechanisms across four core ability families:
 
-- **Part A — Bare-Metal Startup & Linker Reasoning (25%):** Reconstruct memory sections, analyze a vector table and linker script from scratch, and resolve an injected boot fault (e.g., misaligned vector table or corrupt `.data` initialization).
-- **Part B — Peripheral Register & DMA Data-Path Diagnosis (25%):** Diagnose a non-functioning peripheral data path (Timer TRGO, ADC, or DMA) from live GDB register dumps. Correct configuration bits, compute sampling frequencies, and verify circular buffer operation.
-- **Part C — FreeRTOS Scheduling & Context Switch Mechanics (25%):** Walk through a live GDB breakpoint trace at `xPortPendSVHandler`, calculate PSP vs MSP stack locations, inspect TCB list nodes, and audit an NVIC priority assignment against `configMAX_SYSCALL_INTERRUPT_PRIORITY`.
-- **Part D — Concurrency, Priority Inversion & HW/SW Debugging (25%):** Given a seeded system fault exhibiting timing jitter or crashes, formulate hypotheses, collect register/memory/waveform evidence, identify the root cause (e.g., unbounded priority inversion or task stack exhaustion), and implement an evidence-backed fix.
+- **Part A — Bare-Metal Startup & Linker Reasoning (25% / Floor 60%):** Reconstruct memory sections, analyze a vector table and linker script from scratch, and resolve an unfamiliar fault in the startup/linker/memory-initialization family.
+- **Part B — Peripheral Register & DMA Data-Path Diagnosis (25% / Floor 60%):** Diagnose a non-functioning peripheral data path from live GDB register dumps. Correct configuration bits in the clock/trigger/DMA family (e.g. TIM3 TRGO, ADC, or DMA), compute sampling frequencies, and verify circular buffer operation.
+- **Part C — FreeRTOS Scheduling & Context Switch Mechanics (25% / Floor 60%):** Walk through a live GDB breakpoint trace at `xPortPendSVHandler`, calculate PSP vs MSP stack locations, inspect TCB list nodes, and audit an unfamiliar NVIC priority assignment against `configMAX_SYSCALL_INTERRUPT_PRIORITY`.
+- **Part D — Concurrency, Priority Inversion & HW/SW Debugging (25% / Floor 70%):** Given a seeded system fault exhibiting timing jitter, starvation, or watchdog resets, formulate 3–5 hypotheses, collect register/memory/waveform evidence, identify the root cause in the synchronization/stack/timing family, and implement an evidence-backed fix.
 
-**Pass Criteria:** Overall score >= 75%; Part floors: Part A >= 60%, Part B >= 60%, Part C >= 60%, Part D >= 70%. Zero unexplained memory corruption; evidence chain required for all bug fixes.
+**Pass Criteria:** Overall score >= 75%; Part floors: Part A >= 60%, Part B >= 60%, Part C >= 60%, Part D >= 70%. Zero unexplained memory corruption; evidence chain required for all bug fixes. Concrete seeds and fixtures remain isolated in reviewer materials.
 
 ---
 
 ## Leader decision points
 
-- **Hardware Platform:** Confirm **STM32F103C8T6** as the sole mandatory hardware target. It completely fulfills all architectural, peripheral, DMA, FreeRTOS, and timing instrumentation requirements without requiring additional purchases.
-- **Toolchain Baseline:** Standardize on GNU Arm Embedded Toolchain (`arm-none-eabi-gcc` 13.x or 12.x) with Make-first workflow. CMake is excluded from Phase 2 to ensure total transparency of compiler/linker flags.
-- **CubeMX Policy:** CubeMX is strictly restricted to an offline pinout/clock configuration reference tool; no auto-generated HAL code is used in mandatory coursework.
-- **Upstream Kernel Pinning:** Pin `FreeRTOS-Kernel` release `V11.3.0` (`9b777ae`) and ST CMSIS device headers `v4.3.4`.
+- **Hardware Target & Board Profile Separation:**
+  - *MCU Silicon Contract:* STM32F103C8T6 (Cortex-M3, 64 KB Flash, 20 KB SRAM, TIM3 TRGO, ADC1, DMA1, USART1, NVIC, SWD).
+  - *Board Profile Layer:* Minimal Development Board ("Blue Pill" / Core board) with documented HSE 8 MHz crystal (and HSI 64 MHz fallback), PC13 User LED, SWD header, PA0 analog input, and PA1–PA4 GPIO timing test points. Alternatively, ST Nucleo-F103RB.
+  - *Lab Equipment Requirements:* ST-Link V2 (or CMSIS-DAP / J-Link), 2-channel oscilloscope or 8-channel logic analyzer, and an analog potentiometer/signal source. Learner inventory must be verified against these requirements.
+- **Toolchain Baseline:** Standardize on **Arm GNU Toolchain 13.3.rel1** (`arm-none-eabi-gcc` 13.3.1 20240614, Binutils 2.42, GDB 14.2) with Make-first workflow. CMake is excluded from Phase 2 to ensure total transparency of compiler/linker flags.
+- **Runtime Contract:** Standardize on **Option B (newlib-nano runtime with original startup & transparent linker)**: original assembly startup performs `.data` copy and `.bss` zeroing; `--specs=nano.specs --specs=nosys.specs` provides lightweight stubs; statistics use integer/fixed-point math (`isqrt()`) avoiding libm overhead.
+- **CubeMX Policy:** CubeMX is strictly restricted to an offline pinout/clock configuration reference tool; auto-generated HAL code is prohibited in mandatory coursework.
+- **Upstream Version Pinning:** Pin `FreeRTOS-Kernel` release `V11.3.0` (`9b777ae`), ST CMSIS device headers `cmsis_device_f1 v4.3.5`, and `CMSIS_5 v5.9.0`.
