@@ -141,14 +141,14 @@ The learner must create a standalone command-line data filtration utility (`sift
    * `san` target builds with `-fsanitize=address,undefined -fno-omit-frame-pointer`.
 
 ### 4.3 Evaluation Deliverables
-1. Clean source files (`main.c`, `sifter.c`, `sifter.h`).
+1. At least four source/header files with a coherent module split (for example, `main.c`, `sifter.c`, `sifter.h`, plus a parser/record module).
 2. Self-contained `Makefile`.
 3. Automated test script demonstrating normal input, empty input, invalid records, and `stdin` pipeline.
 4. Documented **Resource Ownership Table** in submission markdown.
 
 ### 4.4 Hard Pass Criteria for Part A
 * Score $\ge 18 / 30$ (60%).
-* **Zero unexplained resource leaks:** Under AddressSanitizer with `detect_leaks=1`, execution on valid, invalid, and empty files must report zero memory leaks and zero descriptor leaks in `/proc/self/fd`. Any unclosed owned descriptor is a failure.
+* **Zero unexplained resource leaks:** ASan/LSan execution on valid, invalid, and empty inputs must report zero memory errors/leaks, and a separate `/proc/<pid>/fd` or equivalent FD audit must show no leaked owned descriptors. Any unclosed owned descriptor is a failure.
 
 ---
 
@@ -425,7 +425,7 @@ To earn a passing grade on the Phase 1 Final Gate, a submission must satisfy **a
    * Part D $\ge 15 / 25$
 3. **Diagnostic Mastery Bar:** Part B must achieve at least **70%** ($\ge 17.5 / 25$).
 4. **Runtime Concurrency Proof:** Part D must include concrete runtime evidence proving resolution of both interacting defects.
-5. **Zero Resource Leaks in Construction:** Part A must execute completely clean under AddressSanitizer with zero memory leaks and zero file descriptor leaks.
+5. **Zero Resource Leaks in Construction:** Part A must be clean under ASan/LSan for memory errors/leaks and must independently demonstrate zero leaked owned file descriptors with `/proc` or equivalent runtime evidence.
 6. **Integrity Attestation:** A signed AI-Free Attestation must accompany the submission.
 
 > [!NOTE]
@@ -456,17 +456,17 @@ If a specific diagnostic tool is unsupported or unavailable in the host environm
 +-------------------+----------------------------+---------------------------------------------------+
 | Unavailable Tool  | Impacted Area              | Approved Equivalent Evidence Channel              |
 +-------------------+----------------------------+---------------------------------------------------+
-| GDB               | Thread inspection /        | • Core dump analysis via alternative tool         |
-|                   | backtrace analysis         | • Compiler instrumentation / backtrace() libc API |
-|                   |                            | • AddressSanitizer / ThreadSanitizer stack logs   |
+| GDB               | Thread inspection /        | • Sanitizer stack traces when relevant             |
+|                   | backtrace analysis         | • `/proc` / process-state evidence plus a          |
+|                   |                            |   deterministic reproduction harness               |
 +-------------------+----------------------------+---------------------------------------------------+
-| strace            | Syscall / descriptor leak  | • /proc/<pid>/fd manual directory audit           |
-|                   | tracing                    | • Explicit errno and return-value logging         |
-|                   |                            | • LD_PRELOAD wrapper for descriptor tracking      |
+| strace            | Syscall / descriptor leak  | • `/proc/<pid>/fd` runtime audit                   |
+|                   | tracing                    | • Explicit return/errno observations from the     |
+|                   |                            |   tested program or bounded harness                |
 +-------------------+----------------------------+---------------------------------------------------+
-| ThreadSanitizer   | Data race detection        | • Rigorous mathematical source invariant proof    |
-| (WSL2 ASLR limits)|                            | • setarch x86_64 -R execution wrapper             |
-|                   |                            | • High-iteration stress testing under contention  |
+| ThreadSanitizer   | Data race detection        | • GDB thread-state evidence when available         |
+| (host limitations)|                            | • Deterministic coordination / stress reproduction |
+|                   |                            |   plus explicit invariant reasoning                |
 +-------------------+----------------------------+---------------------------------------------------+
 ```
 
@@ -569,9 +569,9 @@ Failure on one or more parts of the Final Gate does not require an automatic res
 
 ## 15. Calibration Plan
 
-Prior to canonical deployment across all learners, the Final Gate will undergo a formal **First-Cohort Calibration Plan**:
+Before thresholds are treated as calibrated, the Final Gate will undergo a documented **First-Learner Calibration Run**:
 
-1. **Initial Pilot Run:** Three representative learners execute the assessment under timed conditions with full environmental logging.
+1. **Initial Pilot Run:** The first real learner attempt executes the assessment under timed conditions with full environmental logging.
 2. **Calibration Dimensions Measured:**
    * Actual time required per Part vs budgeted duration (identifying unintended time sinks).
    * Ambiguity in problem specifications or harness instructions.
@@ -608,7 +608,7 @@ The deliverables generated by the Final Gate are structured to serve as high-sig
 > [!IMPORTANT]
 > Passing the Phase 1 Final Gate certifies that the candidate has attained **L3/L4-local competency in foundational Linux systems programming, C object lifetime tracking, and multithreaded synchronization**.
 >
-> It demonstrates readiness for junior embedded systems, BSP engineering, and Linux platform roles. It does **not** claim senior kernel architecture or driver mastery, which are evaluated in subsequent curriculum phases.
+> It demonstrates strong foundational preparation for junior embedded/Linux systems work and for later BSP/driver training. It does **not** by itself demonstrate BSP, kernel, or driver mastery.
 
 ---
 
@@ -620,7 +620,7 @@ To prevent curriculum scope creep, the following domains are strictly **excluded
 * **No Bootloader / Board Bring-up:** No U-Boot scripting, SPL bring-up, or barebox configuration. *(Reserved for Phase 3: BSP & Hardware).*
 * **No Embedded Build Systems:** No Buildroot or Yocto Project / OpenEmbedded recipes. *(Reserved for Phase 3: BSP & Hardware).*
 * **No Hardware Register Programming:** No Device Tree source authoring (`.dts`/`.dtsi`), direct MMIO register mapping, DMA controller engines, or MMU page table configuration. *(Reserved for Phase 3 & 4).*
-* **No Bare-Metal Microcontrollers / RTOS:** No FreeRTOS tasks, CMSIS, Cortex-M NVIC register manipulation, or STM32 bare-metal code. *(Evaluated in Phase 0 Baseline / Phase 4).*
+* **No Bare-Metal Microcontrollers / RTOS:** No FreeRTOS tasks, CMSIS, Cortex-M NVIC register manipulation, or STM32 bare-metal code. These belong outside the Phase 1 Final Gate.
 * **No Advanced Concurrency Architectures:** No lock-free queues, atomic memory orders (`memory_order_seq_cst`), POSIX semaphores, read-write locks, or multi-consumer worker pools.
 * **No External Dependencies:** No CMake, Autotools, JSON parsers, databases, or third-party unit test frameworks.
 
