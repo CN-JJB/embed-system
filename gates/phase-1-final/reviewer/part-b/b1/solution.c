@@ -9,13 +9,23 @@ void engine_init(struct engine_window *win) {
 }
 
 int engine_push_event(struct engine_window *win, uint64_t id, int32_t val, char *payload) {
-    if (win->count >= win->capacity) {
+    if (win == NULL || win->count >= win->capacity) {
         return -1;
     }
-    struct engine_event *ev = &win->events[win->count++];
+
+    char *payload_copy = NULL;
+    if (payload != NULL) {
+        payload_copy = strdup(payload);
+        if (payload_copy == NULL) {
+            return -1;
+        }
+    }
+
+    struct engine_event *ev = &win->events[win->count];
     ev->id = id;
     ev->value = val;
-    ev->payload = (payload != NULL) ? strdup(payload) : NULL;
+    ev->payload = payload_copy;
+    win->count++;
     return 0;
 }
 
