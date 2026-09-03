@@ -511,8 +511,8 @@ graph LR
     - In `xQueueGenericSendFromISR()`, when a task waiting on the queue is unblocked, the kernel invokes `xTaskRemoveFromEventList()`.
     - If the scheduler is **running normally** (`uxSchedulerSuspended == 0`), the unblocked task is added **directly to `pxReadyTasksLists[uxPriority]`**.
     - If the scheduler is **suspended** (`uxSchedulerSuspended != 0`), the unblocked task is placed onto **`xPendingReadyList`**, deferring ready-list insertion until `xTaskResumeAll()`.
-    - If the unblocked task has a priority $\ge$ currently running task, `*pxHigherPriorityTaskWoken` is set to `pdTRUE`.
-    - The ISR calls `portYIELD_FROM_ISR(xHigherPriorityTaskWoken)`, which asserts `PENDSVSET`. As soon as the ISR exits, PendSV executes immediately, switching context directly to the unblocked task.
+    - If the unblocked task has a priority **higher than** the currently running task, the event-list removal path reports that a yield is required and `*pxHigherPriorityTaskWoken` is set to `pdTRUE`.
+    - The ISR calls `portYIELD_FROM_ISR(xHigherPriorityTaskWoken)`, requesting PendSV. After interrupt return, the scheduler selects the highest-priority ready task; this is often the newly unblocked task, but the mechanism is a scheduling request rather than a hard-coded direct jump to that task.
   - NVIC Priority Configuration:
     - CMSIS Logical Priority: values `0` (highest) to `15` (lowest) configured via `NVIC_SetPriority(IRQn, prio)`.
     - Encoded Hardware Byte: `prio << 4`.
@@ -765,7 +765,7 @@ graph TD
 4. **RTOS & Concurrency Family:**
    - `F-RTOS-01`: Shared telemetry resource protected by binary semaphore; medium-priority compute task starves high-priority telemetry task indefinitely.
    - `F-RTOS-02`: A task's local working set exceeds that task's configured stack depth; the stack approaches or crosses its allocated bounds and is detected by the configured FreeRTOS stack-overflow checks / watermark evidence. `configMINIMAL_STACK_SIZE` is not a universal per-task stack limit.
-   - `F-RTOS-03`: ISR calls `xQueueSend()` instead of `xQueueSendFromISR()`; caught by `configASSERT( __get_IPSR() == 0 )` or port assertion.
+   - `F-RTOS-03`: ISR calls `xQueueSend()` instead of `xQueueSendFromISR()`; with `configASSERT` enabled, the ARM_CM3 task-context critical-section path detects nonzero active exception state and halts deterministically. Without assertions, the misuse is unsupported and no specific crash form is guaranteed.
 
 *Note: The fault pool above defines instructional families for modules. The Phase 2 Final Gate evaluates unfamiliar variants within these families; exact seeds and fixtures remain isolated in reviewer materials.*
 
@@ -927,7 +927,7 @@ Phase 2 enforces a transparent, standard, Make-first build workflow.
             -Wl,--gc-sections -Wl,-Map=$(BUILD_DIR)/output.map \
             --specs=nano.specs --specs=nosys.specs
   ```
-- **Syscall Policy:** `--specs=nosys.specs` provides non-blocking minimal stubs without host syscall overhead.
+- **Syscall Policy:** `--specs=nosys.specs` supplies placeholder syscall stubs suitable for bare-metal linking; unsupported calls can return errors. Mandatory real-time paths must not depend on host-style file/syscall behavior, and any USART retargeting is explicit course code rather than an assumed `nosys` service.
 - **Math Policy:** Statistics calculations (min, max, average, RMS) use **integer / fixed-point arithmetic** (such as integer square root `isqrt()`), avoiding floating-point emulation overhead and libm dependencies on Cortex-M3.
 
 ### 3. Debugging Infrastructure
@@ -1023,8 +1023,8 @@ All materials in Phase 2 derive strictly from authoritative Tier 0 and Tier 1 sp
 | **S-06** | FreeRTOS-Kernel Upstream Source | FreeRTOS / AWS | Upstream Source Code | Release V11.3.0 (`9b777ae`) | `tasks.c`, `queue.c`, `list.c`, `portable/GCC/ARM_CM3/` | Reference implementation of preemptive scheduler, queues, mutexes. (MIT License). |
 | **S-07** | CMSIS Core (Cortex-M) | Arm Limited / CMSIS | Upstream Source Code | CMSIS_5 v5.9.0 | `CMSIS/Core/Include/core_cm3.h` | Hardware register structs and NVIC inline helper functions. (Apache-2.0). |
 | **S-08** | STM32F1xx CMSIS Device Headers | STMicroelectronics | Upstream Source Code | `cmsis_device_f1` v4.3.5 | `Include/stm32f103xb.h`, `Source/Templates/gcc/startup_stm32f103xb.s` | Peripheral base addresses, bit definitions, startup file. Repository component license: Apache-2.0; retain per-file notices. |
-| **S-09** | Original 64 KB Linker Script | Repository Author | Course Source Code | `stm32f103c8tx_flash.ld` (2026) | Entire file | Original pedagogical linker script for 64 KB C8 target. (MIT License). ST Ac6 template is read-only reference, not redistributed. |
-| **S-10** | Arm GNU Toolchain 13.3.rel1 | Arm Limited | Toolchain Distribution | 13.3.rel1 (Jul 2024) | GCC 13.3.1, Binutils 2.42, GDB 14.2 | Pinned compiler/linker baseline. (GPL-3.0 / LGPL-3.0). |
+| **S-09** | Original 64 KB Linker Script | Repository Author | Course Source Code | `stm32f103c8tx_flash.ld` (2026) | Entire file | Original pedagogical linker script for the 64 KB C8 target; no vendor linker-script text is copied. Repository-wide licensing is a separate governance decision and is not invented here. ST's Ac6 template is read-only reference only. |
+| **S-10** | Arm GNU Toolchain 13.3.rel1 | Arm Limited | Toolchain Distribution | 13.3.rel1 (Jul 2024) | GCC 13.3.1, Binutils 2.42, GDB 14.2, Newlib 4.4.0 | Pinned compiler/linker baseline. Distribution contains components under multiple upstream licenses; implementation notes must preserve the release package's license notices rather than collapse them into one license label. |
 | **S-11** | Mastering the FreeRTOS Real Time Kernel | Richard Barry / FreeRTOS | Official Guide | 2020 Edition | Chapters 3, 4, 7, 8 | Task management, queue mechanisms, interrupt priorities. |
 
 ---
