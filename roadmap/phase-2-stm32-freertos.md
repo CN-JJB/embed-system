@@ -21,7 +21,7 @@ Phase 2 is complete when the learner can independently:
 - construct an autonomous hardware data acquisition path using Timer 3 TRGO update triggers, calibrated ADC1 regular external triggering (`EXTSEL = 0b100`), valid ADC clock prescaling (`ADCPRE = /6` yielding 12 MHz ADCCLK $\le 14\text{ MHz}$), sample-time selection matched to source impedance, and DMA1 Channel 1 circular double-buffering without CPU polling;
 - explain FreeRTOS kernel scheduling mechanics: ready/delayed/pending-ready task state lists, tick processing (`xTaskIncrementTick`), and the PendSV context switch mechanism (`{r4-r11}` software stacking on PSP);
 - implement robust ISR-to-task handoffs using queues, audit NVIC priority settings against `configMAX_SYSCALL_INTERRUPT_PRIORITY`, and use `portYIELD_FROM_ISR`;
-- distinguish mutexes from binary semaphores, reproduce and resolve unbounded priority inversion using priority inheritance in a controlled 3-task experiment, and audit code for deadlock;
+- distinguish mutexes from binary semaphores, reproduce and resolve priority inversion using priority inheritance in a controlled 3-task experiment with identical CPU workloads, and audit code for deadlock;
 - monitor task runtime health using stack watermarks (`uxTaskGetStackHighWaterMark`), configure stack overflow hooks (`taskCHECK_FOR_STACK_OVERFLOW`), enforce FreeRTOS `heap_4` as the sole dynamic memory manager (excluding libc heap/`malloc`), and integrate an independent watchdog (IWDG);
 - capture physical evidence of system timing (ISR latency, jitter, context switch duration) using GPIO toggles, oscilloscope/logic analyzer probes, and live SWD/GDB register inspection;
 - debug complex MCU/RTOS faults using the disciplined hypothesis-driven framework: `Symptom -> Own Description -> Hypotheses -> Evidence -> Narrow Scope -> Root Cause -> Fix -> Regression`.
@@ -57,7 +57,7 @@ Hardware-software debugging begins in Module 1. There is no isolated "RTOS debug
 | **P2-M03** | Peripheral Acquisition & DMA Data Path | L2–L3 DMA / L4-local peripheral path | 4.5 | 1.0 | Build TIM3-TRGO+ADC+DMA circular buffer; configure ADCPRE & calibration; diagnose DMA stall |
 | **P2-M04** | FreeRTOS Scheduler, Task Lifecycle, and Context Switch | L3 FreeRTOS core / L3 Cortex-M port | 5.0 | 1.0 | Walk through `tasks.c` & `port.c`; verify PendSV register stacking in GDB |
 | **P2-M05** | Queue, Mutex, and ISR-Safe Synchronization Boundaries | L3 synchronization / L3 ISR handoff | 4.5 | 1.0 | Build ISR-to-Task queue pipeline; audit NVIC vs `configMAX_SYSCALL`; verify mutex vs semaphore |
-| **P2-M06** | Priority Inversion, Inheritance, Stack Watermark & Debugging | L3 concurrency / L4-local RTOS faults | 4.0 | 0.5 | Reproduce unbounded priority inversion; observe inheritance fix; detect stack overflow |
+| **P2-M06** | Priority Inversion, Inheritance, Stack Watermark & Debugging | L3 concurrency / L4-local RTOS faults | 4.0 | 0.5 | Reproduce bounded priority inversion; observe inheritance fix; detect stack overflow |
 | **P2-M07** | STM32 FreeRTOS Acquisition Node Integration Project | L3 integrated node | 5.0 | 1.0 | End-to-end multi-task node acceptance; controlled priority inversion test; scope evidence |
 | **P2-GATE**| Phase 2 Final Gate Assessment | L3 transfer / L4-local diagnostic | 3.5 | 0.0 | AI-Free 4-part transfer exam (Startup, DMA, Scheduler, Concurrency/HW-SW debug) |
 
@@ -88,8 +88,8 @@ All curriculum content must derive from primary specifications and authoritative
 - **Armv7-M Architecture Reference Manual** (ARM DDI 0403E.e) — Exception model, stack alignment, instruction execution states, memory barriers (`DSB`, `ISB`, `DMB`).
 - **FreeRTOS-Kernel Upstream** (Release V11.3.0, commit `9b777ae`, MIT License) — Official kernel source for task scheduling, queues, and Cortex-M3 port.
 - **CMSIS Core / Device Headers** (CMSIS_5 v5.9.0 / `cmsis_device_f1` v4.3.5; Apache-2.0 component licenses, retaining per-file notices) — core/device register definitions (`core_cm3.h`, `stm32f103xb.h`).
-- **Original 64 KB Linker Script Policy:** The teaching linker script (`stm32f103c8tx_flash.ld`) is an original pedagogical work written from GNU ld documentation and the physical STM32F103C8 memory map (64 KB Flash, 20 KB SRAM). The vendor template in ST repositories carries an Ac6 non-redistribution notice and specifies 128 KB Flash; it is strictly a read-only comparison reference and is not redistributed.
-- **Runtime & Memory Ownership Policy:** Standardizes on newlib-nano (`--specs=nano.specs --specs=nosys.specs`) with original assembly startup explicitly executing `__libc_init_array()`. FreeRTOS `heap_4` is the sole dynamic memory manager in mandatory coursework; libc `malloc/free` is strictly forbidden to prevent dual-heap memory hazards; USART telemetry uses direct register I/O without `printf`/host syscall dependency.
+- **Original 64 KB Linker Script Policy:** The teaching linker script (`stm32f103c8tx_flash.ld`) is an original pedagogical work written from GNU ld documentation and the physical STM32F103C8 memory map (64 KB Flash, 20 KB SRAM). It explicitly retains `.preinit_array` and `.init_array` via `KEEP` with standard `PROVIDE_HIDDEN` boundary symbols. The vendor template in ST repositories carries an Ac6 non-redistribution notice and specifies 128 KB Flash; it is strictly a read-only comparison reference and is not redistributed.
+- **Runtime & Memory Ownership Policy:** Standardizes on newlib-nano (`--specs=nano.specs --specs=nosys.specs`) with explicit course entry point (`-Wl,-e,Reset_Handler`). Original assembly startup calls `SystemInit()` (which must not depend on initialized writable global/static C state), copies `.data`, zeroes `.bss`, executes `__libc_init_array()`, and calls `main()`. FreeRTOS `heap_4` is the sole dynamic memory manager in mandatory coursework; libc `malloc/free` is strictly forbidden to prevent dual-heap memory hazards; `_sbrk` is absent when unused; USART telemetry uses direct register I/O without `printf`/host syscall dependency.
 
 ---
 
@@ -121,7 +121,7 @@ All curriculum content must derive from primary specifications and authoritative
 ### Bare-Metal & CMSIS Source Walkthrough
 
 1. **`startup_stm32f103xb.s`**:
-   - Initial stack pointer (`_estack`), Vector Table entries, `Reset_Handler`, `SystemInit()`, `.data` copy loop, `.bss` zeroing loop, `__libc_init_array()` call, and jump to `main()`.
+   - Vector Table entries (`_estack`, `Reset_Handler`), hardware MSP loading from vector 0, `SystemInit()` execution (under pre-.data/.bss invariant), `.data` copy loop, `.bss` zeroing loop, `__libc_init_array()` call, and jump to `main()`.
 2. **`core_cm3.h`**:
    - `NVIC_SetPriority()`, `NVIC_EnableIRQ()`, and SCB register definitions (`SCB->AIRCR`, `SCB->ICSR`).
 
@@ -142,7 +142,7 @@ The curriculum organizes recurring hardware/software failure modes into **compet
 | DMA data width mismatch (16-bit ADC to 8-bit RAM) | P2-M03 | Gate Part B: Transfer configuration | DMA Configuration |
 | Calling task-context API from interrupt handler | P2-M04 | Gate Part C: Execution context audit | FreeRTOS API Boundary |
 | ISR priority higher than `configMAX_SYSCALL` | P2-M05 | Gate Part C: Priority & BASEPRI masking | NVIC / RTOS Interaction |
-| Unbounded priority inversion (binary semaphore lock) | P2-M06 | Gate Part D: Synchronization architecture | Concurrency / Real-Time |
+| Bounded priority inversion without inheritance | P2-M06 | Gate Part D: Synchronization architecture | Concurrency / Real-Time |
 | Task stack overflow / corruption | P2-M06 | Gate Part D: Stack watermark & memory bounds | Memory Safety |
 
 A fix without verified register, memory, or oscilloscope evidence does not pass any module gate.
@@ -166,14 +166,16 @@ Timer 3 Trigger (TIM3 TRGO update @ 1 kHz)
    -> Health Monitor Task (Task_Health, Priority 1) -> stack watermark check & IWDG refresh
 
 Controlled Diagnostic Priority-Inversion Experiment:
-Task_Health (Priority 1) holds xDiagMutex -> Task_Process (Priority 3) blocks on xDiagMutex
-   -> Task_Compute (Priority 2) creates interference -> Priority inheritance verified
+Task_Health (Priority 1) holds xDiagMutex (executing CPU-runnable work, not vTaskDelay)
+   -> Task_Process (Priority 3) attempts lock and blocks
+   -> Task_Compute (Priority 2) is released to create interference
+   -> Compare bounded 20 ms inversion without inheritance vs prompt inheritance resolution
 ```
 
-- **Milestone 0 (Clock, Pinout & Runtime Harness):** Configure 72 MHz SYSCLK via PLL (or 64 MHz HSI fallback if board lacks HSE), set up GPIO timing markers (PA1–PA4), verify Make build with Arm GNU Toolchain 13.3.rel1 (`startup -> SystemInit -> copy .data -> zero .bss -> __libc_init_array -> main`), and verify OpenOCD SWD flashing.
+- **Milestone 0 (Clock, Pinout & Runtime Harness):** Configure 72 MHz SYSCLK via PLL (or 64 MHz HSI fallback if board lacks HSE), set up GPIO timing markers (PA1–PA4), verify Make build with Arm GNU Toolchain 13.3.rel1 (`startup -> SystemInit -> copy .data -> zero .bss -> __libc_init_array -> main`), with course `Reset_Handler` as sole entry point, and verify OpenOCD SWD flashing.
 - **Milestone 1 (Autonomous Calibrated DMA Data Path):** Configure ADCPRE to divide by 6 (yielding 12 MHz ADCCLK $\le 14\text{ MHz}$), configure sample time $\ge 55.5\text{ cycles}$ on PA0 for source impedance compatibility, execute ADC calibration sequence (RSTCAL/CAL), configure TIM3 update event to emit TRGO pulses driving ADC1 regular conversions (`EXTSEL = 0b100`) into a circular ping-pong DMA buffer (`2 * 64` 16-bit samples). Verify autonomous transfer with CPU sleeping (`WFI`).
 - **Milestone 2 (FreeRTOS Core & ISR Handoff):** Integrate FreeRTOS kernel with `heap_4` as sole heap manager. In DMA HT/TC ISR, post buffer tokens to `xAcqQueue` via `xQueueSendFromISR()` and yield via `portYIELD_FROM_ISR()`. Processing task unblocks and calculates batch statistics using integer arithmetic (`isqrt()`).
-- **Milestone 3 (Logging & Controlled Priority Inversion Experiment):** Implement `Task_Comm` transmitting fixed-size telemetry packets over USART1 via direct register I/O. The normal acquisition path remains completely lock-free. Implement a controlled diagnostic experiment where `Task_Health` (prio 1) acquires `xDiagMutex` to format a diagnostic report, `Task_Process` (prio 3) blocks on `xDiagMutex` to record an urgent alarm, and `Task_Compute` (prio 2) creates computational interference. Demonstrate bounded latency under priority inheritance versus unbounded starvation under a binary semaphore.
+- **Milestone 3 (Logging & Controlled Priority Inversion Experiment):** Implement `Task_Comm` transmitting fixed-size telemetry packets over USART1 via direct register I/O. The normal acquisition path remains queue-driven with no application mutex. Implement a controlled diagnostic experiment with deterministic coordination: `Task_Health` (prio 1) acquires `xDiagMutex`, signals `Task_Process` (prio 3) which attempts the lock and blocks, then signals `Task_Compute` (prio 2) to become runnable. `Task_Health` executes identical CPU-runnable work (~5 ms, measured by cycle counter, no `vTaskDelay()`). Compare bounded 20 ms inversion under a binary semaphore versus prompt completion under a mutex with priority inheritance.
 - **Milestone 4 (Health Monitoring & Scope Evidence):** Implement `Task_Health` inspecting `uxTaskGetStackHighWaterMark` across all tasks and refreshing IWDG. Connect oscilloscope/logic analyzer to GPIO markers; capture and document ISR-to-Task latency, context-switch duration, and priority inheritance timing.
 - **Final Project Acceptance:** Zero compiler warnings (`-Wall -Wextra -Werror`), static initialization with zero steady-state heap allocation churn, no unhandled exceptions, verified waveform documentation, and concise English `BUILD_RUN_DEBUG.md`.
 
@@ -242,8 +244,13 @@ The Phase 2 Final Gate is an **AI-Free**, hands-on, transfer-oriented assessment
   - *Board Profile Layer:* Minimal Development Board ("Blue Pill" / Core board) with documented HSE 8 MHz crystal (and HSI 64 MHz fallback), PC13 User LED, SWD header, PA0 analog input, and PA1–PA4 GPIO timing test points. Alternatively, ST Nucleo-F103RB.
   - *Lab Equipment Requirements:* ST-Link V2 (or CMSIS-DAP / J-Link), 2-channel oscilloscope or 8-channel logic analyzer, and an analog potentiometer/signal source. Learner inventory must be verified against these requirements.
 - **Toolchain Baseline:** Standardize on **Arm GNU Toolchain 13.3.rel1** (`arm-none-eabi-gcc` 13.3.1 20240614, Binutils 2.42, GDB 14.2) with Make-first workflow. CMake is excluded from Phase 2 to ensure total transparency of compiler/linker flags.
-- **Runtime Contract:** Standardize on **Option B (newlib-nano runtime with original startup & transparent linker)**: original assembly startup explicitly performs `Reset_Handler -> SystemInit -> copy .data -> zero .bss -> __libc_init_array -> main()`; `--specs=nano.specs --specs=nosys.specs` provides lightweight stubs; FreeRTOS `heap_4` is the sole dynamic heap (no libc `malloc`); statistics use integer/fixed-point math (`isqrt()`) avoiding libm overhead; direct register USART I/O avoids host syscall/printf dependencies.
+- **Runtime & Startfile Contract:** Standardize on **Option B (newlib-nano runtime with original startup & transparent linker)**:
+  - Original assembly startup explicitly executes: `Reset_Handler -> SystemInit -> copy .data -> zero .bss -> __libc_init_array -> main()`.
+  - Startfile policy uses `-Wl,-e,Reset_Handler` to ensure course `Reset_Handler` is the sole entry point, suppressing alternative CRT startup routines.
+  - Invariant: `SystemInit()` is called before `.data` copy and `.bss` zeroing; it must **not** depend on initialized writable global or static C state.
+  - Linker script explicitly retains `.preinit_array` and `.init_array` using `KEEP` and provides standard `PROVIDE_HIDDEN` boundary symbols.
+  - FreeRTOS `heap_4` is the sole dynamic heap (no libc `malloc/free`); `_sbrk` is absent when unused; statistics use integer/fixed-point math (`isqrt()`); direct register USART I/O avoids host syscall/printf dependencies.
 - **ADC Clock & Sampling Contract:** In 72 MHz profile, configure `ADCPRE = /6` yielding 12 MHz ADCCLK ($\le 14\text{ MHz}$); select sample time $\ge 55.5\text{ cycles}$ on PA0 for source impedance compatibility ($R_{\text{AIN}} \le 50\text{ k}\Omega$); execute explicit hardware calibration sequence (`RSTCAL`/`CAL`) before conversion enable.
-- **Controlled Priority Inversion Architecture:** Normal acquisition pipeline remains lock-free and queue-driven; a dedicated diagnostic telemetry resource `xDiagMutex` provides a real shared-mutex dependency between Low (`Task_Health`), Medium (`Task_Compute`), and High (`Task_Process`) to test priority inheritance under controlled scheduling.
+- **Controlled Priority Inversion Architecture:** Normal acquisition pipeline is queue-driven with no application mutex; a dedicated diagnostic telemetry resource `xDiagMutex` provides a real shared-mutex dependency between Low (`Task_Health`), Medium (`Task_Compute`), and High (`Task_Process`). Deterministic sequencing and identical CPU-runnable Low workload (~5 ms, no `vTaskDelay`) demonstrate bounded 20 ms inversion under binary semaphore versus prompt completion under priority inheritance.
 - **CubeMX Policy:** CubeMX is strictly restricted to an offline pinout/clock configuration reference tool; auto-generated HAL code is prohibited in mandatory coursework.
 - **Upstream Version Pinning:** Pin `FreeRTOS-Kernel` release `V11.3.0` (`9b777ae`), ST CMSIS device headers `cmsis_device_f1 v4.3.5`, and `CMSIS_5 v5.9.0`.

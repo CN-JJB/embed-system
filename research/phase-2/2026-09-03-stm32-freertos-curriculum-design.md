@@ -45,7 +45,7 @@ Upon completing Phase 2, the learner can independently:
 5. **Autonomous DMA Data Paths & ADC Sampling (L2–L3):** Construct hardware-triggered peripheral-to-memory data transfers using Timer 3 TRGO update triggers, calibrated ADC1 regular external triggering (`EXTSEL = 0b100`), valid ADC clock prescaling (`ADCPRE = /6` yielding 12 MHz ADCCLK $\le 14\text{ MHz}$), sample-time selection matched to source impedance, and DMA1 Channel 1 circular double-buffering operating autonomously without CPU intervention; reason about buffer lifetime and pointer alignment.
 6. **FreeRTOS Core Mechanics (L3):** Trace task state transitions across `pxReadyTasksLists`, `xDelayedTaskList`, and `xPendingReadyList`; explain SysTick-driven preemption and the PendSV assembly context switch (`{r4-r11}` software stacking on PSP); audit memory allocation (`heap_4.c` as sole dynamic heap vs static `xTaskCreateStatic`).
 7. **Synchronization & ISR Boundary (L3):** Implement queue-based pipelines; audit NVIC interrupt priorities against `configMAX_SYSCALL_INTERRUPT_PRIORITY`; enforce correct usage of `FromISR` APIs and `portYIELD_FROM_ISR()`.
-8. **Concurrency, Priority Inversion & Safety (L3 / L4-local RTOS faults):** Distinguish binary semaphores from mutexes; reproduce unbounded priority inversion in a controlled 3-task experiment and resolve it using priority inheritance; monitor task stack watermarks (`uxTaskGetStackHighWaterMark`); catch stack overflows via hook functions (`taskCHECK_FOR_STACK_OVERFLOW`); integrate an Independent Watchdog (IWDG).
+8. **Concurrency, Priority Inversion & Safety (L3 / L4-local RTOS faults):** Distinguish binary semaphores from mutexes; reproduce priority inversion in a controlled 3-task experiment with identical CPU workloads and resolve it using priority inheritance; monitor task stack watermarks (`uxTaskGetStackHighWaterMark`); catch stack overflows via hook functions (`taskCHECK_FOR_STACK_OVERFLOW`); integrate an Independent Watchdog (IWDG).
 9. **Measurable HW/SW Debugging (L4-local):** Diagnose complex faults using GPIO timing markers, oscilloscopes/logic analyzers, and SWD live register/memory inspection following the disciplined hypothesis-driven framework:
    $$\text{Symptom} \longrightarrow \text{Own Description} \longrightarrow \text{Hypotheses} \longrightarrow \text{Evidence} \longrightarrow \text{Narrow Scope} \longrightarrow \text{Root Cause} \longrightarrow \text{Fix} \longrightarrow \text{Regression}$$
 
@@ -154,7 +154,7 @@ Phase 2 incorporates only the architectural mechanisms of the ARM Cortex-M3 (ARM
 ### 1. Register Set, PC, and Stack Pointers (MSP vs PSP)
 - **General Purpose Registers:** R0–R12, SP (R13), LR (R14), PC (R15), xPSR.
 - **Dual Stack Pointers:** Cortex-M3 physically separates the Main Stack Pointer (MSP) and Process Stack Pointer (PSP). The active pointer is selected by `CONTROL[1]` (`SPSEL`).
-- **Reset State:** Upon reset, the core enters Privileged Thread mode using MSP. MSP initial value is fetched directly from address `0x08000000`.
+- **Reset State:** Upon reset, the processor hardware automatically loads the initial MSP value directly from address `0x08000000` (entry 0 of vector table) and the Reset Handler address from `0x08000004` into PC, entering Privileged Thread mode using MSP.
 - **RTOS Division of Labor:** FreeRTOS configures the kernel and all exception handlers (ISRs, SysTick, PendSV, SVCall) to use MSP. User tasks run in Thread mode using PSP. Consequently, task stack sizes need only accommodate the task's own call tree and context frame—not worst-case nested interrupt stacks!
 
 ### 2. Exception Entry and Return Mechanics
@@ -271,23 +271,51 @@ graph LR
 - **Prerequisites:** Phase 1 M03 (ELF, sections, symbols, Make).
 - **Mental Model:** Flash memory holds the cold immutable image; RAM is volatile scratchpad. Startup code is the physical bridge that loads the initial stack pointer, configures vector addresses, copies initialized data from Flash to RAM, zeroes uninitialized variables, calls standard C runtime constructors via `__libc_init_array()`, and jumps into compiled C code.
 - **Minimal Theory:**
-  - Armv7-M boot sequence: CPU reads 32-bit initial MSP value from `0x08000000`, then reads initial PC (Reset Vector address) from `0x08000004`.
+  - Armv7-M boot sequence: CPU hardware automatically reads 32-bit initial MSP value from vector-table entry 0 (`0x08000000`, `_estack`), then reads initial PC (Reset Vector address) from entry 1 (`0x08000004`).
   - Bit 0 of vector addresses must be `1` to indicate Thumb state; loading an even address into PC triggers an immediate `UsageFault` (INVSTATE).
   - Linker script `MEMORY` and `SECTIONS` commands: defining `FLASH (rx)` (64 KB at `0x08000000`) and `RAM (rwx)` (20 KB at `0x20000000`).
   - Section placement: `.isr_vector` at Flash origin; `.text` and `.rodata` in Flash; `.data` loaded in Flash (LMA) but executed in RAM (VMA); `.bss` allocated in RAM.
-  - Startup runtime initialization sequence:
+  - **Linker Script Constructor Array Contract:**
+    The original 64 KB linker script explicitly defines `.preinit_array`, `.init_array`, and `.fini_array` sections using `KEEP` to prevent linker garbage collection (`--gc-sections`) from discarding constructor tables, and defines standard `PROVIDE_HIDDEN` boundary symbols consumed by newlib-nano's `__libc_init_array()`:
+    ```ld
+    .preinit_array :
+    {
+        PROVIDE_HIDDEN (__preinit_array_start = .);
+        KEEP (*(.preinit_array*))
+        PROVIDE_HIDDEN (__preinit_array_end = .);
+    } > FLASH
+
+    .init_array :
+    {
+        PROVIDE_HIDDEN (__init_array_start = .);
+        KEEP (*(SORT(.init_array.*)))
+        KEEP (*(.init_array*))
+        PROVIDE_HIDDEN (__init_array_end = .);
+    } > FLASH
+
+    .fini_array :
+    {
+        PROVIDE_HIDDEN (__fini_array_start = .);
+        KEEP (*(SORT(.fini_array.*)))
+        KEEP (*(.fini_array*))
+        PROVIDE_HIDDEN (__fini_array_end = .);
+    } > FLASH
+    ```
+  - **Startup Runtime Initialization Sequence:**
     ```text
     Reset_Handler:
-      1. Set initial MSP = _estack (hardware loads vector 0; assembly ensures consistency)
-      2. Call SystemInit() (basic clock and bus initialization)
-      3. Copy initialized data (.data) from Flash (LMA _sidata) to SRAM (VMA _sdata .. _edata)
-      4. Zero uninitialized data (.bss _sbss .. _ebss)
-      5. Call __libc_init_array() (executes C runtime constructors and .init_array)
-      6. Branch to main()
-      7. Infinite trap loop if main() returns (Default_Handler loop)
+      1. Hardware loads initial MSP from vector-table entry 0 (_estack); startup code does not pretend this is an assembly instruction.
+      2. Call SystemInit() (configures basic clock/bus state; MUST NOT depend on initialized writable global/static C state).
+      3. Copy initialized data (.data) from Flash (LMA _sidata) to SRAM (VMA _sdata .. _edata).
+      4. Zero uninitialized data (.bss _sbss .. _ebss).
+      5. Call __libc_init_array() (executes C runtime constructors in .init_array).
+      6. Branch to main().
+      7. Infinite trap loop if main() ever returns (Default_Handler loop).
     ```
-  - `__libc_init_array()` Policy: It iterates over `.preinit_array` and `.init_array` section tables to invoke static initialization routines (e.g. `__attribute__((constructor))`). Calling it explicitly ensures standard C language compliance. Phase 2 is strictly C-only; no C++ runtime (`libsupc++`), static C++ object constructors, or exception/RTTI overhead are introduced.
-  - Linker script provenance: An original pedagogical 64 KB linker script (`stm32f103c8tx_flash.ld`) is authored from scratch. The vendor template in ST repositories carries an Ac6 non-redistribution notice and specifies 128 KB Flash; it is strictly a read-only comparison reference and is not redistributed.
+  - **SystemInit() Ordering Invariant:** Because `Reset_Handler` calls `SystemInit()` before `.data` copying and `.bss` zeroing, `SystemInit()` must **not** depend on initialized writable global or static C variables. It operates strictly on memory-mapped peripheral registers (`RCC`, `FLASH->ACR`, `SCB->VTOR`), read-only constants (`.rodata`), or CPU core registers using local stack variables.
+  - **Startfile Policy:** Linker flag `-Wl,-e,Reset_Handler` ensures course `Reset_Handler` is the sole entry point, suppressing alternative default CRT startup objects (e.g. `crt0.o` / `_start`).
+  - **`__libc_init_array()` Policy:** It iterates over `.preinit_array` and `.init_array` section tables to invoke C initialization functions (`__attribute__((constructor))`). Phase 2 is strictly C-only; no C++ runtime (`libsupc++`), static C++ object constructors, or exception/RTTI overhead are introduced.
+  - **Linker script provenance:** An original pedagogical 64 KB linker script (`stm32f103c8tx_flash.ld`) is authored from scratch. The vendor template in ST repositories carries an Ac6 non-redistribution notice and specifies 128 KB Flash; it is strictly a read-only comparison reference and is not redistributed.
 - **Official Source:**
   - ST RM0008, Section 3.3 (Embedded SRAM) & Section 3.4 (Flash memory).
   - ST PM0056 (Rev 7, Dec 2024), Section 2.1 (Processor modes and stacks) & Section 2.2 (Memory model).
@@ -296,27 +324,27 @@ graph LR
 - **Exact Upstream Source Path:**
   - `cmsis_device_f1/Source/Templates/gcc/startup_stm32f103xb.s` (Lines 45–140: `g_pfnVectors` & `Reset_Handler`).
 - **Labs:**
-  - **Objective:** Build a complete, bootable bare-metal firmware image from an empty directory using an original 64 KB linker script, minimal assembly startup implementing the exact startup sequence (`SystemInit -> copy .data -> zero .bss -> __libc_init_array -> main`), and `main.c` that toggles an LED via register addresses.
+  - **Objective:** Build a complete, bootable bare-metal firmware image from an empty directory using an original 64 KB linker script, minimal assembly startup implementing the exact startup sequence (`SystemInit -> copy .data -> zero .bss -> __libc_init_array -> main`), with `Reset_Handler` as sole entry point, and `main.c` that toggles an LED via register addresses.
   - **Prerequisites:** GNU Arm toolchain (`arm-none-eabi-gcc` 13.3.rel1), Make, OpenOCD, GDB.
   - **Environment:** Linux host or WSL2, STM32F103C8T6 target (onboard LED e.g. PC13 active LOW), ST-Link V2 SWD debugger.
   - **Estimated Time:** 2.0 h.
   - **AI Mode:** AI-Hint (only for linker script syntax reference).
-  - **Build:** `arm-none-eabi-gcc -mcpu=cortex-m3 -mthumb -O2 -g3 -Wall -Wextra -Werror -ffunction-sections -fdata-sections -T stm32f103c8tx_flash.ld -Wl,--gc-sections --specs=nano.specs --specs=nosys.specs startup.s main.c -o firmware.elf`.
+  - **Build:** `arm-none-eabi-gcc -mcpu=cortex-m3 -mthumb -O2 -g3 -Wall -Wextra -Werror -ffunction-sections -fdata-sections -T stm32f103c8tx_flash.ld -Wl,-e,Reset_Handler -Wl,--gc-sections --specs=nano.specs --specs=nosys.specs startup.s main.c -o firmware.elf`.
   - **Procedure:**
-    1. Write `stm32f103c8tx_flash.ld` declaring Flash at `0x08000000` (64K) and RAM at `0x20000000` (20K).
+    1. Write `stm32f103c8tx_flash.ld` declaring Flash at `0x08000000` (64K), RAM at `0x20000000` (20K), and retaining `.init_array` with boundary symbols.
     2. Write `startup.s` with vector table containing `_estack` and `Reset_Handler`.
-    3. Implement `.data` copy loop and `.bss` clear loop in assembly. Call `bl __libc_init_array`.
+    3. Implement `Reset_Handler`: call `SystemInit()`, implement `.data` copy loop and `.bss` clear loop, then call `__libc_init_array()`, then jump to `main()`.
     4. Write `main()` configuring PC13 to toggle the LED.
     5. Flash target with OpenOCD; inspect registers in GDB before and after `Reset_Handler`.
   - **Expected Observation:** GDB halts at `Reset_Handler`; stepping through the copy loop initializes global variables in RAM; `__libc_init_array` executes cleanly; target boots into `main()`.
   - **Actual Verification Status:** `UNVERIFIED` (curriculum design baseline).
-  - **Questions:** Why does the PC register in GDB display an even address when the vector table contains an odd address? What occurs if `.bss` is not zeroed?
+  - **Questions:** Why does the PC register in GDB display an even address when the vector table contains an odd address? What occurs if `SystemInit()` writes to an uninitialized `.data` variable?
   - **Failure Modes:** Target enters infinite `HardFault_Handler` due to missing Thumb bit; global variables evaluate to zero because `.data` copy loop bounds are inverted.
-  - **Debug Strategy:** Connect GDB; issue `x/8wx 0x08000000` to inspect vector table; verify SP and PC match ELF symbols via `arm-none-eabi-nm`.
+  - **Debug Strategy:** Connect GDB; issue `x/8wx 0x08000000` to inspect vector table; verify SP and PC match ELF symbols via `arm-none-eabi-nm`; check `readelf -h firmware.elf` entry point.
   - **Challenge:** Implement a stack canary in the linker script (`_stack_canary`) and verify in `main()` that initial stack allocation has not overflowed.
   - **Cleanup:** Erase Flash via OpenOCD.
   - **Sources:** PM0056 Section 2.1; RM0008 Section 3.
-- **Expected Evidence:** Disassembly listing showing vector table at `0x08000000`, `arm-none-eabi-readelf -l firmware.elf` showing LMA vs VMA addresses, GDB register dump at `main()`.
+- **Expected Evidence:** Disassembly listing showing vector table at `0x08000000`, `arm-none-eabi-readelf -l firmware.elf` showing LMA vs VMA addresses, `readelf -h` showing `Reset_Handler` entry point, GDB register dump at `main()`.
 - **Challenge:** Reconstruct a working startup file and linker script entirely from memory in a blank directory within 25 minutes.
 - **Deliberate Fault:** Vector alignment fault: place `.isr_vector` with misaligned address or clear bit 0 of the Reset Vector function pointer.
 - **Gate:** AI-Free: Diagnose an unfamiliar non-booting ELF image in the startup/linker/memory-initialization family, extract the vector table and linker map, identify the offset/boundary error, fix the linker script, and achieve clean execution of `main()`.
@@ -610,7 +638,7 @@ graph LR
 - **Why Now:** Multi-task systems frequently fail due to timing and concurrency defects: priority inversion starving critical tasks, or undetected stack exhaustion causing silent memory corruption. Engineers must master diagnosis of these failure modes before deploying integrated systems.
 - **Prerequisites:** P2-M04 (scheduler), P2-M05 (mutexes and queues).
 - **Mental Model:** 
-  - *Unbounded Priority Inversion:* A low-priority task holds a shared resource needed by a high-priority task. A medium-priority task preempts the low-priority task (because it needs no lock), indirectly starving the high-priority task for an unbounded duration.
+  - *Priority Inversion Mechanism:* A low-priority task holds a shared resource needed by a high-priority task. A medium-priority task preempts the low-priority task (because it needs no lock), indirectly delaying the high-priority task.
   - *Priority Inheritance:* When a high-priority task blocks on a mutex held by a low-priority task, the kernel temporarily boosts the low-priority task to the high-priority level until the mutex is released.
   - *Stack Watermark:* Stacks grow downward. The kernel fills each allocated stack with a known pattern (`0xA5`). The high-water mark is determined by scanning upward from the stack limit to find the lowest untouched `0xA5` byte.
 - **Minimal Theory:**
@@ -624,6 +652,8 @@ graph LR
     }
     ```
   - Binary Semaphore vs Mutex for Locking: Why using a binary semaphore for resource mutual exclusion fails: semaphores have no owner, so priority inheritance cannot function!
+  - Bounded Reproduction vs General Unbounded Inversion:
+    In the general case, priority inversion can create unbounded blocking if medium-priority work remains continuously runnable or multiple medium tasks preempt the lock-holder indefinitely. In laboratory experiments, a finite, bounded medium workload (e.g. 20 ms) is used to produce a repeatable, measurable latency comparison.
   - Stack Sizing & Overflow Detection:
     - Method 1: Check if SP is within stack bounds during context switch (`pxCurrentTCB->pxTopOfStack <= pxCurrentTCB->pxStack`).
     - Method 2: Check if the last 16 bytes of the stack still contain `0xA5` (`taskCHECK_FOR_STACK_OVERFLOW` in `include/stack_macros.h` invoking `vApplicationStackOverflowHook`).
@@ -637,31 +667,33 @@ graph LR
   - `FreeRTOS-Kernel/tasks.c`: `xTaskPriorityInherit()`, `xTaskPriorityDisinherit()`, and `uxTaskGetStackHighWaterMark()` in the pinned V11.3.0 source.
   - `FreeRTOS-Kernel/include/stack_macros.h` (`taskCHECK_FOR_STACK_OVERFLOW`).
 - **Labs:**
-  - **Objective:** Construct a 3-task setup (High, Medium, Low) sharing a resource; demonstrate unbounded priority inversion using a binary semaphore; resolve it using a Mutex with priority inheritance; deliberately trigger a stack overflow and verify hook execution; configure the IWDG.
+  - **Objective:** Construct a 3-task setup (High, Medium, Low) sharing a resource; coordinate deterministic task execution; demonstrate a bounded reproduction of priority inversion using a binary semaphore; resolve it using a Mutex with priority inheritance under identical Low CPU workloads; deliberately trigger a stack overflow and verify hook execution; configure the IWDG.
   - **Prerequisites:** P2-M04, P2-M05.
-  - **Environment:** STM32F103C8T6, logic analyzer on Task High (PA1), Task Medium (PA2), Task Low (PA3).
+  - **Environment:** STM32F103C8T6, logic analyzer on Task High (PA1), Task Medium (PA2), Task Low (PA3), Mutex held (PA4).
   - **Estimated Time:** 2.5 h.
   - **AI Mode:** AI-Hint.
   - **Build:** `make clean && make`.
   - **Procedure:**
     1. Create `Task_Low` (prio 1), `Task_Med` (prio 2), `Task_High` (prio 3).
-    2. Shared lock: `xSemaphoreCreateBinary()`.
-    3. `Task_Low` takes lock, starts prolonged computation.
-    4. `Task_High` awakens and blocks on lock.
-    5. `Task_Med` awakens and executes continuous work.
-    6. Observe on logic analyzer: `Task_High` is starved while `Task_Med` runs, despite `Task_High` having higher priority (unbounded priority inversion).
-    7. Replace binary semaphore with `xSemaphoreCreateMutex()`.
-    8. Observe on logic analyzer: `Task_Low` inherits priority 3, completes its critical section immediately, releases mutex, and `Task_High` runs without delay from `Task_Med`.
-    9. In `Task_Low`, allocate a 256-byte local array on a 128-byte stack; verify CPU halts in `vApplicationStackOverflowHook()`.
-  - **Expected Observation:** Logic analyzer waveform proves that priority inheritance caps `Task_High` latency to exactly the duration of `Task_Low`'s critical section.
+    2. Shared lock: `xSemaphoreCreateBinary()` in Run A, `xSemaphoreCreateMutex()` in Run B.
+    3. Coordination: `Task_Low` takes lock.
+    4. `Task_Low` releases/signals `Task_High` via direct task notification (`xTaskNotifyGive`).
+    5. `Task_High` awakens, attempts to take lock via `xSemaphoreTake(xLock, portMAX_DELAY)`, and blocks.
+    6. `Task_Low` detects `Task_High` is blocked, then signals `Task_Med` to run via direct task notification.
+    7. `Task_Med` executes a bounded 20 ms CPU workload.
+    8. `Task_Low` executes identical bounded CPU-runnable work (~5 ms integer calculation measured by DWT cycle counter, not `vTaskDelay()`).
+    9. In Run A (binary semaphore): `Task_Med` preempts `Task_Low`; `Task_High` experiences 25 ms total wait latency (bounded reproduction of priority inversion without inheritance).
+    10. In Run B (mutex): `Task_Low` inherits priority 3; `Task_Med` cannot preempt; `Task_Low` completes its 5 ms work promptly, releases mutex, and `Task_High` runs within ~5 ms.
+    11. In `Task_Low`, allocate a 256-byte local array on a 128-byte stack; verify CPU halts in `vApplicationStackOverflowHook()`.
+  - **Expected Observation:** Logic analyzer waveform proves that priority inheritance caps `Task_High` latency to exactly the duration of `Task_Low`'s critical section (~5 ms vs 25 ms).
   - **Actual Verification Status:** `UNVERIFIED` (curriculum design baseline).
-  - **Questions:** Why can't priority inheritance prevent all latency? What is deadlocking and how does lock ordering prevent it?
+  - **Questions:** Why cannot `vTaskDelay()` be used during the measured critical section of a priority inversion experiment? Why can't priority inheritance eliminate all latency?
   - **Failure Modes:** Priority inheritance fails because a binary semaphore was used; stack overflow silently corrupts adjacent TCB because `configCHECK_FOR_STACK_OVERFLOW` was not set to 2.
   - **Debug Strategy:** Inspect `pxCurrentTCB->uxPriority` and `pxCurrentTCB->uxBasePriority` in GDB during lock contention; check `vApplicationStackOverflowHook` parameters.
   - **Challenge:** Implement priority ceiling protocol manually and compare worst-case blocking time against priority inheritance.
   - **Cleanup:** Reset watchdog and restore safe stack allocations.
   - **Sources:** FreeRTOS `tasks.c`; RM0008 Section 24.
-- **Expected Evidence:** Logic analyzer traces capturing both the failure (priority inversion) and the fix (priority inheritance); GDB stack memory dump showing `0xA5` fill pattern.
+- **Expected Evidence:** Logic analyzer traces capturing both the failure (priority inversion) and the fix (priority inheritance) with identical Low CPU workload; GDB stack memory dump showing `0xA5` fill pattern.
 - **Challenge:** Create a circular deadlock scenario with two mutexes acquired in reverse order; write a lightweight deadlock detector that audits lock acquisition timestamps.
 - **Deliberate Fault:** Allocate a local structure larger than the task stack; observe `vApplicationStackOverflowHook` capturing the corrupted task name and TCB pointer.
 - **Gate:** AI-Free: Given an unfamiliar firmware image in the concurrency, priority inversion, and stack watermark family experiencing timing jitter and resets, inspect GDB memory dumps, identify a stack watermark violation in one task and a priority inversion hazard on a shared logging resource, and implement the permanent architectural fix.
@@ -702,7 +734,7 @@ graph LR
 | **L2-03** | P2-M03 | Autonomous ADC + DMA Double Buffer | STM32F103 + Logic Analyzer | `make -C lab03` | 78.125 Hz pulse rate / 39.0625 Hz square wave; ADCCLK 12 MHz; calibrated ADC | `UNVERIFIED` |
 | **L2-04** | P2-M04 | FreeRTOS Scheduler & PendSV Stacking | STM32F103 + GDB | `make -C lab04` | Inspection of `{r4-r11}` and hardware frame on PSP | `UNVERIFIED` |
 | **L2-05** | P2-M05 | ISR-to-Task Queue Pipeline & Priority Audit | STM32F103 + Logic Analyzer | `make -C lab05` | Measured $\Delta t$ ISR-to-task latency; `configASSERT` on bad priority | `UNVERIFIED` |
-| **L2-06** | P2-M06 | Priority Inversion & Inheritance Proof | STM32F103 + Logic Analyzer | `make -C lab06` | Waveform proving priority inheritance caps task latency | `UNVERIFIED` |
+| **L2-06** | P2-M06 | Priority Inversion & Inheritance Proof | STM32F103 + Logic Analyzer | `make -C lab06` | Waveform proving priority inheritance caps task latency (~5 ms vs 25 ms) | `UNVERIFIED` |
 | **L2-07** | P2-M07 | Integrated Acquisition Node Full System | Full hardware testbench | `make -C project` | Continuous telemetry streaming, 0 dropped frames, controlled priority inheritance test | `UNVERIFIED` |
 
 ### Verification Integrity Protocol:
@@ -781,7 +813,7 @@ graph TD
     end
 
     subgraph RTOS & Concurrency Family
-        F_RTOS1[F-RTOS-01: Unbounded Priority Inversion via Binary Semaphore]
+        F_RTOS1[F-RTOS-01: Bounded Priority Inversion via Binary Semaphore]
         F_RTOS2[F-RTOS-02: Task Stack Overflow Corrupting Neighboring TCB]
         F_RTOS3[F-RTOS-03: Calling Task-Context API Inside Interrupt Handler]
     end
@@ -800,7 +832,7 @@ graph TD
    - `F-DMA-02`: DMA memory width is configured as 8-bit while the ADC data register supplies a 12-bit result through the peripheral transfer width; the stored sample representation is truncated/mismatched relative to the intended `uint16_t` buffer contract.
    - `F-DMA-03`: TIM3 runs and ADC is enabled, but `ADC_CR2[EXTSEL]` is not set to `0b100` (TIM3 TRGO) or `EXTTRIG` is 0; DMA transfer counter (`CNDTR`) remains static.
 4. **RTOS & Concurrency Family:**
-   - `F-RTOS-01`: Shared telemetry resource protected by binary semaphore; medium-priority compute task starves high-priority telemetry task indefinitely.
+   - `F-RTOS-01`: Bounded reproduction of priority inversion via binary semaphore lock without inheritance; medium-priority compute task preempts low-priority holder during CPU work, producing measurable high-priority wait delay.
    - `F-RTOS-02`: A task's local working set exceeds that task's configured stack depth; the stack approaches or crosses its allocated bounds and is detected by the configured FreeRTOS stack-overflow checks / watermark evidence. `configMINIMAL_STACK_SIZE` is not a universal per-task stack limit.
    - `F-RTOS-03`: ISR calls `xQueueSend()` instead of `xQueueSendFromISR()`; with `configASSERT` enabled, the ARM_CM3 task-context critical-section path detects nonzero active exception state and halts deterministically. Without assertions, the misuse is unsupported and no specific crash form is guaranteed.
 
@@ -827,9 +859,11 @@ graph TD
     end
 
     subgraph Controlled Diagnostic Priority-Inversion Experiment
-        TASK_HEALTH[Health Task: Priority 1] -->|1. Takes Mutex & Holds 5ms| DIAG_MUTEX[xDiagMutex: Shared Diagnostic Record]
-        TASK_PROC -.->|2. Urgent Alarm: Blocks on Mutex| DIAG_MUTEX
-        TASK_COMPUTE[Compute Task: Priority 2] -.->|3. CPU Work: Preempts Health if Binary Semaphore| SCHED
+        TASK_HEALTH[Health Task: Priority 1] -->|1. Takes Mutex & Executes 5ms CPU Work| DIAG_MUTEX[xDiagMutex: Shared Diagnostic Record]
+        TASK_HEALTH -.->|2. Signals High Task| TASK_PROC
+        TASK_PROC -.->|3. Urgent Alarm: Blocks on Mutex| DIAG_MUTEX
+        TASK_HEALTH -.->|4. Signals Med Task once High is blocked| TASK_COMPUTE[Compute Task: Priority 2]
+        TASK_COMPUTE -.->|5. 20ms Work: Preempts Health if Binary Semaphore| SCHED
         TASK_HEALTH -->|Inspect Watermarks| WATERMARK[uxTaskGetStackHighWaterMark]
         TASK_HEALTH -->|Periodic Refresh| IWDG[Independent Watchdog Timer]
     end
@@ -840,7 +874,7 @@ graph TD
    - TIM3 update event generates TRGO pulses at 1.0 kHz.
    - ADC1 regular channel PA0 converts on TIM3 TRGO (`EXTSEL = 0b100`, `EXTTRIG = 1`).
    - Clock contract: `RCC->CFGR[ADCPRE] = 0b10` (/6) ensuring $f_{\text{ADCCLK}} = 12\text{ MHz} \le 14\text{ MHz}$.
-   - Sampling contract: `ADC1->SMPR2[SMP0] = 0b101` (55.5 cycles) ensuring compatibility with high-impedance $10\text{ k}\Omega$ bench sources ($R_{\text{AIN}} \le 50\text{ k}\Omega$).
+   - Sampling contract: `ADC1->SMPR2[SMP0] = 0b101` (55.5 cycles) ensuring compatibility with high-impedance sources within the datasheet table ($R_{\text{AIN}} \le 50\text{ k}\Omega$).
    - Calibration contract: explicit power-on, stabilization delay, `RSTCAL`, and `CAL` executed prior to acquisition.
    - DMA1 Channel 1 autonomously streams 16-bit samples into a persistent 128-sample circular buffer (`uint16_t g_adc_pool[2][64]`).
 2. **ISR Handoff Stage:** 
@@ -850,12 +884,24 @@ graph TD
 3. **Processing Stage (`Task_Process`, Priority 3):** Blocks on `xAcqQueue`. Upon wakeup, computes batch statistics (minimum, maximum, average, integer RMS via `isqrt()`). Formats a fixed-size `TelemetryRecord_t`. Posts record to `xLogQueue`. The normal acquisition path has no application-level mutex dependency; FreeRTOS queue operations still use kernel synchronization and are not described as lock-free.
 4. **Communication Stage (`Task_Comm`, Priority 2):** Blocks on `xLogQueue`. Formats fixed-size ASCII or binary telemetry frames and transmits via **USART1 interrupt-driven or polling TX** (115200 baud) using direct CMSIS register operations (`USART1->DR`, `USART1->SR`).
 5. **Controlled Priority Inversion Experiment:**
-   - To test real-time concurrency without imposing a meaningless lock on the fast acquisition path, a shared diagnostic snapshot buffer `g_diag_snapshot` guarded by `xDiagMutex` is introduced:
-     - **Low-priority `Task_Health` (Priority 1):** Periodically (or upon diagnostic command) acquires `xDiagMutex`, starts writing a multi-field diagnostic block, and holds the lock for a bounded 5 ms delay. Drives GPIO marker PA3 HIGH while holding the lock.
-     - **High-priority `Task_Process` (Priority 3):** Upon detecting a batch anomaly or test trigger, attempts to write an urgent alarm snapshot into `g_diag_snapshot`. Calls `xSemaphoreTake(xDiagMutex, portMAX_DELAY)`. Because `Task_Health` holds the lock, `Task_Process` blocks. Drives GPIO marker PA1 LOW.
-     - **Medium-priority `Task_Compute` (Priority 2):** A CPU-bound workload task that becomes runnable while `Task_Health` is in its critical section. Drives GPIO marker PA2 HIGH.
-   - **Experiment A (Binary Semaphore / No Inheritance):** When `xDiagMutex` is initialized as a binary semaphore (`xSemaphoreCreateBinary`), `Task_Compute` preempts `Task_Health` (Priority 2 > Priority 1), running its 20 ms loop and starving `Task_Process` (Priority 3) for the entire duration (unbounded priority inversion).
-   - **Experiment B (FreeRTOS Mutex / With Priority Inheritance):** When `xDiagMutex` is initialized with `xSemaphoreCreateMutex()`, FreeRTOS kernel immediately elevates `Task_Health`'s effective priority to 3 (`xTaskPriorityInherit()`). `Task_Compute` cannot preempt `Task_Health`. `Task_Health` finishes within 5 ms, releases the mutex, its priority drops back to 1 (`xTaskPriorityDisinherit()`), and `Task_Process` runs immediately.
+   - To test real-time concurrency without imposing a mutex on the fast acquisition path, a shared diagnostic snapshot buffer `g_diag_snapshot` guarded by `xDiagMutex` is introduced:
+     - **Low-priority `Task_Health` (Priority 1):** Takes `xDiagMutex` and executes bounded **CPU-runnable work** (~5 ms integer calculation loop measured by DWT cycle counter; it must **not** call `vTaskDelay()` while holding the lock). Drives GPIO marker PA3 HIGH while holding the lock.
+     - **High-priority `Task_Process` (Priority 3):** Urgent alarm snapshot. Attempts `xSemaphoreTake(xDiagMutex, portMAX_DELAY)` and blocks. Drives GPIO marker PA1 LOW while blocked.
+     - **Medium-priority `Task_Compute` (Priority 2):** CPU-bound workload task. Drives GPIO marker PA2 HIGH while executing.
+   - **Deterministic Coordination Protocol:**
+     1. Low-priority `Task_Health` (Priority 1) acquires `xDiagMutex`.
+     2. `Task_Health` signals High-priority `Task_Process` (Priority 3) via direct task notification (`xTaskNotifyGive`).
+     3. `Task_Process` awakens, attempts to acquire `xDiagMutex` via `xSemaphoreTake(xDiagMutex, portMAX_DELAY)`, and blocks.
+     4. `Task_Health` detects or verifies `Task_Process` is blocked, then signals Medium-priority `Task_Compute` (Priority 2) via direct task notification.
+     5. `Task_Compute` awakens and executes its 20 ms CPU workload.
+     6. Simultaneously, `Task_Health` executes its identical 5 ms CPU-bound workload.
+   - **Controlled Comparison:**
+     - **Run A (Binary Semaphore / No Inheritance):** `Task_Compute` preempts `Task_Health` (Priority 2 > Priority 1), running for 20 ms while `Task_Health` is suspended. Once `Task_Compute` finishes, `Task_Health` completes its 5 ms work and releases the lock. Total observed `Task_Process` wait time is 25 ms (bounded reproduction of priority inversion without inheritance).
+       *(Note: The mechanism can create unbounded blocking in the general case if medium-priority work remains continuously runnable; this lab uses a finite 20 ms workload for exact, repeatable measurement).*
+     - **Run B (FreeRTOS Mutex / With Priority Inheritance):** When `Task_Process` blocks on `xDiagMutex`, FreeRTOS kernel immediately elevates `Task_Health`'s effective priority to 3 (`xTaskPriorityInherit()`). `Task_Compute` (Priority 2) cannot preempt `Task_Health`. `Task_Health` executes its identical 5 ms CPU workload without preemption, releases `xDiagMutex`, its priority drops back to 1 (`xTaskPriorityDisinherit()`), and `Task_Process` runs immediately with bounded ~5 ms latency.
+   - **Observable Evidence:**
+     - GPIO markers on PA1 (`Task_Process` active), PA2 (`Task_Compute` active), PA3 (`Task_Health` active), PA4 (`xDiagMutex` held);
+     - GDB live inspection of `pxCurrentTCB->uxPriority` vs `uxBasePriority` in `Task_Health` during contention.
 6. **Health Stage (`Task_Health`, Priority 1):** Runs periodically every 500 ms. Audits stack watermarks of all tasks via `uxTaskGetStackHighWaterMark()`. Verifies that acquisition packet counter is incrementing. Refreshes the Independent Watchdog (`IWDG`). If any task deadlocks or starves, IWDG resets the MCU within the configured timeout window.
 
 ### 2. Concrete Resource & Memory Budget (Design Targets)
@@ -888,7 +934,7 @@ Instead of relying on host-style leak tools, the MCU project enforces an observa
 - **Observable Evidence:** `xPortGetFreeHeapSize()` remains constant across steady-state cycles and `xPortGetMinimumEverFreeHeapSize()` does not decrease after the recorded steady-state baseline. These observations bound heap churn on the exercised path; they do not prove absence of arbitrary memory corruption.
 - **Stack Watermark Lower Bound:** Minimum stack high-water mark across all tasks $\ge 32$ words under full acquisition load.
 - **Latency Design Target:** Observed $\Delta t$ from DMA HT/TC pin high to `Task_Process` pin high $\le 15~\mu\text{s}$ at 72 MHz (subject to physical calibration).
-- **Priority Inversion Verification:** In the controlled diagnostic experiment, `Task_Health` (prio 1), `Task_Compute` (prio 2), and `Task_Process` (prio 3) interact through `xDiagMutex`; scope captures and GDB register dumps confirm that priority inheritance caps `Task_Process` blocking time to $\le 6\text{ ms}$, whereas binary semaphore causes prolonged starvation ($\ge 25\text{ ms}$).
+- **Priority Inversion Verification:** In the controlled diagnostic experiment, `Task_Health` (prio 1), `Task_Compute` (prio 2), and `Task_Process` (prio 3) interact through `xDiagMutex` with identical Low CPU workloads (~5 ms); scope captures and GDB register dumps confirm that priority inheritance caps `Task_Process` blocking time to $\le 6\text{ ms}$, whereas binary semaphore causes a bounded 20 ms preemption delay (total wait $\ge 25\text{ ms}$).
 - **Fault Recovery Design Target:** Simulated task lockup triggers IWDG reset; system recovers cleanly within $\le 1200\text{ ms}$.
 
 ---
@@ -965,43 +1011,80 @@ Phase 2 enforces a transparent, standard, Make-first build workflow.
   - Windows: `arm-gnu-toolchain-13.3.rel1-mingw-w64-i686-arm-none-eabi.zip`
 - Toolchain identity must be verified by `arm-none-eabi-gcc --version`.
 
-### 2. Runtime Contract: Option B (newlib-nano runtime with original startup)
+### 2. Runtime & Linker Contract: Option B (newlib-nano runtime with original startup)
 - **Startup Call Sequence:** The original assembly startup file (`startup_stm32f103xb.s`) enforces an explicit execution sequence:
   ```text
   Reset_Handler:
     1. Hardware loads the initial MSP from vector-table entry 0 (`_estack`); the course startup does not pretend this hardware action is performed by ordinary assembly instructions.
-    2. Call SystemInit() (configures basic clock/bus state)
-    3. Copy initialized data (.data) from Flash (LMA _sidata) to SRAM (VMA _sdata .. _edata)
-    4. Zero uninitialized data (.bss _sbss .. _ebss)
-    5. Call __libc_init_array() (executes C runtime constructors and .init_array)
-    6. Branch to main()
-    7. Trap if main() ever returns (Default_Handler loop)
+    2. Call SystemInit() (configures basic clock/bus state; must NOT depend on initialized writable global/static C state).
+    3. Copy initialized data (.data) from Flash (LMA _sidata) to SRAM (VMA _sdata .. _edata).
+    4. Zero uninitialized data (.bss _sbss .. _ebss).
+    5. Call __libc_init_array() (executes C runtime constructors and .init_array).
+    6. Branch to main().
+    7. Trap if main() ever returns (Default_Handler loop).
   ```
+- **SystemInit() Pre-.data/.bss Invariant:**
+  - Because `Reset_Handler` invokes `SystemInit()` before copying `.data` and zeroing `.bss`, the Phase 2 `SystemInit()` implementation must **not** depend on initialized writable global or static C variables. It operates strictly on memory-mapped peripheral registers (`RCC`, `FLASH->ACR`, `SCB->VTOR`), read-only constants (`.rodata`), or core registers using local stack variables. If any initialization routine requires initialized writable C state, it must be sequenced *after* data and BSS initialization.
+- **Linker Script Section & Boundary Symbol Contract:**
+  - The teaching linker script (`stm32f103c8tx_flash.ld`) explicitly defines and retains constructor arrays required by newlib-nano's `__libc_init_array()`:
+    ```ld
+    .preinit_array :
+    {
+        PROVIDE_HIDDEN (__preinit_array_start = .);
+        KEEP (*(.preinit_array*))
+        PROVIDE_HIDDEN (__preinit_array_end = .);
+    } > FLASH
+
+    .init_array :
+    {
+        PROVIDE_HIDDEN (__init_array_start = .);
+        KEEP (*(SORT(.init_array.*)))
+        KEEP (*(.init_array*))
+        PROVIDE_HIDDEN (__init_array_end = .);
+    } > FLASH
+
+    .fini_array :
+    {
+        PROVIDE_HIDDEN (__fini_array_start = .);
+        KEEP (*(SORT(.fini_array.*)))
+        KEEP (*(.fini_array*))
+        PROVIDE_HIDDEN (__fini_array_end = .);
+    } > FLASH
+    ```
+  - `KEEP` prevents linker garbage collection (`--gc-sections`) from discarding constructor tables, and `PROVIDE_HIDDEN` establishes standard boundary symbols consumed by `__libc_init_array()`.
+- **Startfile / CRT Policy:**
+  - **Policy 1 — No Default CRT Startup (Course `Reset_Handler` is the sole entry point):**
+    - Linker flag explicitly sets entry point: `-Wl,-e,Reset_Handler`.
+    - The vector table in `startup_stm32f103xb.s` assigns `Reset_Handler` to address `0x08000004`.
+    - Default GCC/newlib CRT startup objects (such as `crt0.o` / `_start`) are not linked as entry points; course `Reset_Handler` is the sole entry point.
+    - Verified via ELF entry point (`readelf -h firmware.elf | grep "Entry point address"`) and disassembly confirming vector 0x08000004 branches directly to course assembly code.
 - **`__libc_init_array()` Decision:**
   - Why it exists: `__libc_init_array()` walks the `.preinit_array` and `.init_array` section tables to invoke C initialization functions (`__attribute__((constructor))`). Calling it explicitly ensures standard C runtime semantics are respected.
   - C-Only Boundary: Phase 2 is strictly C-only. No C++ static object constructors, no `libsupc++`, no exceptions, and no RTTI are introduced.
-- **Linker Script:** Original 64 KB linker script (`stm32f103c8tx_flash.ld`).
 - **Flags:**
   ```makefile
   CFLAGS = -mcpu=cortex-m3 -mthumb -O2 -g3 -Wall -Wextra -Werror \
            -ffunction-sections -fdata-sections \
            -DSTM32F103xB
   LDFLAGS = -mcpu=cortex-m3 -mthumb -T stm32f103c8tx_flash.ld \
-            -Wl,--gc-sections -Wl,-Map=$(BUILD_DIR)/output.map \
+            -Wl,-e,Reset_Handler -Wl,--gc-sections \
+            -Wl,-Map=$(BUILD_DIR)/output.map \
             --specs=nano.specs --specs=nosys.specs
   ```
 - **Heap Ownership Contract (FreeRTOS `heap_4` vs Libc Heap):**
   - **Single Heap Rule:** FreeRTOS application allocation uses `heap_4` / `pvPortMalloc()` from `static uint8_t ucHeap[configTOTAL_HEAP_SIZE]`.
   - **Exclusion of Libc Heap:** Mandatory coursework **strictly prohibits** `malloc()`, `calloc()`, `realloc()`, and `free()` from standard libc.
-  - `--specs=nosys.specs` stubs `_sbrk()`, but the linker map must verify that `_sbrk` is never called and no libc heap memory region is allocated or grown into SRAM.
+  - `--specs=nosys.specs` supplies minimal placeholder stubs. When no libc heap functions are referenced, `_sbrk` is absent entirely from the linked binary; if `_sbrk` is ever pulled in, the implementation must justify what triggered it. Linker map must verify that no libc heap memory region is allocated or grown into SRAM.
 - **I/O & Syscall Policy:**
   - USART telemetry is written with **explicit peripheral register driver code** (CMSIS `USART1->DR`, `USART1->SR`), not through `printf` or host file descriptors.
   - Mandatory real-time paths must not depend on host-style file/syscall behavior. `--specs=nosys.specs` supplies placeholder syscall stubs purely to satisfy bare-metal linking.
 - **Link & Memory Evidence Contract:**
   - Implementation PRs must inspect `output.map` and `arm-none-eabi-readelf -s` to confirm:
-    - Symbol `__libc_init_array` is linked;
-    - Symbol `_sbrk` is a stub and libc `malloc` is absent;
-    - Symbol `ucHeap` contains the full FreeRTOS heap pool;
+    - Symbol `__libc_init_array` and required boundary symbols (`__init_array_start`, `__init_array_end`) are linked;
+    - Standard libc `malloc/calloc/realloc/free` are strictly absent;
+    - `_sbrk` is absent when unused;
+    - Vector table and ELF header prove `Reset_Handler` is the actual entry point;
+    - Symbol `ucHeap` contains the full FreeRTOS heap pool in SRAM;
     - Section addresses and sizes match the 64 KB Flash / 20 KB SRAM target contract.
 - **Math Policy:** Statistics calculations (min, max, average, RMS) use **integer / fixed-point arithmetic** (such as integer square root `isqrt()`), avoiding floating-point emulation overhead and libm dependencies on Cortex-M3.
 
@@ -1098,7 +1181,7 @@ All materials in Phase 2 derive strictly from authoritative Tier 0 and Tier 1 sp
 | **S-06** | FreeRTOS-Kernel Upstream Source | FreeRTOS / AWS | Upstream Source Code | Release V11.3.0 (`9b777ae`) | `tasks.c`, `queue.c`, `list.c`, `portable/GCC/ARM_CM3/` | Reference implementation of preemptive scheduler, queues, mutexes. (MIT License). |
 | **S-07** | CMSIS Core (Cortex-M) | Arm Limited / CMSIS | Upstream Source Code | CMSIS_5 v5.9.0 | `CMSIS/Core/Include/core_cm3.h` | Hardware register structs and NVIC inline helper functions. (Apache-2.0). |
 | **S-08** | STM32F1xx CMSIS Device Headers | STMicroelectronics | Upstream Source Code | `cmsis_device_f1` v4.3.5 | `Include/stm32f103xb.h`, `Source/Templates/gcc/startup_stm32f103xb.s` | Peripheral base addresses, bit definitions, startup file. Repository component license: Apache-2.0; retain per-file notices. |
-| **S-09** | Original 64 KB Linker Script | Repository Author | Course Source Code | `stm32f103c8tx_flash.ld` (2026) | Entire file | Original pedagogical linker script for 64 KB C8 target. (MIT License). ST Ac6 template is read-only reference, not redistributed. |
+| **S-09** | Original 64 KB Linker Script | Repository Author | Course Source Code | `stm32f103c8tx_flash.ld` (2026) | Entire file | Original pedagogical linker script for 64 KB C8 target, retaining `.init_array` via KEEP. (MIT License). ST Ac6 template is read-only reference, not redistributed. |
 | **S-10** | Arm GNU Toolchain 13.3.rel1 | Arm Limited | Toolchain Distribution | 13.3.rel1 (Jul 2024) | GCC 13.3.1, Binutils 2.42, GDB 14.2 | Pinned compiler/linker baseline. (GPL-3.0 / LGPL-3.0). |
 | **S-11** | Mastering the FreeRTOS Real Time Kernel | Richard Barry / FreeRTOS | Official Guide | 2020 Edition | Chapters 3, 4, 7, 8 | Task management, queue mechanisms, interrupt priorities. |
 
@@ -1122,7 +1205,7 @@ GPIO Oscilloscope Instrumentation --> Hardware bring-up, logic analyzer bus trac
 1. **Bare-Metal Boot Fluency:** Ability to explain every line of a linker script and startup file on a whiteboard; explaining how `.data`, `.bss`, and `__libc_init_array()` are initialized without runtime libraries.
 2. **Interrupt & Concurrency Rigor:** Articulating why RMW operations fail on shared registers; demonstrating how `BASEPRI` masking implements bounded-jitter critical sections.
 3. **Autonomous Data Movement:** Demonstrating a working ADC+DMA circular double-buffered acquisition node running at 1 kHz with live oscilloscope timing evidence.
-4. **Real-Time Determinism:** Explaining priority inversion, reproducing it on real hardware with a logic analyzer, and demonstrating priority inheritance resolution in FreeRTOS source code.
+4. **Real-Time Determinism:** Explaining priority inversion, reproducing it in a controlled scheduling experiment with identical CPU workloads, and demonstrating priority inheritance resolution in FreeRTOS source code.
 
 ---
 
@@ -1146,7 +1229,7 @@ graph TD
 
 ### Proposed Issue Breakdown:
 1. **Issue 1 (`tutorial/p2-m01-m02`): Bare-Metal Foundations (Startup, Linker, MMIO, Clock, NVIC)**
-   - Implement `P2-M01` (original 64 KB linker script, assembly startup executing `SystemInit -> copy .data -> zero .bss -> __libc_init_array -> main`, vector table, memory copy loops).
+   - Implement `P2-M01` (original 64 KB linker script retaining `.init_array` with boundary symbols, assembly startup executing `SystemInit -> copy .data -> zero .bss -> __libc_init_array -> main` with `Reset_Handler` sole entry point, vector table, memory copy loops).
    - Implement `P2-M02` (72 MHz clock tree, 1 kHz timer interrupt, GPIO atomic BSRR/BRR, RMW fault lab).
    - Estimated Load: 8.0 h MUST.
 2. **Issue 2 (`tutorial/p2-m03-m04`): Peripheral DMA, ADC Contract & FreeRTOS Core Scheduler**
@@ -1155,12 +1238,12 @@ graph TD
    - Estimated Load: 9.5 h MUST.
 3. **Issue 3 (`tutorial/p2-m05-m06`): Synchronization, Priority Inversion & RTOS Faults**
    - Implement `P2-M05` (Queue pipeline, ISR-to-task handoff, NVIC vs `configMAX_SYSCALL` priority audit, `configASSERT` validation).
-   - Implement `P2-M06` (Unbounded priority inversion reproduction, priority inheritance fix, stack watermark & overflow hook).
+   - Implement `P2-M06` (Controlled priority inversion reproduction with identical Low CPU workload, priority inheritance fix, stack watermark & overflow hook).
    - Estimated Load: 8.5 h MUST.
 4. **Issue 4 (`project/p2-m07-acquisition-node`): Integrated Acquisition Node Project**
    - Implement `P2-M07` full system:
-     - Normal lock-free acquisition pipeline: TIM3-ADC-DMA $\to$ `Task_Process` $\to$ `Task_Comm` (direct register USART1 TX) $\to$ `Task_Health` + IWDG.
-     - Controlled diagnostic priority inversion experiment: `Task_Health` (prio 1), `Task_Compute` (prio 2), `Task_Process` (prio 3) contending on `xDiagMutex`.
+     - Normal queue-driven acquisition pipeline (no application mutex): TIM3-ADC-DMA $\to$ `Task_Process` $\to$ `Task_Comm` (direct register USART1 TX) $\to$ `Task_Health` + IWDG.
+     - Controlled diagnostic priority inversion experiment: `Task_Health` (prio 1), `Task_Compute` (prio 2), `Task_Process` (prio 3) contending on `xDiagMutex` with deterministic notification gating and identical Low CPU workload (~5 ms, no `vTaskDelay`).
    - Full automated testbench, Makefile, and physical GPIO timing evidence documentation.
    - Estimated Load: 5.0 h MUST.
 5. **Issue 5 (`gate/phase-2-final-gate`): Phase 2 Final Gate Assessment Package**
