@@ -87,7 +87,7 @@ All curriculum content must derive from primary specifications and authoritative
 - **STMicroelectronics Datasheet DS5319** (DocID 13587 Rev 20, 31 Jul 2025) — STM32F103x8/xB electrical characteristics, pin multiplexing, and memory mapping.
 - **Armv7-M Architecture Reference Manual** (ARM DDI 0403E.e) — Exception model, stack alignment, instruction execution states, memory barriers (`DSB`, `ISB`, `DMB`).
 - **FreeRTOS-Kernel Upstream** (Release V11.3.0, commit `9b777ae`, MIT License) — Official kernel source for task scheduling, queues, and Cortex-M3 port.
-- **CMSIS Core / Device Headers** (CMSIS_5 v5.9.0 / `cmsis_device_f1` v4.3.5, Apache-2.0 / BSD-3-Clause) — Vendor-neutral register structs (`core_cm3.h`, `stm32f103xb.h`).
+- **CMSIS Core / Device Headers** (CMSIS_5 v5.9.0 / `cmsis_device_f1` v4.3.5; Apache-2.0 component licenses, retaining per-file notices) — Vendor-neutral core/device register definitions (`core_cm3.h`, `stm32f103xb.h`).
 - **Original 64 KB Linker Script Policy:** The teaching linker script (`stm32f103c8tx_flash.ld`) is an original pedagogical work written from GNU ld documentation and the physical STM32F103C8 memory map (64 KB Flash, 20 KB SRAM). The vendor template in ST repositories carries an Ac6 non-redistribution notice and specifies 128 KB Flash; it is strictly a read-only comparison reference and is not redistributed.
 
 ---
