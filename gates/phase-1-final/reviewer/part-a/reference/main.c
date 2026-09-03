@@ -50,7 +50,7 @@ int main(int argc, char **argv) {
     if (show_stats) {
         fprintf(stderr, "[sifter] total=%zu valid=%zu filtered=%zu errors=%zu\n",
                 stats.total_lines, stats.valid_records,
-                stats.valid_records - stats.error_records, stats.error_records);
+                stats.filtered_records, stats.error_records);
     }
 
     return 0;
