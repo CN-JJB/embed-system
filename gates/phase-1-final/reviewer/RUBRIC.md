@@ -64,8 +64,8 @@ requirement → path/command → expected observation → what it proves → wha
 * **Requirement:** Multi-field invariant synchronization free of data races.
 * **Command:** Execution under ThreadSanitizer (`setarch x86_64 -R make tsan`) and 100-cycle stress regression.
 * **Expected Observation:** TSan reports zero data races on shared state and harness control flags (`exit=0`).
-* **What it proves:** Confirms that memory accesses observed during execution were properly synchronized under POSIX mutexes without data races.
-* **What it does not prove:** 100 clean non-TSan runs do not prove absence of races under arbitrary thread scheduling. TSan execution with thread-safe harness state is required.
+* **What it proves:** In the recorded instrumented execution, TSan reported no conflicting unsynchronized accesses on the exercised shared-state and harness-control paths.
+* **What it does not prove:** Neither 100 clean stress runs nor one clean TSan execution proves absence of races under every possible schedule; they provide bounded evidence for the exercised paths.
 * **Pass/Fail:** Pass if TSan reports zero races and invariant check succeeds.
 
 ### Example 3: Part D Interacting Root-Cause & Residual Failure Proof
