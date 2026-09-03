@@ -195,7 +195,7 @@ strace: UNAVAILABLE
   --- 4. Demonstrating Dual Diagnostic Evidence Channels ---
   PASS: Both OS/FD descriptor table audit and thread lifecycle drain channels demonstrated.
   --- 5. Verifying Fixed Reference Implementation (50 Cycles) ---
-  PASS: 50/50 consecutive clean cycles completed with zero hangs, leaks, or crashes.
+  PASS: 50/50 consecutive cycles completed with no observed hangs or crashes; resource cleanup is evaluated by dedicated lifecycle evidence.
   >>> ALL PART D REGRESSION & INTERACTION CHECKS PASSED <<<
   ```
 * **What it proves:**
