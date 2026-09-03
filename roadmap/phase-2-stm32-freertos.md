@@ -100,10 +100,10 @@ All curriculum content must derive from primary specifications and official upst
    - `vTaskSwitchContext()` — Highest-priority ready task selection (`taskSELECT_HIGHEST_PRIORITY_TASK`).
    - `xTaskIncrementTick()` — Tick counter update, unblocking delayed tasks from `pxDelayedTaskList`, and preemption decision.
    - `vTaskPlaceOnEventList()` — Moving tasks from ready lists to event lists (queue wait lists).
-   - `uxTaskGetStackHighWaterMark()` & `taskCHECK_FOR_STACK_OVERFLOW()` — Stack safety inspection mechanisms.
+   - `uxTaskGetStackHighWaterMark()` in `tasks.c` and `taskCHECK_FOR_STACK_OVERFLOW()` in `include/stack_macros.h` — complementary stack-usage and overflow-detection mechanisms.
 2. **`portable/GCC/ARM_CM3/port.c` & `portmacro.h`**:
    - `xPortStartScheduler()` — NVIC priority configuration for PendSV/SysTick and SVC 0 kickoff.
-   - `prvPortStartFirstTask()` & `vPortSVCHandler()` — Switching to unprivileged/privileged Thread mode on PSP.
+   - `prvPortStartFirstTask()` & `vPortSVCHandler()` — Starting the first task in Thread mode on PSP; the standard non-MPU ARM_CM3 port does not itself introduce unprivileged task execution.
    - `xPortPendSVHandler()` — Assembly context switch: saving `{r4-r11}` on PSP, swapping `pxCurrentTCB->pxTopOfStack`, restoring `{r4-r11}`, and returning with `0xFFFFFFFD`.
    - `vPortValidateInterruptPriority()` — Assertion checking ISR priority against `configMAX_SYSCALL_INTERRUPT_PRIORITY`.
    - `portSET_INTERRUPT_MASK_FROM_ISR()` / `portCLEAR_INTERRUPT_MASK_FROM_ISR()` — Masking interrupts via `BASEPRI`.
