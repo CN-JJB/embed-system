@@ -38,9 +38,9 @@ if gcc -I"$B3_DIR" -std=c17 -O0 -g3 -Wall -Wextra -Wpedantic -Werror -pthread -f
     "$SCRIPT_DIR/solution.c" "$B3_DIR/harness.c" -o "$SCRIPT_DIR/tsan_test" 2>/dev/null; then
     setarch x86_64 -R "$SCRIPT_DIR/tsan_test" >/dev/null
     rm -f "$SCRIPT_DIR/tsan_test"
-    echo "PASS: ThreadSanitizer confirmed zero data races."
+    echo "PASS: ThreadSanitizer reported no data races in this execution."
 else
     echo "NOTICE: TSan compilation unsupported in current environment."
 fi
 
-echo ">>> SUCCESS: Variant B3 verified (bug reproduces, solution passes 100/100, TSan clean) <<<"
+echo ">>> SUCCESS: Variant B3 verified (bug reproduces, solution passes 100/100, TSan run reported no races) <<<"
