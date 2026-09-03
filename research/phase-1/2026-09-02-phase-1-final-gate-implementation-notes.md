@@ -94,12 +94,12 @@ strace: UNAVAILABLE
   ```
 * **What it proves:**
   1. Compiles strictly under `-std=c17 -O0 -g3 -Wall -Wextra -Wpedantic -Werror`.
-  2. Divided across 5 files (`main.c`, `sifter.c`, `sifter.h`, `parser.c`, `parser.h`).
-  3. Dispatches records to caller-provided `sifter_record_cb` and `void *ctx`.
-  4. Enforces strict input validation: rejects negative unsigned values, rejects trailing non-whitespace, validates exact 128/129-byte boundaries.
-  5. In-process descriptor lifecycle audit confirms that opened owned descriptors are explicitly closed before function return and on error paths, while borrowed descriptors (0 and 1) remain active.
+  2. Divided across 6 files (`main.c`, `app_lifecycle.c`, `app_lifecycle.h`, `sifter.c`, `sifter.h`, `parser.c`, `parser.h`).
+  3. Dispatches records to caller-provided `sifter_record_cb` and `void *ctx`, and propagates callback failures immediately.
+  4. Enforces strict input validation: rejects negative unsigned values, rejects trailing non-whitespace, validates exact 128-byte accepted and 129-byte rejected physical record boundaries (both newline-terminated and EOF-terminated).
+  5. In-process descriptor lifecycle audit confirms that opened owned descriptors in the reusable application lifecycle helper (`app_lifecycle.c`) are explicitly closed before function return and on error paths (including output open failure after input open), while borrowed descriptors (0 and 1) remain active.
   6. AddressSanitizer and LeakSanitizer confirm zero memory errors and zero leaks.
-* **What it does not prove:** An external shell `/proc/self/fd` check does not prove application code cleanup (since the kernel forcibly closes file descriptors upon process termination). True application cleanup is proven through the in-process descriptor lifecycle harness.
+* **What it does not prove:** An external shell `/proc/self/fd` check does not prove application code cleanup (since the kernel forcibly closes file descriptors upon process termination). True application cleanup is proven through the in-process descriptor lifecycle audit of the reusable application helper.
 * **Status:** `VERIFIED`.
 
 ---
@@ -200,10 +200,10 @@ strace: UNAVAILABLE
   ```
 * **What it proves:**
   1. The unpatched fixture stalls indefinitely and is safely terminated by the 3-second watchdog timer (exit code 2).
-  2. The two defect boundaries genuinely interact: resolving only the Process/FD fault leaves a residual concurrency drain failure (exit code 1); resolving only the concurrency fault leaves an unresolved stream EOF stall (exit code 2).
+  2. The two defect boundaries genuinely interact: resolving only the Process/FD fault leaves a deterministic residual concurrency drain failure (exit code 1); resolving only the concurrency fault leaves an unresolved stream EOF stall (exit code 2).
   3. The fixed reference implementation resolves both boundaries, passing 50 consecutive cycles cleanly.
-  4. Both diagnostic channels (OS descriptor inspection via `/proc` and thread lifecycle drain state) are experimentally demonstrated.
-* **What it does not prove:** Watchdog timeout proves execution safety; it does not constitute diagnostic proof of root cause. Root-cause proof requires tracing the descriptor and thread states.
+  4. Both diagnostic channels are experimentally demonstrated on actual target executions: OS descriptor table inspection captures open pipe descriptors in `/proc/<target_pid>/fd` during a live stall, and the concurrency channel captures unjoined thread and lifecycle state.
+* **What it does not prove:** Watchdog timeout proves execution safety; it does not constitute diagnostic proof of root cause. Root-cause proof requires tracing the descriptor table and live thread states.
 * **Status:** `VERIFIED`.
 
 ---

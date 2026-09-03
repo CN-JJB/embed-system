@@ -8,8 +8,9 @@
 
 * **Golden Reference Directory:** `reviewer/part-a/reference/`
 * **Core Modules:**
-  * `main.c`: Parses `--input`, `--output`, `--filter`, `--stats`. Validates integer boundaries for `--filter` (`INT32_MIN` to `INT32_MAX`), manages owned vs borrowed descriptors, and invokes stream processing with caller-supplied callback and context.
-  * `sifter.c` / `sifter.h`: Accepts caller callback `int (*sifter_record_cb)(const struct sifter_record *rec, void *ctx)` and `void *ctx`. Coordinates line buffering with exact 128-byte boundary, dispatches valid records to callback, and tracks summary statistics.
+  * `main.c`: Parses `--input`, `--output`, `--filter`, `--stats`. Validates integer boundaries for `--filter` (`INT32_MIN` to `INT32_MAX`) and delegates I/O execution to `app_lifecycle.c`.
+  * `app_lifecycle.c` / `app_lifecycle.h`: Implements complete application I/O lifecycle: opens owned input/output, guarantees owned descriptor release on all success and error paths, preserves borrowed descriptors (0 and 1), and dispatches to stream processing.
+  * `sifter.c` / `sifter.h`: Accepts caller callback `int (*sifter_record_cb)(const struct sifter_record *rec, void *ctx)` and `void *ctx`. Enforces exact 128-byte physical record line-length framing, propagates callback failures immediately, dispatches valid records to callback, and tracks summary statistics.
   * `parser.c` / `parser.h`: Strictly parses `<timestamp_ns> <sensor_id> <metric_val>\n`. Rejects negative unsigned values, rejects trailing non-whitespace garbage, enforces `UINT64_MAX`, sensor ID `0..255`, and metric `INT32_MIN..INT32_MAX`.
 * **Validation Command:**
   ```bash

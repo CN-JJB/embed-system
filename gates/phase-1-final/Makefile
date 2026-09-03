@@ -18,7 +18,9 @@ test:
 	@cd reviewer/part-c && ./verify.sh
 	@echo "=== Testing Part D Regression ==="
 	@cd reviewer/part-d && ./regression.sh
-	@echo ">>> ALL FINAL GATE COMPONENT TESTS PASSED <<<"
+	@echo "=== Running Learner Package Secrecy & Leakage Audit ==="
+	@cd reviewer && ./audit-learner-package.sh
+	@echo ">>> ALL FINAL GATE VERIFICATION CHECKS PASSED <<<"
 
 clean:
 	@rm -rf build /tmp/final-gate-learner-*

@@ -2,7 +2,7 @@ CC ?= gcc
 CFLAGS ?= -std=c17 -O0 -g3 -Wall -Wextra -Wpedantic -Werror -MMD -MP
 SAN_FLAGS ?= -fsanitize=address,undefined -fno-omit-frame-pointer
 
-SRCS = main.c sifter.c parser.c
+SRCS = main.c sifter.c parser.c app_lifecycle.c
 OBJS = $(SRCS:.c=.o)
 DEPS = $(SRCS:.c=.d)
 BIN = sifter

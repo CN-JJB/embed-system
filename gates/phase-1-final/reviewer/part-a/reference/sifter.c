@@ -57,7 +57,7 @@ int sifter_process_stream(int in_fd, sifter_record_cb cb, void *ctx,
 
     char read_buf[256];
     char line_buf[SIFTER_MAX_LINE + 2];
-    size_t line_len = 0;
+    size_t char_count = 0;
     int discarding_too_long = 0;
 
     for (;;) {
@@ -76,68 +76,83 @@ int sifter_process_stream(int in_fd, sifter_record_cb cb, void *ctx,
             char c = read_buf[i];
             if (c == '\n') {
                 if (discarding_too_long) {
-                    /* Finished discarding overlong line */
                     discarding_too_long = 0;
-                    line_len = 0;
+                    char_count = 0;
                     continue;
                 }
-                if (line_len > 0) {
+                if (char_count > 0) {
                     if (stats != NULL) {
                         stats->total_lines++;
                     }
-                    struct sifter_record rec;
-                    enum parser_status st = sifter_parse_line(line_buf, line_len, &rec);
-                    if (st == PARSE_OK) {
-                        if (stats != NULL) {
-                            stats->valid_records++;
-                        }
-                        if (cb(&rec, ctx) != 0) {
-                            return -1;
-                        }
-                    } else {
+                    /* Physical record including newline: char_count + 1 bytes.
+                     * Must not exceed SIFTER_MAX_LINE (128 bytes). */
+                    if (char_count + 1 > SIFTER_MAX_LINE) {
                         if (stats != NULL) {
                             stats->error_records++;
                         }
+                    } else {
+                        struct sifter_record rec;
+                        enum parser_status st = sifter_parse_line(line_buf, char_count, &rec);
+                        if (st == PARSE_OK) {
+                            if (stats != NULL) {
+                                stats->valid_records++;
+                            }
+                            int cb_res = cb(&rec, ctx);
+                            if (cb_res != 0) {
+                                return cb_res;
+                            }
+                        } else {
+                            if (stats != NULL) {
+                                stats->error_records++;
+                            }
+                        }
                     }
-                    line_len = 0;
+                    char_count = 0;
                 }
             } else {
                 if (discarding_too_long) {
                     continue;
                 }
-                /* Allow up to SIFTER_MAX_LINE bytes (which would include the newline) */
-                if (line_len < SIFTER_MAX_LINE) {
-                    line_buf[line_len++] = c;
+                /* An EOF-terminated record can hold up to 128 bytes.
+                 * If a 129th non-newline character is received, it exceeds limit. */
+                if (char_count < SIFTER_MAX_LINE) {
+                    line_buf[char_count++] = c;
                 } else {
-                    /* Line exceeds limit; discard until next newline and count error */
                     discarding_too_long = 1;
                     if (stats != NULL) {
                         stats->total_lines++;
                         stats->error_records++;
                     }
-                    line_len = 0;
+                    char_count = 0;
                 }
             }
         }
     }
 
-    /* Trailing record without newline */
-    if (line_len > 0 && !discarding_too_long) {
+    /* Trailing record without newline (EOF-terminated) */
+    if (char_count > 0 && !discarding_too_long) {
         if (stats != NULL) {
             stats->total_lines++;
         }
-        struct sifter_record rec;
-        enum parser_status st = sifter_parse_line(line_buf, line_len, &rec);
-        if (st == PARSE_OK) {
-            if (stats != NULL) {
-                stats->valid_records++;
-            }
-            if (cb(&rec, ctx) != 0) {
-                return -1;
-            }
-        } else {
+        if (char_count > SIFTER_MAX_LINE) {
             if (stats != NULL) {
                 stats->error_records++;
+            }
+        } else {
+            struct sifter_record rec;
+            enum parser_status st = sifter_parse_line(line_buf, char_count, &rec);
+            if (st == PARSE_OK) {
+                if (stats != NULL) {
+                    stats->valid_records++;
+                }
+                int cb_res = cb(&rec, ctx);
+                if (cb_res != 0) {
+                    return cb_res;
+                }
+            } else {
+                if (stats != NULL) {
+                    stats->error_records++;
+                }
             }
         }
     }

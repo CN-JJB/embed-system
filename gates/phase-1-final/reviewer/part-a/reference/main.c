@@ -1,10 +1,8 @@
 #define _POSIX_C_SOURCE 200809L
-#include "sifter.h"
+#include "app_lifecycle.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-#include <fcntl.h>
 #include <errno.h>
 #include <limits.h>
 
@@ -36,56 +34,23 @@ int main(int argc, char **argv) {
         }
     }
 
-    int in_fd = STDIN_FILENO;
-    int in_owned = 0;
-    if (input_path != NULL && strcmp(input_path, "-") != 0) {
-        in_fd = open(input_path, O_RDONLY | O_CLOEXEC);
-        if (in_fd < 0) {
-            fprintf(stderr, "Error: Failed to open input file '%s': %s\n", input_path, strerror(errno));
-            return 1;
-        }
-        in_owned = 1;
-    }
-
-    int out_fd = STDOUT_FILENO;
-    int out_owned = 0;
-    if (output_path != NULL && strcmp(output_path, "-") != 0) {
-        out_fd = open(output_path, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
-        if (out_fd < 0) {
-            fprintf(stderr, "Error: Failed to open output file '%s': %s\n", output_path, strerror(errno));
-            if (in_owned) {
-                close(in_fd);
-            }
-            return 1;
-        }
-        out_owned = 1;
-    }
-
-    struct sifter_filter_ctx fctx = {
-        .out_fd = out_fd,
-        .threshold = filter_threshold,
-        .emitted_records = 0
+    struct sifter_io_config cfg = {
+        .input_path = input_path,
+        .output_path = output_path,
+        .filter_threshold = filter_threshold
     };
 
     struct sifter_stats stats;
-    int res = sifter_process_stream(in_fd, sifter_filter_cb, &fctx, &stats);
-
-    if (in_owned) {
-        close(in_fd);
-    }
-    if (out_owned) {
-        close(out_fd);
-    }
-
+    int res = sifter_run_application_lifecycle(&cfg, &stats);
     if (res != 0) {
-        fprintf(stderr, "Error during stream processing\n");
+        fprintf(stderr, "Error: Application lifecycle execution failed\n");
         return 1;
     }
 
     if (show_stats) {
         fprintf(stderr, "[sifter] total=%zu valid=%zu filtered=%zu errors=%zu\n",
                 stats.total_lines, stats.valid_records,
-                fctx.emitted_records, stats.error_records);
+                stats.valid_records - stats.error_records, stats.error_records);
     }
 
     return 0;

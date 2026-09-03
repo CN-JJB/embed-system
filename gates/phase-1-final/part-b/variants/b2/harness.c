@@ -68,10 +68,10 @@ int main(void) {
         unlink(path);
     }
 
-    /* In a correct implementation, final_fds should match baseline */
+    /* Verify descriptor stability */
     if (final_fds > base_fds + 1) {
-        fprintf(stderr, ">>> FAULT DETECTED: Descriptor table growth detected (%d leaked descriptors)! <<<\n",
-                final_fds - base_fds);
+        fprintf(stderr, ">>> FAULT DETECTED: Descriptor count check failed (base=%d, final=%d) <<<\n",
+                base_fds, final_fds);
         return 1;
     }
 

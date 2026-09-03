@@ -52,13 +52,13 @@ Every evaluated claim must follow the canonical mapping:
 requirement → path/command → expected observation → what it proves → what it does not prove → pass/fail
 ```
 
-### Example 1: Part A In-Process File Descriptor Lifecycle Audit
-* **Requirement:** All owned file descriptors opened by the application are explicitly closed before termination.
-* **Command:** In-process descriptor audit (`reviewer/part-a/test_lifecycle.c`) measuring `/proc/self/fd` active descriptor delta across stream processing, error paths, and exit.
-* **Expected Observation:** The active descriptor count in `/proc/self/fd` before opening owned files strictly matches the count after explicit cleanup, on both success and error paths.
-* **What it proves:** Proves that the C application logic explicitly invokes `close()` on every owned descriptor it allocated, and that borrowed descriptors (`stdin`, `stdout`) remain open.
-* **What it does not prove:** An external parent-shell `/proc/self/fd` comparison does NOT prove child application cleanup (because kernel process tear-down forcibly closes descriptors on exit regardless of code quality). Evidence must be captured via in-process descriptor tracking.
-* **Pass/Fail:** Pass if in-process active descriptor count returns to baseline; Fail if descriptors are retained.
+### Example 1: Part A In-Process Application Descriptor Lifecycle Audit
+* **Requirement:** All owned file descriptors opened by the application lifecycle are explicitly closed before return and on all failure paths.
+* **Command:** In-process descriptor audit (`reviewer/part-a/test_lifecycle.c`) measuring `/proc/self/fd` active descriptor delta across the reusable application lifecycle helper (`app_lifecycle.c`), verifying success paths, output-open failure after input-open, processing errors, and borrowed descriptor preservation.
+* **Expected Observation:** The active descriptor count in `/proc/self/fd` before opening owned files strictly matches the count after lifecycle completion on both success and failure paths.
+* **What it proves:** Proves that the C application lifecycle logic explicitly invokes `close()` on every owned descriptor it allocated (including error unwinding when subsequent opens fail), and that borrowed descriptors (`stdin`, `stdout`) remain open.
+* **What it does not prove:** An external parent-shell `/proc/self/fd` comparison does NOT prove child application cleanup (because kernel process tear-down forcibly closes descriptors on exit regardless of code quality). Evidence must be captured via in-process descriptor tracking of the application's actual lifecycle helper.
+* **Pass/Fail:** Pass if in-process active descriptor count returns to baseline across all paths; Fail if descriptors are retained.
 
 ### Example 2: Part B Concurrency Synchronization & TSan
 * **Requirement:** Multi-field invariant synchronization free of data races.
@@ -70,12 +70,13 @@ requirement → path/command → expected observation → what it proves → wha
 
 ### Example 3: Part D Interacting Root-Cause & Residual Failure Proof
 * **Requirement:** Demonstration that two distinct defect boundaries interact, such that single-fix repairs leave residual failure while the integrated fix restores clean operation.
-* **Command:** `reviewer/part-d/regression.sh` running broken fixture, `partial_fd_fixed`, `partial_conc_fixed`, and reference implementation.
+* **Command:** `reviewer/part-d/regression.sh` running broken fixture, `partial_fd_fixed`, `partial_conc_fixed`, and reference implementation, alongside `test_channels.c`.
 * **Expected Observation:**
   1. Broken fixture hits watchdog timeout (exit code 2).
-  2. Process/FD-only repair fails with residual concurrency drain error (exit code 1).
-  3. Concurrency-only repair stalls on stream EOF (exit code 2).
-  4. Fully fixed reference passes 50/50 consecutive cycles (exit code 0).
-* **What it proves:** Proves genuine interaction between the process stream boundary and internal concurrency drain.
+  2. Live inspection of stalled target child reveals duplicate pipe descriptors in `/proc/<target_pid>/fd`.
+  3. Process/FD-only repair fails with residual concurrency drain error (exit code 1) and active unjoined threads.
+  4. Concurrency-only repair stalls on stream EOF (exit code 2).
+  5. Fully fixed reference passes 50/50 consecutive cycles (exit code 0).
+* **What it proves:** Proves genuine interaction between the process stream boundary and internal concurrency drain using empirical runtime evidence from actual target executions.
 * **What it does not prove:** A single fixed run alone does not prove interaction; both partial-fix failures must be demonstrated. Watchdog timeout proves bounded execution safety, not root-cause diagnosis.
-* **Pass/Fail:** Pass if all four execution states match expected results and two evidence channels are documented.
+* **Pass/Fail:** Pass if all four execution states match expected results and two live evidence channels are documented.

@@ -56,7 +56,7 @@ echo "PASS: CLI rejected out-of-range filter thresholds."
 # 5. Comprehensive Parser & Grammar Boundaries
 echo "--- 5. Testing Parser Grammar & Exact Length Boundaries ---"
 gcc -std=c17 -O0 -g3 -Wall -Wextra -Wpedantic -Werror -I"$TARGET_DIR" \
-    "$SCRIPT_DIR/test_boundaries.c" "$TARGET_DIR/parser.c" -o "$SCRIPT_DIR/run_boundaries"
+    "$SCRIPT_DIR/test_boundaries.c" "$TARGET_DIR/sifter.c" "$TARGET_DIR/parser.c" -o "$SCRIPT_DIR/run_boundaries"
 "$SCRIPT_DIR/run_boundaries" >/dev/null
 rm -f "$SCRIPT_DIR/run_boundaries"
 echo "PASS: All numeric, overflow, and exact 128/129-byte boundaries verified."
@@ -72,7 +72,7 @@ echo "PASS: Custom caller callback and void *ctx verified."
 # 7. In-Process Descriptor Lifecycle Audit
 echo "--- 7. Testing In-Process FD Ownership & Lifecycle ---"
 gcc -std=c17 -O0 -g3 -Wall -Wextra -Wpedantic -Werror -I"$TARGET_DIR" \
-    "$SCRIPT_DIR/test_lifecycle.c" "$TARGET_DIR/sifter.c" "$TARGET_DIR/parser.c" -o "$SCRIPT_DIR/run_lifecycle"
+    "$SCRIPT_DIR/test_lifecycle.c" "$TARGET_DIR/app_lifecycle.c" "$TARGET_DIR/sifter.c" "$TARGET_DIR/parser.c" -o "$SCRIPT_DIR/run_lifecycle"
 "$SCRIPT_DIR/run_lifecycle" "$FIXTURES_DIR/valid.txt" >/dev/null
 rm -f "$SCRIPT_DIR/run_lifecycle"
 echo "PASS: In-process descriptor audit confirmed zero leaked descriptors."

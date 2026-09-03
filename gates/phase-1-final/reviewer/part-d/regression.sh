@@ -64,8 +64,8 @@ echo "PASS: Partial concurrency fix cleanly stalled on stream boundary (exit cod
 # 4. Demonstrate the Two Diagnostic Evidence Channels
 echo "--- 4. Demonstrating Dual Diagnostic Evidence Channels ---"
 gcc -std=c17 -O0 -g3 -Wall -Wextra -Wpedantic -Werror -pthread \
-    -I"$REF_DIR" \
-    "$SCRIPT_DIR/test_channels.c" "$REF_DIR/pipeline.c" "$REF_DIR/queue.c" \
+    -I"$PART_D_DIR/src" \
+    "$SCRIPT_DIR/test_channels.c" "$PART_D_DIR/src/pipeline.c" "$PART_D_DIR/src/queue.c" \
     -o "$SCRIPT_DIR/run_channels"
 "$SCRIPT_DIR/run_channels" >/dev/null
 rm -f "$SCRIPT_DIR/run_channels"

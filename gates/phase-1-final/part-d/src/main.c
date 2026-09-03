@@ -24,8 +24,8 @@ int main(int argc, char **argv) {
 
     printf("=== Starting Part D Telemetry Streaming Service ===\n");
 
-    int p_fd[2];
-    if (pipe(p_fd) != 0) {
+    int pipe_fds[2];
+    if (pipe(pipe_fds) != 0) {
         perror("pipe");
         return 1;
     }
@@ -33,13 +33,13 @@ int main(int argc, char **argv) {
     pid_t pid = fork();
     if (pid < 0) {
         perror("fork");
-        close(p_fd[0]);
-        close(p_fd[1]);
+        close(pipe_fds[0]);
+        close(pipe_fds[1]);
         return 1;
     }
 
     if (pid == 0) {
-        int in_fd = p_fd[0];
+        int in_fd = pipe_fds[0];
 
         struct telemetry_pipeline pipeline;
         if (pipeline_start(&pipeline, in_fd) != 0) {
@@ -49,9 +49,14 @@ int main(int argc, char **argv) {
 
         pipeline_stop(&pipeline);
 
-        if (pipeline.processed_count != 50) {
-            fprintf(stderr, "[child] Drain verification failed: processed %lu of 50 items\n",
-                    (unsigned long)pipeline.processed_count);
+        uint64_t count = 0;
+        int64_t sum = 0;
+        pipeline_get_stats(&pipeline, &count, &sum);
+        bool complete = pipeline_is_completed(&pipeline);
+
+        if (!complete || count != 50) {
+            fprintf(stderr, "[child] Lifecycle verification failed: complete=%d, count=%lu/50\n",
+                    (int)complete, (unsigned long)count);
             pipeline_destroy(&pipeline);
             close(in_fd);
             _exit(1);
@@ -60,23 +65,23 @@ int main(int argc, char **argv) {
         pipeline_destroy(&pipeline);
         close(in_fd);
         printf("[child] Clean shutdown complete. Processed=%lu, Sum=%ld\n",
-               (unsigned long)pipeline.processed_count, (long)pipeline.accumulated_sum);
+               (unsigned long)count, (long)sum);
         _exit(0);
     }
 
-    close(p_fd[0]);
+    close(pipe_fds[0]);
 
     printf("[parent] Streaming 50 telemetry items to worker daemon...\n");
     for (uint64_t i = 1; i <= 50; i++) {
         struct queue_item item = { .id = i, .value = (int32_t)(i * 10) };
-        if (write(p_fd[1], &item, sizeof(item)) != sizeof(item)) {
+        if (write(pipe_fds[1], &item, sizeof(item)) != sizeof(item)) {
             perror("write");
             break;
         }
     }
 
     printf("[parent] Completed transmission. Closing write pipe...\n");
-    close(p_fd[1]);
+    close(pipe_fds[1]);
 
     printf("[parent] Waiting for worker daemon to finish and exit...\n");
     int status = 0;

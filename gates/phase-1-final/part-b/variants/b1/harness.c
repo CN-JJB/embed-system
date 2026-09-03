@@ -21,7 +21,7 @@ int main(void) {
     struct engine_window win;
     engine_init(&win);
 
-    /* Process batch 1: ephemeral batch allocation */
+    /* Process initial telemetry batch */
     for (uint64_t i = 0; i < 5; i++) {
         char *batch_buf = malloc(32);
         if (batch_buf == NULL) {
@@ -29,7 +29,6 @@ int main(void) {
         }
         snprintf(batch_buf, 32, "X_event_payload_%lu", (unsigned long)i);
         engine_push_event(&win, i, (int32_t)(i * 10), batch_buf);
-        /* Ephemeral batch lifetime ends here */
         free(batch_buf);
     }
 

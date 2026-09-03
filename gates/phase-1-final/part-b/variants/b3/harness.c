@@ -87,8 +87,7 @@ int main(void) {
 
     bool violation = check_violation();
     if (violation) {
-        fprintf(stderr, ">>> FAULT DETECTED: Multi-field invariant violation (pool_a + pool_b != %lld) observed! <<<\n",
-                (long long)B3_TOTAL_BALANCE);
+        fprintf(stderr, ">>> FAULT DETECTED: Inconsistent balance check observed <<<\n");
         return 1;
     }
 

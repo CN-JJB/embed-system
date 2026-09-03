@@ -38,7 +38,6 @@ int spool_rotate(struct spool_manager *mgr, const char *new_path) {
     if (new_fd < 0) {
         return -1;
     }
-    /* Reassign active descriptor pointer without releasing previous descriptor */
     mgr->current_fd = new_fd;
     strncpy(mgr->current_path, new_path, sizeof(mgr->current_path) - 1);
     return 0;
