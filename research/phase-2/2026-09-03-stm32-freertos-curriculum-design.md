@@ -411,8 +411,8 @@ graph LR
     - Selecting `0b101` (55.5 cycles) yields $T_{\text{conv}} = 55.5 + 12.5 = 68\text{ cycles} \approx 5.67~\mu\text{s}$, well within the 10 kHz sample period ($100~\mu\text{s}$).
   - **Source Impedance ($R_{\text{AIN}}$) Compatibility Note:**
     - RM0008 Section 11.3.11 and DS5319 Table 49 define maximum external input impedance $R_{\text{AIN}}$ vs sample cycles.
-    - At $T_{\text{sample}} = 1.5\text{ cycles}$, $R_{\text{AIN}} \le 0.4\text{ k}\Omega$. A standard $10\text{ k}\Omega$ bench potentiometer cannot charge the internal sampling capacitor ($C_{\text{ADC}} \approx 8\text{ pF}$) in 1.5 cycles, causing severe voltage droop, non-linear distortion, and inter-channel crosstalk.
-    - To support standard $10\text{ k}\Omega$ unbuffered signal sources, $T_{\text{sample}}$ must be selected $\ge 55.5\text{ cycles}$ ($R_{\text{AIN}} \le 50\text{ k}\Omega$).
+    - At $T_{\text{sample}} = 1.5\text{ cycles}$, the datasheet permits only a low external source impedance. A 10 kΩ potentiometer wired as a divider has a worst-case Thevenin resistance of about 2.5 kΩ at midscale, not 10 kΩ; other unbuffered sensors or resistor networks may be substantially higher impedance.
+    - The canonical 55.5-cycle setting is intentionally conservative for the lab and accommodates higher-impedance sources within the datasheet table. Learners must calculate the actual source impedance rather than infer it from a potentiometer's end-to-end resistance.
   - **Explicit Hardware Calibration Sequence (RM0008 Section 11.4):**
     - Calibration must be executed after power-up before enabling regular conversions to eliminate internal analog offset:
       1. Set `ADON = 1` in `ADC1->CR2` to power up the converter. Wait $t_{\text{STAB}}$ stabilization time (~1 $\mu\text{s}$).
@@ -814,7 +814,7 @@ The canonical capstone project is the **STM32 FreeRTOS Acquisition Node** (`P2-M
 
 ```mermaid
 graph TD
-    subgraph Normal Acquisition Pipeline - Lock-Free Fast Path
+    subgraph Normal Acquisition Pipeline - Queue-Driven, No Application Mutex
         TIMER[TIM3 TRGO Update @ 1 kHz] -->|EXTSEL=100 ADCPRE=/6| ADC[ADC1 Regular Channel PA0 - SMP0 55.5 cycles]
         ADC -->|DMA Request| DMA[DMA1 Channel 1 Circular Buffer 2x64]
         DMA -->|Half-Transfer / Transfer-Complete IRQ| ISR[DMA1_Channel1_IRQHandler]
@@ -836,7 +836,7 @@ graph TD
 ```
 
 ### 1. Data Flow & Ownership Architecture
-1. **Acquisition Stage (Lock-Free Fast Path):**
+1. **Acquisition Stage (Queue-Driven Fast Path, No Application Mutex):**
    - TIM3 update event generates TRGO pulses at 1.0 kHz.
    - ADC1 regular channel PA0 converts on TIM3 TRGO (`EXTSEL = 0b100`, `EXTTRIG = 1`).
    - Clock contract: `RCC->CFGR[ADCPRE] = 0b10` (/6) ensuring $f_{\text{ADCCLK}} = 12\text{ MHz} \le 14\text{ MHz}$.
@@ -847,7 +847,7 @@ graph TD
    - When Half 0 is filled (64 samples), DMA fires Half-Transfer interrupt. ISR packages `{ buffer_index = 0, count = 64, timestamp = xTaskGetTickCountFromISR() }` into an acquisition message and posts to `xAcqQueue` via `xQueueSendFromISR()`.
    - When Half 1 is filled, Transfer-Complete interrupt posts `{ buffer_index = 1, ... }`.
    - ISR calls `portYIELD_FROM_ISR()`.
-3. **Processing Stage (`Task_Process`, Priority 3):** Blocks on `xAcqQueue`. Upon wakeup, computes batch statistics (minimum, maximum, average, integer RMS via `isqrt()`). Formats a fixed-size `TelemetryRecord_t`. Posts record to `xLogQueue`. Normal acquisition path has zero mutex dependencies.
+3. **Processing Stage (`Task_Process`, Priority 3):** Blocks on `xAcqQueue`. Upon wakeup, computes batch statistics (minimum, maximum, average, integer RMS via `isqrt()`). Formats a fixed-size `TelemetryRecord_t`. Posts record to `xLogQueue`. The normal acquisition path has no application-level mutex dependency; FreeRTOS queue operations still use kernel synchronization and are not described as lock-free.
 4. **Communication Stage (`Task_Comm`, Priority 2):** Blocks on `xLogQueue`. Formats fixed-size ASCII or binary telemetry frames and transmits via **USART1 interrupt-driven or polling TX** (115200 baud) using direct CMSIS register operations (`USART1->DR`, `USART1->SR`).
 5. **Controlled Priority Inversion Experiment:**
    - To test real-time concurrency without imposing a meaningless lock on the fast acquisition path, a shared diagnostic snapshot buffer `g_diag_snapshot` guarded by `xDiagMutex` is introduced:
@@ -969,7 +969,7 @@ Phase 2 enforces a transparent, standard, Make-first build workflow.
 - **Startup Call Sequence:** The original assembly startup file (`startup_stm32f103xb.s`) enforces an explicit execution sequence:
   ```text
   Reset_Handler:
-    1. Set initial MSP = _estack (hardware loads vector 0; assembly reinforces)
+    1. Hardware loads the initial MSP from vector-table entry 0 (`_estack`); the course startup does not pretend this hardware action is performed by ordinary assembly instructions.
     2. Call SystemInit() (configures basic clock/bus state)
     3. Copy initialized data (.data) from Flash (LMA _sidata) to SRAM (VMA _sdata .. _edata)
     4. Zero uninitialized data (.bss _sbss .. _ebss)
