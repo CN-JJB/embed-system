@@ -87,7 +87,7 @@ All curriculum content must derive from primary specifications and authoritative
 - **STMicroelectronics Datasheet DS5319** (DocID 13587 Rev 20, 31 Jul 2025) — STM32F103x8/xB electrical characteristics, pin multiplexing, ADC electrical limits ($f_{\text{ADC}} \le 14\text{ MHz}$, $R_{\text{AIN}}$ table), and memory mapping.
 - **Armv7-M Architecture Reference Manual** (ARM DDI 0403E.e) — Exception model, stack alignment, instruction execution states, memory barriers (`DSB`, `ISB`, `DMB`).
 - **FreeRTOS-Kernel Upstream** (Release V11.3.0, commit `9b777ae`, MIT License) — Official kernel source for task scheduling, queues, and Cortex-M3 port.
-- **CMSIS Core / Device Headers** (CMSIS_5 v5.9.0 / `cmsis_device_f1` v4.3.5, Apache-2.0 / BSD-3-Clause) — Vendor-neutral register structs (`core_cm3.h`, `stm32f103xb.h`).
+- **CMSIS Core / Device Headers** (CMSIS_5 v5.9.0 / `cmsis_device_f1` v4.3.5; Apache-2.0 component licenses, retaining per-file notices) — core/device register definitions (`core_cm3.h`, `stm32f103xb.h`).
 - **Original 64 KB Linker Script Policy:** The teaching linker script (`stm32f103c8tx_flash.ld`) is an original pedagogical work written from GNU ld documentation and the physical STM32F103C8 memory map (64 KB Flash, 20 KB SRAM). The vendor template in ST repositories carries an Ac6 non-redistribution notice and specifies 128 KB Flash; it is strictly a read-only comparison reference and is not redistributed.
 - **Runtime & Memory Ownership Policy:** Standardizes on newlib-nano (`--specs=nano.specs --specs=nosys.specs`) with original assembly startup explicitly executing `__libc_init_array()`. FreeRTOS `heap_4` is the sole dynamic memory manager in mandatory coursework; libc `malloc/free` is strictly forbidden to prevent dual-heap memory hazards; USART telemetry uses direct register I/O without `printf`/host syscall dependency.
 
@@ -154,7 +154,7 @@ A fix without verified register, memory, or oscilloscope evidence does not pass 
 The canonical integration project is the **STM32 FreeRTOS Acquisition Node** (P2-M07). It represents a production-grade embedded subsystem without application bloat:
 
 ```text
-Normal Acquisition Data Path (Lock-Free, Queue-Driven):
+Normal Acquisition Data Path (Queue-Driven, No Application Mutex):
 Timer 3 Trigger (TIM3 TRGO update @ 1 kHz)
    -> ADC1 regular external trigger (EXTSEL = 0b100, ADCPRE = /6 -> 12 MHz, SMP0 >= 55.5 cycles)
    -> DMA1 Channel 1 circular ping-pong buffer (2x64 samples)
