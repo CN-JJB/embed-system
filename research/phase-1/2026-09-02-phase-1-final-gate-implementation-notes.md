@@ -144,14 +144,14 @@ strace: UNAVAILABLE
   PASS: Buggy harness detected invariant violation as expected (exit code 1).
   --- 2. Verifying Fixed Solution Across 100 Cycles ---
   --- 3. Verifying Fixed Solution Under ThreadSanitizer (TSan) ---
-  PASS: ThreadSanitizer confirmed zero data races.
+  PASS: ThreadSanitizer reported no data races in this execution.
   >>> SUCCESS: Variant B3 verified (bug reproduces, solution passes 100/100, TSan clean) <<<
   ```
 * **What it proves:**
   1. The unpatched fixture detects multi-field invariant violation under concurrent worker and auditor threads within milliseconds.
-  2. The harness control state is thread-safe, and ThreadSanitizer confirms zero data races on both shared state and harness control flags.
-  3. The fixed reference passes 100 consecutive cycles without a single invariant violation.
-* **What it does not prove:** 100 non-TSan runs alone do not prove absence of all possible data races; TSan execution combined with stress iterations confirms synchronization integrity.
+  2. The harness control state is synchronized, and the recorded ThreadSanitizer execution reported no data races on the exercised shared-state and harness-control paths.
+  3. The fixed reference passes 100 consecutive cycles without an observed invariant violation.
+* **What it does not prove:** 100 non-TSan runs do not prove absence of races, and one clean TSan execution does not prove all possible schedules are race-free; together they provide bounded regression evidence for the exercised paths.
 * **Status:** `VERIFIED`.
 
 ---
