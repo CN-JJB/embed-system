@@ -153,7 +153,7 @@ Phase 2 incorporates only the architectural mechanisms of the ARM Cortex-M3 (ARM
 ### 1. Register Set, PC, and Stack Pointers (MSP vs PSP)
 - **General Purpose Registers:** R0–R12, SP (R13), LR (R14), PC (R15), xPSR.
 - **Dual Stack Pointers:** Cortex-M3 physically separates the Main Stack Pointer (MSP) and Process Stack Pointer (PSP). The active pointer is selected by `CONTROL[1]` (`SPSEL`).
-- **Reset State:** Upon reset, the core enters Privileged Thread mode using MSP. MSP initial value is fetched directly from address `0x08000000`.
+- **Reset State:** Upon reset, the core enters Privileged Thread mode using MSP and fetches the initial vector entries through the reset vector mapping at address `0x00000000`; in normal STM32F1 Flash boot this maps to main Flash whose physical origin is `0x08000000`.
 - **RTOS Division of Labor:** FreeRTOS configures the kernel and all exception handlers (ISRs, SysTick, PendSV, SVCall) to use MSP. User tasks run in Thread mode using PSP. Consequently, task stack sizes need only accommodate the task's own call tree and context frame—not worst-case nested interrupt stacks!
 
 ### 2. Exception Entry and Return Mechanics
@@ -238,11 +238,11 @@ graph LR
 | **`FreeRTOS-Kernel/portable/GCC/ARM_CM3/port.c`** | `prvPortStartFirstTask()` & `vPortSVCHandler()` | How does SVC 0 kick off the first task, configure PSP, and transition from privileged handler mode to thread mode? |
 | **`FreeRTOS-Kernel/portable/GCC/ARM_CM3/port.c`** | `xPortPendSVHandler()` | Exactly which registers are pushed by hardware vs software? How does `pxTopOfStack` get swapped? |
 | **`FreeRTOS-Kernel/portable/GCC/ARM_CM3/port.c`** | `vPortValidateInterruptPriority()` | How does the kernel assert that an ISR calling RTOS APIs has a priority $\ge$ `configMAX_SYSCALL_INTERRUPT_PRIORITY`? |
-| **`FreeRTOS-Kernel/portable/GCC/ARM_CM3/portmacro.h`** | `portSET_INTERRUPT_MASK_FROM_ISR()` | How does writing to `BASEPRI` implement nestable, zero-jitter critical sections? |
+| **`FreeRTOS-Kernel/portable/GCC/ARM_CM3/portmacro.h`** | `portSET_INTERRUPT_MASK_FROM_ISR()` | How does `BASEPRI` mask the kernel-callable interrupt-priority band while preserving higher-urgency interrupts, and how is the prior mask restored? |
 | **`FreeRTOS-Kernel/queue.c`** | `struct QueueDefinition` | What are the physical components of a queue (storage buffer, head/tail pointers, waiting senders/receivers lists)? |
 | **`FreeRTOS-Kernel/queue.c`** | `xQueueGenericSend()` & `Receive()` | How does a task copy data into the queue, unblock a waiting receiver, or block itself if the queue is full? |
 | **`FreeRTOS-Kernel/queue.c`** | `xQueueGenericSendFromISR()` | Why can't an ISR block? How does `xQueueGenericSendFromISR` signal `*pxHigherPriorityTaskWoken` without calling the scheduler? |
-| **`FreeRTOS-Kernel/queue.c`** | `xTaskPriorityInherit()` & `Disinherit()` | Where does priority inheritance modify `pxCurrentTCB->uxPriority` when a high-priority task contends for a mutex? |
+| **`FreeRTOS-Kernel/tasks.c`** | `xTaskPriorityInherit()` & `xTaskPriorityDisinherit()` | Where does priority inheritance modify a mutex holder's effective priority when a higher-priority task contends for that mutex? |
 | **`FreeRTOS-Kernel/list.c`** | `vListInsertEnd()`, `vListInsert()`, `uxListRemove()` | How do circular doubly-linked lists provide $O(1)$ ready-list insertion and priority-ordered event list queuing? |
 | **`FreeRTOS-Kernel/portable/MemMang/heap_4.c`** | `pvPortMalloc()` & `vPortFree()` | How does first-fit block coalescing prevent memory fragmentation? Contrast with static allocation (`xTaskCreateStatic`). |
 
@@ -965,7 +965,7 @@ GPIO Oscilloscope Instrumentation --> Hardware bring-up, logic analyzer bus trac
 
 ### Internship & Interview Evidence Portfolio:
 1. **Bare-Metal Boot Fluency:** Ability to explain every line of a linker script and startup file on a whiteboard; explaining how `.data` and `.bss` are initialized without runtime libraries.
-2. **Interrupt & Concurrency Rigor:** Articulating why RMW operations fail on shared registers; demonstrating how `BASEPRI` masking implements microsecond-bounded zero-jitter critical sections.
+2. **Interrupt & Concurrency Rigor:** Articulating why RMW operations can lose updates on shared registers; demonstrating how `BASEPRI` masks the kernel-callable interrupt-priority band while higher-urgency interrupts remain eligible, and measuring the resulting critical-section timing rather than assuming zero jitter.
 3. **Autonomous Data Movement:** Demonstrating a working ADC+DMA circular double-buffered acquisition node running at 1 kHz with live oscilloscope timing evidence.
 4. **Real-Time Determinism:** Explaining priority inversion, reproducing it on real hardware with a logic analyzer, and demonstrating priority inheritance resolution in FreeRTOS source code.
 
