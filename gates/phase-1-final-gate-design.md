@@ -23,7 +23,7 @@ Passing the Phase 1 Final Gate verifies that the learner can independently:
 3. **Execute Evidence-Driven Debugging:** Apply the canonical 8-step diagnostic chain:
    $$\text{Symptom} \rightarrow \text{Own Description} \rightarrow \text{Hypotheses} \rightarrow \text{Experiment} \rightarrow \text{Evidence} \rightarrow \text{Root Cause} \rightarrow \text{Fix} \rightarrow \text{Regression}$$
 4. **Reason About the Linux OS Runtime Model:** Accurately reason about process address spaces, file descriptor tables, open file descriptions, copy-on-write across `fork()`, signal masks, and blocking system calls.
-5. **Analyze Binary & Toolchain Mechanics:** Inspect and explain ELF object layouts, symbol visibility, relocation bindings, and linker ordering using standard binary utilities (`readelf`, `nm`, `objdump`).
+5. **Analyze Binary & Toolchain Mechanics:** Inspect and explain ELF object layouts, symbol visibility, relocation bindings, and compilation-vs-linking stages using standard binary utilities (`readelf`, `nm`, `objdump`).
 6. **Diagnose Concurrency Invariants & Lifecycle Ordering:** Identify data races, multi-field invariant violations, condition-variable predicate loops, and shutdown synchronization sequences.
 
 ### 1.2 Explicit Non-Goals (What the Gate Does NOT Test)
@@ -84,7 +84,7 @@ The assessment is divided into four distinct, non-overlapping Parts weighted **3
 | Part                     | Weight | Primary Assessment Focus                                       |
 +--------------------------+--------+----------------------------------------------------------------+
 | Part A: Blank-Directory  | 30%    | Synthesizing C17 systems software from scratch:                |
-| Build                    |        | • Zero starter code; clean multi-file architecture             |
+| Build                    |        | • Zero starter code; clean multi-file architecture (>= 4 files)|
 |                          |        | • Explicit dynamic/static memory ownership, no leaks           |
 |                          |        | • POSIX stream/FD error boundaries (EINTR, partial I/O)        |
 |                          |        | • Clean Makefile with strict warnings & sanitizer targets      |
@@ -95,15 +95,16 @@ The assessment is divided into four distinct, non-overlapping Parts weighted **3
 |                          |        | • Complete 8-step diagnostic report; no patch guessing         |
 |                          |        | • High passing bar (>= 70%) for diagnostic rigor               |
 +--------------------------+--------+----------------------------------------------------------------+
-| Part C: ELF / Link /     | 20%    | Deep toolchain & binary literacy without guessing:             |
-| Binary Evidence          |        | • Symbol binding (GLOBAL/WEAK/LOCAL), sections (.text/.bss)    |
-|                          |        | • Relocation entries and dynamic/static linking semantics      |
-|                          |        | • Load segment memory alignment and execution permissions      |
-|                          |        | • Disassembly inspection and System V AMD64 ABI verification   |
+| Part C: ELF / Link /     | 20%    | Canonical five evidence tasks on host relocatable objects:     |
+| Binary Evidence          |        | • Symbol linkage & binding (GLOBAL / LOCAL / WEAK)             |
+|                          |        | • Relocation entry inspection before final link                |
+|                          |        | • Section placement (.text / .rodata / .data / .bss)           |
+|                          |        | • Compiler diagnostic vs linker diagnostic distinction         |
+|                          |        | • Short disassembly-to-C lowering observation                  |
 +--------------------------+--------+----------------------------------------------------------------+
-| Part D: Process / FD /   | 25%    | Two interacting failure modes across OS & threading boundaries:|
-| Concurrency Debugging    |        | • Fault 1: Process/FD lifecycle (inheritance, leaks, zombies)  |
-|                          |        | • Fault 2: Multithreaded concurrency (mutex, condvar predicate)|
+| Part D: Process / FD /   | 25%    | Two genuinely interacting failure modes across OS & threads:   |
+| Concurrency Debugging    |        | • Hidden pair bridging process/FD and concurrency boundaries   |
+|                          |        | • Partial fix leaves residual symptom; regression fails        |
 |                          |        | • Requires two independent evidence channels (strace/proc/tsan)|
 |                          |        | • Runtime proof of root cause and clean regression             |
 +--------------------------+--------+----------------------------------------------------------------+
@@ -165,55 +166,62 @@ Verify that the learner can diagnose an unfamiliar defect using disciplined hypo
 > * Prohibited: M10 missing-broadcast shutdown hang.
 > * Prohibited: M09 shared counter lost update race.
 > * Prohibited: Phase 0 dangling stack pointer or duplicate symbol tasks.
+>
+> Furthermore, this public design document specifies only the **variant families and assessment contracts**. Exact mechanical seeds, buggy line locations, and hidden solutions are strictly quarantined to reviewer implementation files to prevent answer leaks.
 
-### 5.3 Rotational Variant Pool
-The implementation task must provide a pool of at least three distinct failure families. When a learner takes or retries Part B, one variant is randomly assigned:
+### 5.3 Rotational Variant Pool Families
+The implementation issue will construct concrete hidden fixtures across three distinct failure families. When a learner takes or retries Part B, one variant is assigned from the pool:
 
 ```
 +----------------------------------------------------------------------------------------------------+
-|                                  PART B VARIANT POOL MATRIX                                        |
-+---------+------------------------------+---------------------------+-------------------------------+
-| Variant | Defect Mechanism             | Primary Symptom           | Primary Diagnostic Evidence   |
-+---------+------------------------------+---------------------------+-------------------------------+
-| B1      | Ring Buffer Framing / Wrap:  | Stream ingestion corrupts | Hex/byte dump of corrupted    |
-|         | Off-by-one or non-atomic     | records or loops infinitely| frame boundary; state machine |
-|         | boundary handling when record| only when record spans    | tracing at ring wrap index.   |
-|         | straddles circular boundary. | the circular buffer wrap. |                               |
-+---------+------------------------------+---------------------------+-------------------------------+
-| B2      | Signal-Interrupted Parsing:  | Intermittent parse aborts | strace showing signal delivery|
-|         | Signal handler mutates state | or corrupted cursor only  | between cursor read steps;    |
-|         | shared with active non-atomic| during asynchronous signal| GDB inspection of non-reentrant|
-|         | parsing cursor loop.         | storms.                   | shared cursor structure.      |
-+---------+------------------------------+---------------------------+-------------------------------+
-| B3      | Child Descriptor Inheritance:| Pipeline worker hangs on  | /proc/<pid>/fd listing showing|
-|         | Child worker process inherits| read end expecting EOF;   | unclosed inherited write end; |
-|         | unclosed pipe write end due  | process fails to exit     | strace showing reader blocked |
-|         | to missing O_CLOEXEC.        | after parent finishes.    | in read(2) with open writer.  |
-+---------+------------------------------+---------------------------+-------------------------------+
+|                                  PART B VARIANT FAMILY CONTRACTS                                    |
++---------+-----------------------+-----------------------------+------------------------------------+
+| Family  | Domain Assessed       | Evaluation Contract         | Evidence & Bounded Harness Rules   |
++---------+-----------------------+-----------------------------+------------------------------------+
+| B-MEM   | Memory Lifetime,      | Tests object lifetime,      | • Bounded execution via watchdog   |
+|         | Extent, & Ownership   | allocation extent, pointer  |   timer (alarm <= 3s) on crash/hang|
+|         |                       | borrowing across contexts,  | • Reproduces with deterministic input|
+|         |                       | and use-after-free/escape.  | • Requires sanitizer trace, GDB    |
+|         |                       |                             |   inspection, or memory dump evidence|
++---------+-----------------------+-----------------------------+------------------------------------+
+| B-FD    | File Descriptor &     | Tests descriptor lifecycle, | • Bounded execution ensuring child |
+|         | Process Boundaries    | owned vs borrowed FDs,      |   reaping within <= 3s             |
+|         |                       | child process inheritance,  | • Reproduces via pipeline harness  |
+|         |                       | and error-path cleanup.     | • Requires /proc/<pid>/fd audit,   |
+|         |                       |                             |   strace, or errno observations    |
++---------+-----------------------+-----------------------------+------------------------------------+
+| B-CONC  | Concurrency Invariant,| Tests synchronization locks,| • Bounded execution terminating    |
+|         | Race, & Lifecycle     | multi-field invariants under|   within <= 3s on deadlock/stall   |
+|         |                       | contention, predicate waits,| • Reproduces under bounded stress  |
+|         |                       | or shutdown coordination.   | • Requires TSan log, GDB thread bt,|
+|         |                       |                             |   or invariant check output        |
++---------+-----------------------+-----------------------------+------------------------------------+
 ```
 
-### 5.4 Learner Experience & Bounded Harness
+#### Family Governance Rules
+1. **Family Isolation:** Each family tests an independent failure domain. A re-attempt or retry of Part B must draw from a **different family** (or an orthogonal, previously unrevealed seed within the family).
+2. **Deterministic Reproducibility:** Every variant fixture must include a reproduction driver that deterministically manifests the failure without requiring unconstrained overnight runs.
+3. **Bounded Harness:** The reproduction binary `./repro` must include an integrated safety watchdog timer (e.g., `alarm(3)`) ensuring it exits with an error code if stalled, preventing CI or terminal lockup.
+
+### 5.4 Learner Experience & Submission
 * The learner is provided with:
-  1. A short symptom statement (e.g., *"The ingestion processor occasionally hangs after processing large streaming inputs"*).
+  1. A neutral symptom description (e.g., *"The data processing utility occasionally halts with an unexpected error code or stalls during specific batch runs"*).
   2. The source tree.
-  3. A bounded reproduction script `./repro` equipped with a safety watchdog timer (e.g., 3-second `alarm(3)`) to ensure that failing reproduction exits with an error code rather than hanging CI or terminal sessions indefinitely.
-* The learner is **not** provided with:
-  1. Clues in comments, filenames, or function names (e.g., no `broken_wrap()` or `fault_signal()`).
-  2. Prescriptive hints pointing to specific lines of code.
+  3. The bounded reproduction script `./repro`.
+* The learner is **not** provided with clues in comments, filenames, or function names (e.g., no `broken_*` tokens).
+* **Required Submission Format (8-Step Diagnostic Chain):**
+  ```text
+  1. Symptom:          Exact observed failure behavior from ./repro.
+  2. Own Description:  Explanation in the learner's own technical words.
+  3. 3-5 Hypotheses:   Plausible mechanical explanations formulated BEFORE tool use.
+  4. Experiment:       Targeted test designed to falsify competing hypotheses.
+  5. Evidence:         Concrete terminal logs (GDB backtrace, sanitizer output, strace line).
+  6. Root Cause:       The exact broken invariant or violated specification.
+  7. Fix:              Minimal, principled code modification.
+  8. Regression:       Automated proof demonstrating repeated clean executions.
+  ```
 
-### 5.5 Required Submission Format (8-Step Diagnostic Chain)
-```text
-1. Symptom:          Exact observed failure behavior from ./repro.
-2. Own Description:  Explanation in the learner's own technical words.
-3. 3-5 Hypotheses:   Plausible mechanical explanations formulated BEFORE tool use.
-4. Experiment:       Targeted test designed to falsify competing hypotheses.
-5. Evidence:         Concrete terminal logs (GDB backtrace, sanitizer output, strace line).
-6. Root Cause:       The exact broken invariant or violated specification.
-7. Fix:              Minimal, principled code modification.
-8. Regression:       Automated proof demonstrating 100 consecutive clean executions.
-```
-
-### 5.6 Hard Pass Criteria for Part B
+### 5.5 Hard Pass Criteria for Part B
 * Score $\ge 17.5 / 25$ (**70% threshold**).
 * **Evidence-first requirement:** A correct patch submitted without a valid diagnostic evidence chain receives **zero points** for the diagnosis and root-cause scoring dimensions.
 
@@ -222,46 +230,59 @@ The implementation task must provide a pool of at least three distinct failure f
 ## 6. Part C Specification: ELF / Link / Binary Evidence (20%)
 
 ### 6.1 Objective
-Verify deep comprehension of the GNU toolchain, ELF binary format, symbol binding, relocation resolution, and AMD64 ABI calling conventions without relying on compiler error guessing.
+Verify solid, evidence-backed comprehension of translation units, ELF relocatable object files, symbol resolution, and compile-vs-link diagnostic boundaries using standard binary utilities (`readelf`, `nm`, `objdump`).
 
-### 6.2 Assessment Structure: Five Evidence Dimensions
-Learners are provided with a non-trivial multi-module library and test driver that fails to link or misbehaves at runtime. They must use binary utilities (`readelf`, `nm`, `objdump`) to produce five specific evidentiary items:
+### 6.2 The Five Canonical Evidence Tasks
+Part C presents the learner with a host-compiled multi-module object package and asks for five specific, evidence-backed demonstrations:
 
 ```
 +----------------------------------------------------------------------------------------------------+
-|                                    PART C EVIDENCE DIMENSIONS                                      |
+|                                    PART C FIVE CANONICAL TASKS                                     |
 +---+----------------------------+-----------------------+-------------------------------------------+
-| # | Dimension                  | Inspection Tool       | Evidentiary Artifact Required             |
+| # | Canonical Task             | Inspection Tool       | Evidentiary Artifact Required             |
 +---+----------------------------+-----------------------+-------------------------------------------+
-| 1 | Symbol Table Binding       | readelf -s / nm       | Table of Global, Weak, Local symbols and  |
-|   | & Visibility               |                       | their section indices (.text, .bss, UND). |
+| 1 | Symbol Linkage & Binding   | readelf -s / nm       | Inspect a relocatable object (.o); state  |
+|   |                            |                       | whether a target symbol is GLOBAL, LOCAL  |
+|   |                            |                       | (static), or WEAK, defined or UND, and    |
+|   |                            |                       | which C source construct caused it.       |
 +---+----------------------------+-----------------------+-------------------------------------------+
-| 2 | Relocation Entries         | readelf -r            | Analysis of R_X86_64_PC32 / PLT32 entries |
-|   |                            |                       | explaining static vs dynamic binding.     |
+| 2 | Relocation Entry           | readelf -r            | Inspect an unlinked object file (.o);     |
+|   | Inspection                 |                       | identify a relocation entry for a function|
+|   |                            |                       | call or global reference; explain what the|
+|   |                            |                       | static linker must patch at link time.    |
 +---+----------------------------+-----------------------+-------------------------------------------+
-| 3 | Section vs Segment Mapping | readelf -l / -S       | Program header LOAD segment permissions   |
-|   |                            |                       | (R/W/X), memory alignment, and sections.  |
+| 3 | Section Placement          | readelf -S / size /   | Determine which ELF section (.text,       |
+|   | (.text/.rodata/.data/.bss) | objdump -h            | .rodata, .data, .bss) holds named items;  |
+|   |                            |                       | explain the C storage class and           |
+|   |                            |                       | initialization rule determining placement.|
 +---+----------------------------+-----------------------+-------------------------------------------+
-| 4 | Translation & Link Order   | gcc -v / make         | Archive (.a) symbol extraction order vs   |
-|   | Dependency Resolution      |                       | shared object (.so) search mechanics.     |
+| 4 | Compiler vs Linker         | gcc / make diagnostics| Distinguish whether an observed diagnostic|
+|   | Diagnostic Distinction     |                       | occurred during compilation (syntax, type,|
+|   |                            |                       | decl) or linking (undefined reference,    |
+|   |                            |                       | duplicate symbol, link order).            |
 +---+----------------------------+-----------------------+-------------------------------------------+
-| 5 | Disassembly & ABI Call Site| objdump -d / GDB      | Verifying register parameter conventions  |
-|   | Verification               |                       | (rdi, rsi, rdx, rcx) and stack frames.    |
+| 5 | Short Disassembly-to-C     | objdump -d / GDB      | Inspect disassembly of a short function;  |
+|   | Lowering Observation       |                       | map instructions back to the corresponding|
+|   |                            |                       | C statements (calls, branches, accesses). |
 +---+----------------------------+-----------------------+-------------------------------------------+
 ```
 
-### 6.3 Sample Scenario Definition
-A telemetry plugin system contains a default filtering routine in `libtelemetry.a` and an overridden custom filter in `plugin.c`. When linked into the final executable, the application silently executes the default library routine instead of the custom plugin, and crashes when dynamic relocation fails under position-independent execution (`-fPIE`).
+### 6.3 Scope Guardrails (What Part C Does NOT Require)
+To preserve the canonical Phase 1 focus and avoid architecture-specific or advanced dynamic-loader trivia:
+* **No AMD64 Calling Convention Trivia:** Golden answers must not depend on memorizing register names (`rdi, rsi, rdx, rcx`) or System V ABI parameter passing rules.
+* **No Dynamic Linking / PIE Scope:** No position-independent executable runtime loader mechanics, `.so` shared library search paths (`LD_LIBRARY_PATH`), or dynamic symbol tables.
+* **No Program Header / MMU Permission Analysis:** No segment-to-page alignment or hardware memory protection attributes.
+* **No Architecture Relocation Trivia:** Understanding the *purpose* of relocation patching is required; memorizing specific relocation codes (such as `R_X86_64_PLT32`) is not required.
 
-#### Required Learner Demonstrations
-1. Use `readelf -s` to prove why the archive symbol resolution satisfied the dependency before `plugin.o` was inspected.
-2. Use `readelf -r` to explain the relocation type generated for the call site.
-3. Use `objdump -d` to inspect the assembly instructions generated at the call site, verifying register contents prior to the call.
-4. Correct the build graph in `Makefile` and demonstrate clean linkage and execution.
+### 6.4 Evaluation Scenario & Deliverables
+The learner is provided with a modular three-file utility (e.g., driver, math/filter helper, and state accumulator) exhibiting an intentional link failure or symbol misconfiguration. The learner must:
+1. Provide terminal command excerpts and outputs for each of the five canonical tasks.
+2. Formulate the technical explanation connecting tool output to the underlying C and ELF mechanics.
+3. Submit the repaired `Makefile` or source header ensuring clean compilation and linkage.
 
-### 6.4 Hard Pass Criteria for Part C
+### 6.5 Hard Pass Criteria for Part C
 * Score $\ge 12 / 20$ (60%).
-* All five dimensions must contain actual terminal command excerpts and technical explanations; no theoretical-only prose.
+* All five tasks must be supported by actual terminal command excerpts and clear technical reasoning.
 
 ---
 
@@ -270,54 +291,61 @@ A telemetry plugin system contains a default filtering routine in `libtelemetry.
 ### 7.1 Objective
 Evaluate the learner's ability to debug a realistic, non-isolated Linux systems failure where an operating system process/descriptor lifecycle defect **interacts** with a multithreaded synchronization defect.
 
-### 7.2 Interacting Architecture
-The target fixture represents a concurrent stream-processing supervisor:
-* A **Parent Process** opens an input stream and forks a **Child Processing Daemon**.
-* The Child Daemon runs a **Reader Thread** and a **Worker Thread** connected via a bounded ring queue.
-* The Child Daemon must gracefully handle `SIGTERM`, flush pending records, terminate threads, close descriptors, and exit cleanly.
+### 7.2 Interacting Systems Architecture
+The target fixture models a concurrent stream-processing supervisor:
+* A **Supervisor Process** manages streaming input and coordinates with a **Child Worker Process**.
+* The Child Process executes an internal multithreaded pipeline (e.g., ingestion reader thread communicating with a processing worker thread via a bounded ring buffer).
+* The service must cleanly process stream data, respond to termination signals, flush pending state, join threads, close file descriptors, and exit without stalls or resource leaks.
 
 ```
 +----------------------------------------------------------------------------------------------------+
 |                                    PART D INTERACTING ARCHITECTURE                                 |
 |                                                                                                    |
-|  Parent Process                                                                                    |
+|  Supervisor Process                                                                                |
 |    |                                                                                               |
-|    +-- fork()                                                                                      |
+|    +-- Process/Stream Coordination (fork / pipe / signal / descriptor inheritance)                 |
 |          |                                                                                         |
 |          v                                                                                         |
-|  Child Daemon                                                                                      |
+|  Child Processing Daemon                                                                           |
 |    |                                                                                               |
 |    +-- [Thread 1: Reader] === push ===> [Bounded Ring Queue] === pop ===> [Thread 2: Worker]       |
 |    |                                                                                               |
-|    +-- [Signal Handling / FD Lifecycle]                                                            |
+|    +-- [Concurrency Lifecycle: Mutex Invariants, Predicate Waits, Shutdown Join]                  |
 +----------------------------------------------------------------------------------------------------+
 ```
 
-### 7.3 The Two Interacting Faults
-To prevent pre-rehearsed solutions while staying strictly within the Phase 1 concurrency scope, the fixture contains **two interdependent bugs**:
+### 7.3 Interacting Fault Contract & Family Pairings
+The implementation task must seed **two genuinely interdependent defects** selected from two orthogonal families:
 
-1. **Fault 1 (Process / FD Lifecycle Boundary):**
-   * *Mechanism:* The parent process opens an IPC pipe and forks the child daemon, but the parent process holds a duplicate write descriptor open across child execution. When the upstream data finishes, the reader thread in the child never receives `EOF (0)` from `read()`, remaining blocked in kernel I/O.
-2. **Fault 2 (Multithreaded Queue & Shutdown Invariant):**
-   * *Mechanism:* When `SIGTERM` is delivered to the child daemon, the signal handler flags termination, but the queue shutdown sequence updates the state without rechecking the canonical ring-buffer predicate:
-     $$\text{Predicate Wait:} \quad \mathbf{while\ (count == 0\ \&\&\ !closed)\ pthread\_cond\_wait(\&not\_empty,\ \&mutex);}$$
-     The queue close function marks `closed = 1` but fails to awaken threads sleeping on `not_full` or `not_empty`.
-3. **The Interaction:**
-   * Fixing Fault 1 alone leaves the worker thread deadlocked on queue close.
-   * Fixing Fault 2 alone leaves the reader thread blocked in read I/O waiting for pipe EOF.
-   * Only an integrated diagnosis identifying both boundaries resolves the stall.
+```
++----------------------------------------------------------------------------------------------------+
+|                                    INTERACTING FAULT FAMILY MATRIX                                 |
++------------------------------------+---------------------------------------------------------------+
+| Family 1: Process / FD Lifecycle   | Family 2: Concurrency & Synchronization                       |
++------------------------------------+---------------------------------------------------------------+
+| • Pipe EOF / stream closure hang   | • Data race on shared pipeline state under contention         |
+| • Zombie accumulation / waitpid    | • Named multi-field invariant violation during state transition|
+| • Leaked inherited descriptor      | • Condition-variable predicate misuse (while vs if / TOCTOU)  |
+| • Signal mask inheritance error    | • Lock misuse, ordering deadlock, or shutdown join sequencing |
++------------------------------------+---------------------------------------------------------------+
+```
+
+#### Genuine Interaction Requirements
+1. **Interdependent Failure:** Resolving only the process/FD lifecycle fault must leave the service stalling, deadlocking, or failing under concurrency. Conversely, resolving only the concurrency fault must leave the service hanging on OS/stream boundaries.
+2. **Residual Failure:** A partial fix submitted by the learner will fail the automated regression suite. Both contracts must be understood and repaired to achieve clean execution.
+3. **Secrecy Guardrail:** The specific pair selected by the author of the implementation issue must remain quarantined in `reviewer/` materials. The learner is presented only with the observable system symptom (e.g., *"The service stalls indefinitely during shutdown under streaming workloads"*).
 
 ### 7.4 Two Required Evidence Channels
-Learners must employ and submit evidence from **at least two distinct diagnostic channels**:
-* **Channel 1 (System / OS Boundary):** `strace -f` tracing parent/child descriptor duplication, or inspection of active descriptors in `/proc/<pid>/fd`.
-* **Channel 2 (Thread / Concurrency State):** ThreadSanitizer runtime report, or GDB thread state analysis (`thread apply all bt`).
+Learners must employ and submit concrete evidence from **at least two independent diagnostic channels**:
+* **Channel 1 (System / OS / Descriptor Boundary):** `/proc/<pid>/fd` runtime audit, `strace` syscall trace, or explicit return/errno observations from the tested harness.
+* **Channel 2 (Thread / Concurrency State):** ThreadSanitizer runtime report, GDB thread state analysis (`thread apply all bt`), or deterministic coordination/invariant logging.
 
 ### 7.5 Hard Pass Criteria for Part D
 * Score $\ge 15 / 25$ (60%).
 * **Runtime Root-Cause Proof:** The learner must provide runtime trace evidence proving that:
-  1. The child daemon receives `EOF` cleanly when upstream writes complete.
-  2. The queue drain sequence completes, worker threads join promptly, and mutex/condvar objects are destroyed without `EBUSY`.
-  3. The regression test passes across 50 consecutive runs with zero hangs and zero descriptor leaks.
+  1. The OS/process stream lifecycle boundary terminates and cleans up cleanly.
+  2. The multithreaded pipeline drains, worker threads join promptly, and synchronization primitives are destroyed without error.
+  3. The regression test passes across repeated iterations (e.g., 50+ runs) with zero deadlocks and zero descriptor leaks.
 
 ---
 
@@ -403,8 +431,9 @@ To prevent "log dumping" and unverified claims, every evidentiary submission acr
 | Part B  | Unknown Bug Investigation          | 25     | Description & Hypotheses (6), Evidence (7),|
 |         |                                    |        | Root Cause (4), Fix (4), Regression (4)    |
 +---------+------------------------------------+--------+--------------------------------------------+
-| Part C  | ELF / Link / Binary Evidence       | 20     | Symbol Binding (4), Relocations (4),       |
-|         |                                    |        | Segments (4), Link Order (4), Disasm (4)   |
+| Part C  | ELF / Link / Binary Evidence       | 20     | Symbol Binding (4), Relocation Entry (4),  |
+|         |                                    |        | Section Placement (4), Compiler vs Link (4)|
+|         |                                    |        | Disassembly to C Lowering (4)              |
 +---------+------------------------------------+--------+--------------------------------------------+
 | Part D  | Process / FD / Concurrency Debug   | 25     | Interaction Analysis (6), 2 Channels (8),  |
 |         |                                    |        | Root-Cause Proof (6), Regression (5)       |
@@ -562,7 +591,7 @@ Failure on one or more parts of the Final Gate does not require an automatic res
 
 ### Re-Examination Policy
 1. If a learner scores $< 60\%$ on 1 or 2 parts, they remediate the mapped milestones and retake **only the deficient parts**.
-2. For Part B retries, the learner is assigned a **different variant** from the variant pool (e.g., if Variant B1 was attempted initially, the retest uses Variant B2 or B3).
+2. For Part B retries, the learner is assigned a **different variant** from the variant pool (drawing from a different family, e.g., switching from B-MEM to B-FD or B-CONC).
 3. If a learner scores $< 60\%$ on 3 or more parts, a comprehensive review of Phase 1 is required before re-attempting the complete Final Gate.
 
 ---
@@ -634,18 +663,16 @@ When this specification is approved and merged, the subsequent implementation is
 [ ] Create directory structure: gates/phase-1-final/ and gates/phase-1-final/reviewer/
 [ ] Author learner instructions: gates/phase-1-final/README.md
 [ ] Author Part A specification and automated validation harness
-[ ] Author Part B Variant B1 (Ring Wrap Framing) fixture and bounded ./repro harness
-[ ] Author Part B Variant B2 (Signal-Interrupted State) fixture and bounded ./repro harness
-[ ] Author Part B Variant B3 (Inherited Descriptor Stall) fixture and bounded ./repro harness
-[ ] Author Part C ELF binary test package and diagnostic inspection worksheet
-[ ] Author Part D interacting process/FD/concurrency fixture and multi-channel harness
+[ ] Author Part B hidden variant pool fixtures across families (B-MEM, B-FD, B-CONC) with bounded ./repro harnesses
+[ ] Author Part C host-generated relocatable object package covering the five canonical evidence tasks
+[ ] Author Part D interacting process/FD and concurrency fixture with hidden seed pair and multi-channel harness
 [ ] Author hidden reviewer reference solutions in gates/phase-1-final/reviewer/:
     [ ] Part A golden reference implementation
-    [ ] Part B golden postmortems and patches for Variants B1, B2, B3
+    [ ] Part B golden postmortems and patches for all seeded variants
     [ ] Part C golden symbol/relocation/disassembly answer key
-    [ ] Part D golden interacting-fault postmortem and 100-iteration regression suite
+    [ ] Part D golden interacting-fault postmortem and multi-iteration regression suite
 [ ] Provide learner submission template and AI-Free attestation form
 [ ] Verify that no reviewer answers leak into learner-facing files
 [ ] Test all harnesses under GCC 13/14 and Make 4.x on Linux/WSL2
-[ ] Submit implementation PR and initiate First-Cohort Calibration Plan
+[ ] Submit implementation PR and initiate First-Learner Calibration Run
 ```
