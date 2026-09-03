@@ -934,7 +934,7 @@ Instead of relying on host-style leak tools, the MCU project enforces an observa
 - **Observable Evidence:** `xPortGetFreeHeapSize()` remains constant across steady-state cycles and `xPortGetMinimumEverFreeHeapSize()` does not decrease after the recorded steady-state baseline. These observations bound heap churn on the exercised path; they do not prove absence of arbitrary memory corruption.
 - **Stack Watermark Lower Bound:** Minimum stack high-water mark across all tasks $\ge 32$ words under full acquisition load.
 - **Latency Design Target:** Observed $\Delta t$ from DMA HT/TC pin high to `Task_Process` pin high $\le 15~\mu\text{s}$ at 72 MHz (subject to physical calibration).
-- **Priority Inversion Verification:** In the controlled diagnostic experiment, `Task_Health` (prio 1), `Task_Compute` (prio 2), and `Task_Process` (prio 3) interact through `xDiagMutex` with identical Low CPU workloads (~5 ms); scope captures and GDB register dumps confirm that priority inheritance caps `Task_Process` blocking time to $\le 6\text{ ms}$, whereas binary semaphore causes a bounded 20 ms preemption delay (total wait $\ge 25\text{ ms}$).
+- **Priority Inversion Verification:** In the controlled diagnostic experiment, `Task_Health` (prio 1), `Task_Compute` (prio 2), and `Task_Process` (prio 3) interact through `xDiagMutex` with identical Low CPU workloads (~5 ms). Scope/GDB measurements compare the two runs. The `<= 6 ms` mutex case and `>= 25 ms` semaphore case remain **DESIGN TARGET / UNVERIFIED** until physical measurement.
 - **Fault Recovery Design Target:** Simulated task lockup triggers IWDG reset; system recovers cleanly within $\le 1200\text{ ms}$.
 
 ---
@@ -1055,7 +1055,7 @@ Phase 2 enforces a transparent, standard, Make-first build workflow.
 - **Startfile / CRT Policy:**
   - **Policy 1 — No Default CRT Startup (Course `Reset_Handler` is the sole entry point):**
     - Linker flag explicitly sets entry point: `-Wl,-e,Reset_Handler`.
-    - The vector table in `startup_stm32f103xb.s` assigns `Reset_Handler` to address `0x08000004`.
+    - The Reset vector entry is stored at vector-table offset `+0x04`; its value is the Thumb address of the course `Reset_Handler`.
     - Default GCC/newlib CRT startup objects (such as `crt0.o` / `_start`) are not linked as entry points; course `Reset_Handler` is the sole entry point.
     - Verified via ELF entry point (`readelf -h firmware.elf | grep "Entry point address"`) and disassembly confirming vector 0x08000004 branches directly to course assembly code.
 - **`__libc_init_array()` Decision:**
