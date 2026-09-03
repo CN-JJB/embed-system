@@ -31,7 +31,7 @@ echo "PASS: Module file count is $FILE_COUNT."
 
 # 3. Functional Execution Tests
 echo "--- 3. Testing Functional Processing ---"
-./sifter --input "$FIXTURES_DIR/valid.txt" --filter 0 --stats 2>&1 | grep "valid=6" >/dev/null
+./sifter --input "$FIXTURES_DIR/valid.txt" --filter 0 --stats 2>&1 | grep "valid=6 filtered=4 errors=0" >/dev/null
 ./sifter --input "$FIXTURES_DIR/invalid.txt" --stats 2>&1 | grep "errors=" >/dev/null
 ./sifter --input "$FIXTURES_DIR/empty.txt" --stats 2>&1 | grep "total=0" >/dev/null
 
