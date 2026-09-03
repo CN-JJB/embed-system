@@ -1,0 +1,7 @@
+1000000000 1 42
+bad_line_syntax_no_spaces
+1000000001 999 50
+1000000002 1 99999999999999999999999
+1000000003 2 -99999999999999999999999
+This_line_is_intentionally_made_longer_than_one_hundred_and_twenty_eight_bytes_in_order_to_test_the_line_buffer_overflow_rejection_boundary_condition_now
+1000000004 1 10
