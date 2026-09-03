@@ -79,7 +79,7 @@ make -C "$REF_DIR" all >/dev/null
 for i in $(seq 1 50); do
     "$REF_DIR/fixed_ref" >/dev/null
 done
-echo "PASS: 50/50 consecutive clean cycles completed with zero hangs, leaks, or crashes."
+echo "PASS: 50/50 consecutive cycles completed with no observed hangs or crashes; resource cleanup is evaluated by dedicated lifecycle evidence."
 
 # 6. Clean Build Artifacts
 make -C "$PART_D_DIR" clean >/dev/null
