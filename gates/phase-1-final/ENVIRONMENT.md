@@ -15,17 +15,17 @@ strace --version | head -n1 2>/dev/null || echo "strace: UNAVAILABLE"
 
 ## Host Toolchain Record (Fill In Upon Start)
 
-* **Operating System / Kernel:** `Linux ZHR 6.18.33.2-microsoft-standard-WSL2 #1 SMP PREEMPT_DYNAMIC Thu Jun 18 21:54:43 UTC 2026 x86_64`
-* **C Compiler:** `gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0`
-* **Build System:** `GNU Make 4.3`
-* **Debugger:** `GNU gdb (Ubuntu 15.1-1ubuntu1~24.04.1) 15.1`
-* **Syscall Tracing:** `strace: UNAVAILABLE`
-* **Process Filesystem:** `/proc available`
+* **Operating System / Kernel:** `______________________________`
+* **C Compiler:** `______________________________`
+* **Build System:** `______________________________`
+* **Debugger:** `AVAILABLE / UNAVAILABLE — version: __________________`
+* **Syscall Tracing:** `AVAILABLE / UNAVAILABLE — version: ______________`
+* **Process Filesystem:** `/proc AVAILABLE / UNAVAILABLE`
 * **Sanitizers:**
-  * AddressSanitizer (ASan): `AVAILABLE`
-  * UndefinedBehaviorSanitizer (UBSan): `AVAILABLE`
-  * LeakSanitizer (LSan): `AVAILABLE`
-  * ThreadSanitizer (TSan): `AVAILABLE (via setarch x86_64 -R under WSL2)`
+  * AddressSanitizer (ASan): `VERIFIED / PARTIALLY VERIFIED / UNVERIFIED`
+  * UndefinedBehaviorSanitizer (UBSan): `VERIFIED / PARTIALLY VERIFIED / UNVERIFIED`
+  * LeakSanitizer (LSan): `VERIFIED / PARTIALLY VERIFIED / UNVERIFIED`
+  * ThreadSanitizer (TSan): `VERIFIED / PARTIALLY VERIFIED / UNVERIFIED`
 
 ---
 
