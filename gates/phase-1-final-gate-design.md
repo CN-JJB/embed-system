@@ -297,7 +297,7 @@ The Final Gate comprises **six independent stations** executed across a modular 
 * **Expected Evidence:**
   1. TSan report identifying data races, or GDB backtrace demonstrating thread deadlock on shutdown.
   2. Clear articulation of the **Protected Queue Invariant**:
-     $$0 \le \text{count} \le \text{CAPACITY} \quad \wedge \quad \text{head} = (\text{tail} + \text{count}) \pmod{\text{CAPACITY}}$$
+     $$0 \le \text{count} \le \text{CAPACITY} \quad \wedge \quad \text{tail} = (\text{head} + \text{count}) \pmod{\text{CAPACITY}}$$
   3. Proof of condition-variable wait loops using `while` predicates instead of `if`.
   4. Proof that `close` sets the termination flag under mutex protection and broadcasts to all sleeping threads.
   5. Execution log showing worker join strictly preceding mutex and condition variable destruction.
