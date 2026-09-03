@@ -7,7 +7,7 @@ Starting in a completely empty working directory with **zero starter code or tem
 
 ## 2. Functional Requirements: Bounded Record Log Sifter (`sifter`)
 
-The `sifter` utility reads structured sensor stream records, validates syntax and numeric boundaries, filters records exceeding a specified metric threshold, and outputs matching records and summary statistics.
+The `sifter` utility reads structured sensor stream records, validates syntax and numeric boundaries, filters records meeting the specified metric threshold, and outputs matching records and summary statistics.
 
 ### 2.1 Command-Line Interface
 ```bash
@@ -73,4 +73,4 @@ Sample input fixtures are provided in `fixtures/`:
 * Score $\ge 18 / 30$ (60%).
 * **Zero Unexplained Resource Leaks:**
   * Clean execution under AddressSanitizer with `detect_leaks=1` on valid, invalid, and empty inputs.
-  * Independent `/proc/self/fd` audit showing zero leaked owned file descriptors upon termination.
+  * Independent in-process `/proc/self/fd` lifecycle audit showing owned descriptor counts return to baseline before the application lifecycle helper returns on success and tested failure paths.
