@@ -175,7 +175,7 @@ Phase 2 incorporates only the architectural mechanisms of the ARM Cortex-M3 (ARM
   2. **Encoded Hardware Byte:** The byte value physically written into `NVIC->IP[x]` or `BASEPRI`:
      $$\text{Encoded Byte} = \text{Logical Priority} \ll (8 - \_\_\text{NVIC\_PRIO\_BITS}) = \text{Logical Priority} \ll 4$$
      Thus, logical priority 6 encodes as $6 \ll 4 = \text{0x60}$ (96 decimal). Logical priority 5 encodes as $5 \ll 4 = \text{0x50}$ (80 decimal).
-- **FreeRTOS Sycall Boundary Configuration:**
+- **FreeRTOS Syscall Boundary Configuration:**
   - `configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY = 5` (CMSIS logical priority).
   - `configMAX_SYSCALL_INTERRUPT_PRIORITY = 0x50` (encoded hardware byte).
   - **Rule:** ISRs with **logical priority 0 to 4** (encoded `0x00` to `0x40`, numerically lower/higher urgency) cannot call any FreeRTOS API, but are never masked by `BASEPRI` during critical sections. ISRs with **logical priority 5 to 15** (encoded `0x50` to `0xF0`, numerically equal/lower urgency) can call `...FromISR()` APIs and are masked when `BASEPRI` is set to `0x50`.
@@ -255,7 +255,7 @@ graph LR
 | **`FreeRTOS-Kernel/queue.c`** | `struct QueueDefinition` | What are the physical components of a queue (storage buffer, head/tail pointers, waiting senders/receivers lists)? |
 | **`FreeRTOS-Kernel/queue.c`** | `xQueueGenericSend()` & `Receive()` | How does a task copy data into the queue, unblock a waiting receiver, or block itself if the queue is full? |
 | **`FreeRTOS-Kernel/queue.c`** | `xQueueGenericSendFromISR()` | How does an ISR unblock a waiting task directly to `pxReadyTasksLists` (or defer to `xPendingReadyList` if scheduler is suspended), and set `*pxHigherPriorityTaskWoken` without calling the scheduler? |
-| **`FreeRTOS-Kernel/tasks.c`** | `xTaskPriorityInherit()` & `Disinherit()` | Where does priority inheritance modify `pxTCB->uxPriority` when a high-priority task contends for a mutex? |
+| **`FreeRTOS-Kernel/tasks.c`** | `xTaskPriorityInherit()` & `xTaskPriorityDisinherit()` | Where does priority inheritance modify a mutex holder's effective priority when a higher-priority task contends for that mutex? |
 | **`FreeRTOS-Kernel/list.c`** | `vListInsertEnd()`, `vListInsert()`, `uxListRemove()` | How do circular doubly-linked lists provide $O(1)$ ready-list insertion and priority-ordered event list queuing? |
 | **`FreeRTOS-Kernel/portable/MemMang/heap_4.c`** | `pvPortMalloc()` & `vPortFree()` | How does first-fit block coalescing prevent memory fragmentation? Contrast with static allocation (`xTaskCreateStatic`). |
 
@@ -462,8 +462,8 @@ graph LR
   - Armv7-M Architecture Reference Manual, Section B1.5 (Exception entry and return).
   - ST PM0056 (Rev 7, Dec 2024), Section 2.1 (Stack pointers) & Section 4.4.4 (ICSR).
 - **Exact Upstream Source Path:**
-  - `FreeRTOS-Kernel/tasks.c` (`vTaskSwitchContext`, lines 3200–3350; `xTaskIncrementTick`, lines 3000–3150).
-  - `FreeRTOS-Kernel/portable/GCC/ARM_CM3/port.c` (`xPortPendSVHandler`, lines 220–280; `prvPortStartFirstTask`, lines 180–215).
+  - `FreeRTOS-Kernel/tasks.c`: `vTaskSwitchContext()` and `xTaskIncrementTick()` in the pinned V11.3.0 source. Use function names rather than brittle line-number anchors.
+  - `FreeRTOS-Kernel/portable/GCC/ARM_CM3/port.c`: `xPortPendSVHandler()`, `prvPortStartFirstTask()`, and `vPortSVCHandler()` in the pinned V11.3.0 source.
 - **Labs:**
   - **Objective:** Integrate the FreeRTOS kernel into the bare-metal project; create two tasks with different priorities that toggle GPIO pins at distinct intervals; set a breakpoint in `xPortPendSVHandler` in GDB; manually inspect the hardware and software stack frames on PSP and verify register restoration.
   - **Prerequisites:** P2-M01, P2-M02.
@@ -516,12 +516,13 @@ graph LR
   - NVIC Priority Configuration:
     - CMSIS Logical Priority: values `0` (highest) to `15` (lowest) configured via `NVIC_SetPriority(IRQn, prio)`.
     - Encoded Hardware Byte: `prio << 4`.
-    - `configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY = 5` (encoded `0x50`).
-    - An ISR with **logical priority 0 to 4** (encoded `0x00` to `0x40`) must never call any FreeRTOS API!
-    - An ISR with **logical priority 5 to 15** (encoded `0x50` to `0xF0`) can safely call `...FromISR()` APIs.
+    - `configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY = 5` (CMSIS logical priority).
+    - `configMAX_SYSCALL_INTERRUPT_PRIORITY = 0x50` (encoded value for `configPRIO_BITS = 4`).
+    - An ISR with **logical priority 0 to 4** (encoded `0x00` to `0x40`) must never call FreeRTOS APIs.
+    - An ISR with **logical priority 5 to 15** (encoded `0x50` to `0xF0`) is eligible to call `...FromISR()` APIs when priority grouping is configured with no subpriority bits and the port assertions pass.
   - Task API from ISR Failure Mechanism:
     - FreeRTOS non-ISR APIs (e.g. `xQueueSend()`) assume execution in Thread mode with a valid task context and may block.
-    - Calling a non-ISR API from Handler mode (where IPSR is non-zero) triggers an assertion failure when `configASSERT` is enabled (e.g. `configASSERT( __get_IPSR() == 0 )` or inside `vPortValidateInterruptPriority()`). Without assertions, it corrupts kernel lists and stack pointers.
+    - Calling a non-ISR API from Handler mode is caught by the ARM_CM3 port's interrupt-context critical-section assertion when `configASSERT` is enabled. Without assertions, the call is unsupported and may corrupt kernel state, deadlock, or fail unpredictably; no specific HardFault outcome is guaranteed.
   - Mutex vs Binary Semaphore:
     - Binary Semaphore: Signaling mechanism. Can be given by one entity (e.g. ISR) and taken by another (task). No ownership tracking; no priority inheritance.
     - Mutex: Mutual exclusion mechanism. Must be unlocked by the exact task that locked it (`pxMutexHolder`). Implements priority inheritance in `tasks.c` to prevent unbounded priority inversion.
@@ -529,7 +530,7 @@ graph LR
   - FreeRTOS-Kernel Upstream V11.3.0 (`queue.c`, `tasks.c`).
   - FreeRTOS Official Documentation: "Mastering the FreeRTOS Real Time Kernel" Chapters 4 (Queue Management) & 7 (Interrupt Management).
 - **Exact Upstream Source Path:**
-  - `FreeRTOS-Kernel/queue.c` (`xQueueGenericSend`, lines 750–900; `xQueueGenericSendFromISR`, lines 1200–1320; `xQueueGenericReceive`, lines 1350–1500).
+  - `FreeRTOS-Kernel/queue.c`: `xQueueGenericSend()`, `xQueueGenericSendFromISR()`, and `xQueueGenericReceive()` in the pinned V11.3.0 source.
 - **Labs:**
   - **Objective:** Build an ISR-to-Task pipeline: configure a periodic timer ISR to enqueue an incrementing sequence number using `xQueueSendFromISR()`; unblock a consumer task that verifies sequence continuity; test system behavior when ISR priority violates `configMAX_SYSCALL_INTERRUPT_PRIORITY`; test `configASSERT` detection of calling task APIs from interrupt context.
   - **Prerequisites:** P2-M03, P2-M04.
@@ -596,7 +597,7 @@ graph LR
   - ST RM0008, Section 24 (Independent Watchdog - IWDG).
   - "Mastering the FreeRTOS Real Time Kernel", Chapter 8 (Resource Management).
 - **Exact Upstream Source Path:**
-  - `FreeRTOS-Kernel/tasks.c` (`xTaskPriorityInherit`, lines 4200–4280; `xTaskPriorityDisinherit`, lines 4300–4390; `uxTaskGetStackHighWaterMark`, lines 4400–4450).
+  - `FreeRTOS-Kernel/tasks.c`: `xTaskPriorityInherit()`, `xTaskPriorityDisinherit()`, and `uxTaskGetStackHighWaterMark()` in the pinned V11.3.0 source.
   - `FreeRTOS-Kernel/include/stack_macros.h` (`taskCHECK_FOR_STACK_OVERFLOW`).
 - **Labs:**
   - **Objective:** Construct a 3-task setup (High, Medium, Low) sharing a resource; demonstrate unbounded priority inversion using a binary semaphore; resolve it using a Mutex with priority inheritance; deliberately trigger a stack overflow and verify hook execution; configure the IWDG.
@@ -755,15 +756,15 @@ graph TD
    - `F-BOOT-03`: Peripheral register write has no effect because peripheral clock in `RCC->APB2ENR` was not enabled prior to configuration.
 2. **Interrupt & NVIC Family:**
    - `F-IRQ-01`: Timer interrupt handler omits clearing `TIMx->SR = ~TIM_SR_UIF`; CPU executes infinite ISR loops, starving Thread mode.
-   - `F-IRQ-02`: NVIC priority grouping configured as subpriority (`PRIGROUP != 3`); causes preemptive interrupt masking failure in FreeRTOS critical sections.
+   - `F-IRQ-02`: NVIC priority grouping allocates one or more implemented priority bits to subpriority instead of preemption priority; the ARM_CM3 port's `vPortValidateInterruptPriority()` grouping assertion rejects this configuration. Do not treat `PRIGROUP != 3` as the rule: for a 4-bit implementation, multiple raw PRIGROUP encodings can still result in all implemented bits being preemption bits.
    - `F-IRQ-03`: Peripheral ISR calling FreeRTOS API is assigned CMSIS logical priority 2 (encoded `0x20`, higher priority than syscall limit `0x50`); caught by assertion in `vPortValidateInterruptPriority()`.
 3. **DMA & Peripheral Family:**
    - `F-DMA-01`: DMA buffer declared as local variable in setup function; stack frame reuse causes random data corruption as DMA continues writing.
-   - `F-DMA-02`: `DMA_CCR_MSIZE` configured as 8-bit while `ADC_CR2` is 16-bit; samples are truncated and phase-shifted by 1 byte.
+   - `F-DMA-02`: DMA memory width is configured as 8-bit while the ADC data register supplies a 12-bit result through the peripheral transfer width; the stored sample representation is truncated/mismatched relative to the intended `uint16_t` buffer contract.
    - `F-DMA-03`: TIM3 runs and ADC is enabled, but `ADC_CR2[EXTSEL]` is not set to `0b100` (TIM3 TRGO) or `EXTTRIG` is 0; DMA transfer counter (`CNDTR`) remains static.
 4. **RTOS & Concurrency Family:**
    - `F-RTOS-01`: Shared telemetry resource protected by binary semaphore; medium-priority compute task starves high-priority telemetry task indefinitely.
-   - `F-RTOS-02`: Local buffer allocation in task exceeds `configMINIMAL_STACK_SIZE`; stack pointer crosses into adjacent memory, caught by `taskCHECK_FOR_STACK_OVERFLOW()`.
+   - `F-RTOS-02`: A task's local working set exceeds that task's configured stack depth; the stack approaches or crosses its allocated bounds and is detected by the configured FreeRTOS stack-overflow checks / watermark evidence. `configMINIMAL_STACK_SIZE` is not a universal per-task stack limit.
    - `F-RTOS-03`: ISR calls `xQueueSend()` instead of `xQueueSendFromISR()`; caught by `configASSERT( __get_IPSR() == 0 )` or port assertion.
 
 *Note: The fault pool above defines instructional families for modules. The Phase 2 Final Gate evaluates unfamiliar variants within these families; exact seeds and fixtures remain isolated in reviewer materials.*
@@ -832,9 +833,9 @@ graph TD
 
 ### 3. Observable Memory Lifecycle & Acceptance Contract
 Instead of relying on host-style leak tools, the MCU project enforces an observable embedded memory contract:
-- **Static Initialization Invariant:** All RTOS tasks, queues, semaphores, mutexes, and DMA buffers are created during system initialization before `vTaskStartScheduler()`.
-- **Zero Steady-State Churn:** Zero calls to `pvPortMalloc()` or `vPortFree()` occur during steady-state execution.
-- **Observable Evidence:** `xPortGetFreeHeapSize()` and `xPortGetMinimumEverFreeHeapSize()` remain strictly constant across steady-state execution cycles.
+- **Initialization Invariant:** All application-owned RTOS tasks, queues, semaphores, mutexes, and DMA buffers are created during initialization. Kernel-owned Idle/Timer task creation performed inside scheduler startup is accounted for before the steady-state baseline is recorded.
+- **Zero Steady-State Churn:** After scheduler initialization reaches the defined steady-state baseline, application code performs no `pvPortMalloc()` / `vPortFree()` churn.
+- **Observable Evidence:** `xPortGetFreeHeapSize()` remains constant across steady-state cycles and `xPortGetMinimumEverFreeHeapSize()` does not decrease after the recorded steady-state baseline. These observations bound heap churn on the exercised path; they do not prove absence of arbitrary memory corruption.
 - **Stack Watermark Lower Bound:** Minimum stack high-water mark across all tasks $\ge 32$ words under full acquisition load.
 - **Latency Design Target:** Observed $\Delta t$ from DMA HT/TC pin high to `Task_Process` pin high $\le 15~\mu\text{s}$ at 72 MHz (subject to physical calibration).
 - **Priority Inversion Verification:** `Task_Process` and a diagnostic task `Task_Diag` contend for `xTelemetryMutex`, while background task `Task_Compute` creates interference; priority inheritance ensures `Task_Process` latency remains bounded.
@@ -1021,7 +1022,7 @@ All materials in Phase 2 derive strictly from authoritative Tier 0 and Tier 1 sp
 | **S-05** | Cortex-M3 Devices Generic User Guide | Arm Limited | Primary User Guide | ARM DUI 0552A (2010) | Chapter 2 (Processor), Chapter 4 (Peripherals) | NVIC priority grouping, EXC_RETURN definitions, CONTROL register. |
 | **S-06** | FreeRTOS-Kernel Upstream Source | FreeRTOS / AWS | Upstream Source Code | Release V11.3.0 (`9b777ae`) | `tasks.c`, `queue.c`, `list.c`, `portable/GCC/ARM_CM3/` | Reference implementation of preemptive scheduler, queues, mutexes. (MIT License). |
 | **S-07** | CMSIS Core (Cortex-M) | Arm Limited / CMSIS | Upstream Source Code | CMSIS_5 v5.9.0 | `CMSIS/Core/Include/core_cm3.h` | Hardware register structs and NVIC inline helper functions. (Apache-2.0). |
-| **S-08** | STM32F1xx CMSIS Device Headers | STMicroelectronics | Upstream Source Code | `cmsis_device_f1` v4.3.5 | `Include/stm32f103xb.h`, `Source/Templates/gcc/startup_stm32f103xb.s` | Peripheral base addresses, bit definitions, startup file. (Apache-2.0 / BSD-3-Clause). |
+| **S-08** | STM32F1xx CMSIS Device Headers | STMicroelectronics | Upstream Source Code | `cmsis_device_f1` v4.3.5 | `Include/stm32f103xb.h`, `Source/Templates/gcc/startup_stm32f103xb.s` | Peripheral base addresses, bit definitions, startup file. Repository component license: Apache-2.0; retain per-file notices. |
 | **S-09** | Original 64 KB Linker Script | Repository Author | Course Source Code | `stm32f103c8tx_flash.ld` (2026) | Entire file | Original pedagogical linker script for 64 KB C8 target. (MIT License). ST Ac6 template is read-only reference, not redistributed. |
 | **S-10** | Arm GNU Toolchain 13.3.rel1 | Arm Limited | Toolchain Distribution | 13.3.rel1 (Jul 2024) | GCC 13.3.1, Binutils 2.42, GDB 14.2 | Pinned compiler/linker baseline. (GPL-3.0 / LGPL-3.0). |
 | **S-11** | Mastering the FreeRTOS Real Time Kernel | Richard Barry / FreeRTOS | Official Guide | 2020 Edition | Chapters 3, 4, 7, 8 | Task management, queue mechanisms, interrupt priorities. |
