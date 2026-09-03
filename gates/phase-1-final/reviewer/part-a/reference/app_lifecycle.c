@@ -43,6 +43,9 @@ int sifter_run_application_lifecycle(const struct sifter_io_config *cfg,
     };
 
     int res = sifter_process_stream(in_fd, sifter_filter_cb, &fctx, stats);
+    if (stats != NULL) {
+        stats->filtered_records = fctx.emitted_records;
+    }
 
     if (in_owned) {
         close(in_fd);
