@@ -313,7 +313,10 @@ graph LR
       7. Infinite trap loop if main() ever returns (Default_Handler loop).
     ```
   - **SystemInit() Ordering Invariant:** Because `Reset_Handler` calls `SystemInit()` before `.data` copying and `.bss` zeroing, `SystemInit()` must **not** depend on initialized writable global or static C variables. It operates strictly on memory-mapped peripheral registers (`RCC`, `FLASH->ACR`, `SCB->VTOR`), read-only constants (`.rodata`), or CPU core registers using local stack variables.
-  - **Startfile Policy:** Linker flag `-Wl,-e,Reset_Handler` ensures course `Reset_Handler` is the sole entry point, suppressing alternative default CRT startup objects (e.g. `crt0.o` / `_start`).
+  - **Startfile & Runtime Glue Policy (Preferred Policy A):**
+    - The compiler driver flag `-nostartfiles` explicitly suppresses default GCC/newlib CRT startup objects (such as `crt0.o`, `crti.o`, `crtbegin.o`, `crtend.o`, `crtn.o`), preventing any toolchain-default `_start` or CRT0 initialization routines from being linked.
+    - The reset vector entry at vector-table offset `+0x04` points to course `Reset_Handler`, and linker flag `-Wl,-e,Reset_Handler` sets the ELF entry point symbol. Course `Reset_Handler` is the sole executed reset and startup path.
+    - Minimal course runtime glue defines `void _init(void) {}` and `void _fini(void) {}` to satisfy newlib-nano's `__libc_init_array()` and `__libc_fini_array()` without dragging in CRT startup objects.
   - **`__libc_init_array()` Policy:** It iterates over `.preinit_array` and `.init_array` section tables to invoke C initialization functions (`__attribute__((constructor))`). Phase 2 is strictly C-only; no C++ runtime (`libsupc++`), static C++ object constructors, or exception/RTTI overhead are introduced.
   - **Linker script provenance:** An original pedagogical 64 KB linker script (`stm32f103c8tx_flash.ld`) is authored from scratch. The vendor template in ST repositories carries an Ac6 non-redistribution notice and specifies 128 KB Flash; it is strictly a read-only comparison reference and is not redistributed.
 - **Official Source:**
@@ -324,16 +327,16 @@ graph LR
 - **Exact Upstream Source Path:**
   - `cmsis_device_f1/Source/Templates/gcc/startup_stm32f103xb.s` (Lines 45–140: `g_pfnVectors` & `Reset_Handler`).
 - **Labs:**
-  - **Objective:** Build a complete, bootable bare-metal firmware image from an empty directory using an original 64 KB linker script, minimal assembly startup implementing the exact startup sequence (`SystemInit -> copy .data -> zero .bss -> __libc_init_array -> main`), with `Reset_Handler` as sole entry point, and `main.c` that toggles an LED via register addresses.
+  - **Objective:** Build a complete, bootable bare-metal firmware image from an empty directory using an original 64 KB linker script, minimal assembly startup implementing the exact startup sequence (`SystemInit -> copy .data -> zero .bss -> __libc_init_array -> main`), with `-nostartfiles` and `Reset_Handler` as sole entry point, minimal runtime glue, and `main.c` that toggles an LED via register addresses.
   - **Prerequisites:** GNU Arm toolchain (`arm-none-eabi-gcc` 13.3.rel1), Make, OpenOCD, GDB.
   - **Environment:** Linux host or WSL2, STM32F103C8T6 target (onboard LED e.g. PC13 active LOW), ST-Link V2 SWD debugger.
   - **Estimated Time:** 2.0 h.
   - **AI Mode:** AI-Hint (only for linker script syntax reference).
-  - **Build:** `arm-none-eabi-gcc -mcpu=cortex-m3 -mthumb -O2 -g3 -Wall -Wextra -Werror -ffunction-sections -fdata-sections -T stm32f103c8tx_flash.ld -Wl,-e,Reset_Handler -Wl,--gc-sections --specs=nano.specs --specs=nosys.specs startup.s main.c -o firmware.elf`.
+  - **Build:** `arm-none-eabi-gcc -mcpu=cortex-m3 -mthumb -O2 -g3 -Wall -Wextra -Werror -ffunction-sections -fdata-sections -T stm32f103c8tx_flash.ld -nostartfiles -Wl,-e,Reset_Handler -Wl,--gc-sections --specs=nano.specs --specs=nosys.specs startup.s runtime_glue.c main.c -o firmware.elf`.
   - **Procedure:**
     1. Write `stm32f103c8tx_flash.ld` declaring Flash at `0x08000000` (64K), RAM at `0x20000000` (20K), and retaining `.init_array` with boundary symbols.
     2. Write `startup.s` with vector table containing `_estack` and `Reset_Handler`.
-    3. Implement `Reset_Handler`: call `SystemInit()`, implement `.data` copy loop and `.bss` clear loop, then call `__libc_init_array()`, then jump to `main()`.
+    3. Implement `Reset_Handler`: call `SystemInit()`, implement `.data` copy loop and `.bss` clear loop, call `__libc_init_array()`, then jump to `main()`. Provide minimal runtime glue (`void _init(void) {}`, `void _fini(void) {}` in `runtime_glue.c`).
     4. Write `main()` configuring PC13 to toggle the LED.
     5. Flash target with OpenOCD; inspect registers in GDB before and after `Reset_Handler`.
   - **Expected Observation:** GDB halts at `Reset_Handler`; stepping through the copy loop initializes global variables in RAM; `__libc_init_array` executes cleanly; target boots into `main()`.
@@ -344,7 +347,7 @@ graph LR
   - **Challenge:** Implement a stack canary in the linker script (`_stack_canary`) and verify in `main()` that initial stack allocation has not overflowed.
   - **Cleanup:** Erase Flash via OpenOCD.
   - **Sources:** PM0056 Section 2.1; RM0008 Section 3.
-- **Expected Evidence:** Disassembly listing showing vector table at `0x08000000`, `arm-none-eabi-readelf -l firmware.elf` showing LMA vs VMA addresses, `readelf -h` showing `Reset_Handler` entry point, GDB register dump at `main()`.
+- **Expected Evidence:** `arm-none-eabi-gcc -v` log confirming `-nostartfiles` suppresses default CRT startfiles, disassembly listing showing vector table at `0x08000000` with reset vector at `+0x04` pointing to `Reset_Handler`, `arm-none-eabi-readelf -h` showing `Reset_Handler` entry point, `arm-none-eabi-readelf -s` showing `_init`, `_fini`, `__libc_init_array`, and boundary symbols, `readelf -l` showing LMA vs VMA addresses, GDB register dump at `main()`.
 - **Challenge:** Reconstruct a working startup file and linker script entirely from memory in a blank directory within 25 minutes.
 - **Deliberate Fault:** Vector alignment fault: place `.isr_vector` with misaligned address or clear bit 0 of the Reset Vector function pointer.
 - **Gate:** AI-Free: Diagnose an unfamiliar non-booting ELF image in the startup/linker/memory-initialization family, extract the vector table and linker map, identify the offset/boundary error, fix the linker script, and achieve clean execution of `main()`.
@@ -1011,8 +1014,15 @@ Phase 2 enforces a transparent, standard, Make-first build workflow.
   - Windows: `arm-gnu-toolchain-13.3.rel1-mingw-w64-i686-arm-none-eabi.zip`
 - Toolchain identity must be verified by `arm-none-eabi-gcc --version`.
 
-### 2. Runtime & Linker Contract: Option B (newlib-nano runtime with original startup)
-- **Startup Call Sequence:** The original assembly startup file (`startup_stm32f103xb.s`) enforces an explicit execution sequence:
+### 2. Runtime & Startfile Contract: Preferred Policy A (newlib-nano runtime with -nostartfiles & minimal runtime glue)
+- **Startfile Suppression Policy:**
+  - The compiler driver flag `-nostartfiles` is passed to `arm-none-eabi-gcc` during the link step. This explicitly suppresses default GCC/newlib CRT startup objects (such as `crt0.o`, `crti.o`, `crtbegin.o`, `crtend.o`, `crtn.o`), preventing toolchain-default `_start` or CRT0 initialization routines from being linked into the binary.
+- **Sole Reset & Startup Path:**
+  - The vector table in `startup_stm32f103xb.s` assigns vector-table offset `+0x04` to the Thumb address of course `Reset_Handler`.
+  - The linker driver flag `-Wl,-e,Reset_Handler` explicitly sets the ELF header entry point symbol to match `Reset_Handler`.
+  - No alternative `_start` or CRT startup path exists in the linked image; course `Reset_Handler` is the sole executed reset and startup path.
+- **Startup Call Sequence:**
+  The original assembly startup file (`startup_stm32f103xb.s`) enforces an explicit execution sequence:
   ```text
   Reset_Handler:
     1. Hardware loads the initial MSP from vector-table entry 0 (`_estack`); the course startup does not pretend this hardware action is performed by ordinary assembly instructions.
@@ -1025,7 +1035,16 @@ Phase 2 enforces a transparent, standard, Make-first build workflow.
   ```
 - **SystemInit() Pre-.data/.bss Invariant:**
   - Because `Reset_Handler` invokes `SystemInit()` before copying `.data` and zeroing `.bss`, the Phase 2 `SystemInit()` implementation must **not** depend on initialized writable global or static C variables. It operates strictly on memory-mapped peripheral registers (`RCC`, `FLASH->ACR`, `SCB->VTOR`), read-only constants (`.rodata`), or core registers using local stack variables. If any initialization routine requires initialized writable C state, it must be sequenced *after* data and BSS initialization.
-- **Linker Script Section & Boundary Symbol Contract:**
+- **Runtime Glue for `__libc_init_array()` (`_init` and `_fini`):**
+  - In newlib-nano, `__libc_init_array()` iterates over constructor tables and calls `_init()`, while `__libc_fini_array()` calls `_fini()`.
+  - Because `-nostartfiles` suppresses toolchain CRT objects that normally provide `_init` and `_fini`, minimal course runtime glue explicitly provides empty stubs:
+    ```c
+    /* Minimal runtime glue for newlib-nano with -nostartfiles */
+    void _init(void) {}
+    void _fini(void) {}
+    ```
+    (placed in course `runtime_glue.c` / `syscalls.c`). This satisfies `__libc_init_array()` dependencies cleanly without dragging in any CRT startup machinery.
+- **Linker Script Section Retention (`KEEP`) & Boundary Symbol Contract:**
   - The teaching linker script (`stm32f103c8tx_flash.ld`) explicitly defines and retains constructor arrays required by newlib-nano's `__libc_init_array()`:
     ```ld
     .preinit_array :
@@ -1052,25 +1071,17 @@ Phase 2 enforces a transparent, standard, Make-first build workflow.
     } > FLASH
     ```
   - `KEEP` prevents linker garbage collection (`--gc-sections`) from discarding constructor tables, and `PROVIDE_HIDDEN` establishes standard boundary symbols consumed by `__libc_init_array()`.
-- **Startfile / CRT Policy:**
-  - **Policy 1 — No Default CRT Startup (Course `Reset_Handler` is the sole entry point):**
-    - Linker flag explicitly sets entry point: `-Wl,-e,Reset_Handler`.
-    - The Reset vector entry is stored at vector-table offset `+0x04`; its value is the Thumb address of the course `Reset_Handler`.
-    - Default GCC/newlib CRT startup objects (such as `crt0.o` / `_start`) are not linked as entry points; course `Reset_Handler` is the sole entry point.
-    - Verified via ELF entry point (`readelf -h firmware.elf | grep "Entry point address"`) and disassembly confirming vector 0x08000004 branches directly to course assembly code.
-- **`__libc_init_array()` Decision:**
-  - Why it exists: `__libc_init_array()` walks the `.preinit_array` and `.init_array` section tables to invoke C initialization functions (`__attribute__((constructor))`). Calling it explicitly ensures standard C runtime semantics are respected.
-  - C-Only Boundary: Phase 2 is strictly C-only. No C++ static object constructors, no `libsupc++`, no exceptions, and no RTTI are introduced.
-- **Flags:**
+- **Exact Build & Link Flags:**
   ```makefile
   CFLAGS = -mcpu=cortex-m3 -mthumb -O2 -g3 -Wall -Wextra -Werror \
            -ffunction-sections -fdata-sections \
            -DSTM32F103xB
   LDFLAGS = -mcpu=cortex-m3 -mthumb -T stm32f103c8tx_flash.ld \
-            -Wl,-e,Reset_Handler -Wl,--gc-sections \
+            -nostartfiles -Wl,-e,Reset_Handler -Wl,--gc-sections \
             -Wl,-Map=$(BUILD_DIR)/output.map \
             --specs=nano.specs --specs=nosys.specs
   ```
+- **Libraries Retained:** Standard C libraries (`libc_nano.a`, `libnosys.a`, and `libgcc.a`) are linked via `--specs=nano.specs --specs=nosys.specs` and compiler driver defaults.
 - **Heap Ownership Contract (FreeRTOS `heap_4` vs Libc Heap):**
   - **Single Heap Rule:** FreeRTOS application allocation uses `heap_4` / `pvPortMalloc()` from `static uint8_t ucHeap[configTOTAL_HEAP_SIZE]`.
   - **Exclusion of Libc Heap:** Mandatory coursework **strictly prohibits** `malloc()`, `calloc()`, `realloc()`, and `free()` from standard libc.
@@ -1078,14 +1089,20 @@ Phase 2 enforces a transparent, standard, Make-first build workflow.
 - **I/O & Syscall Policy:**
   - USART telemetry is written with **explicit peripheral register driver code** (CMSIS `USART1->DR`, `USART1->SR`), not through `printf` or host file descriptors.
   - Mandatory real-time paths must not depend on host-style file/syscall behavior. `--specs=nosys.specs` supplies placeholder syscall stubs purely to satisfy bare-metal linking.
-- **Link & Memory Evidence Contract:**
-  - Implementation PRs must inspect `output.map` and `arm-none-eabi-readelf -s` to confirm:
-    - Symbol `__libc_init_array` and required boundary symbols (`__init_array_start`, `__init_array_end`) are linked;
-    - Standard libc `malloc/calloc/realloc/free` are strictly absent;
-    - `_sbrk` is absent when unused;
-    - Vector table and ELF header prove `Reset_Handler` is the actual entry point;
-    - Symbol `ucHeap` contains the full FreeRTOS heap pool in SRAM;
-    - Section addresses and sizes match the 64 KB Flash / 20 KB SRAM target contract.
+- **Required Link Verification Contract:**
+  Implementation PRs must execute, capture, and document:
+  1. `arm-none-eabi-gcc -v ...`: inspect verbose linker invocation to prove that `-nostartfiles` suppresses default `crt0.o` and CRT start objects;
+  2. `arm-none-eabi-readelf -h firmware.elf`: confirm `Entry point address` matches the symbol address of `Reset_Handler`;
+  3. `arm-none-eabi-readelf -s firmware.elf`: confirm:
+     - `Reset_Handler` is present and defined in `.text`;
+     - `_init` and `_fini` are defined as minimal course stubs;
+     - `__libc_init_array` resolves successfully;
+     - `__preinit_array_start/end` and `__init_array_start/end` boundary symbols are present;
+     - Standard libc `malloc`, `calloc`, `realloc`, and `free` are strictly absent;
+     - `_sbrk` is absent when unused (if present, its pull-in reason must be documented);
+     - Symbol `ucHeap` contains the full FreeRTOS heap pool in SRAM;
+  4. `arm-none-eabi-nm -n firmware.elf` & `output.map`: verify vector table at Flash origin (`0x08000000`), reset vector at offset `+0x04` pointing to `Reset_Handler`, and section placement within 64 KB Flash / 20 KB SRAM limits;
+  5. `arm-none-eabi-objdump -h -d firmware.elf`: confirm that no unintended `_start` or alternative CRT startup function is linked or executed.
 - **Math Policy:** Statistics calculations (min, max, average, RMS) use **integer / fixed-point arithmetic** (such as integer square root `isqrt()`), avoiding floating-point emulation overhead and libm dependencies on Cortex-M3.
 
 ### 3. Debugging Infrastructure
@@ -1142,7 +1159,7 @@ Learners must verify their specific board profile (crystal presence/frequency, L
 ### 2. Verification Hierarchy
 The curriculum distinguishes five distinct levels of verification integrity:
 1. **Host Build Verification:** Code compiles cleanly with `-Wall -Wextra -Werror`.
-2. **Target Compile/Link Verification:** Image links cleanly against `stm32f103c8tx_flash.ld`; memory layout verified via `arm-none-eabi-size` and `.map` file.
+2. **Target Compile/Link Verification:** Image links cleanly against `stm32f103c8tx_flash.ld` using `-nostartfiles`; memory layout verified via `arm-none-eabi-size` and `.map` file.
 3. **Target Run Verification:** Image flashes to STM32F103C8T6 via OpenOCD; CPU boots and executes `main()`.
 4. **Debugger/Register Verification:** GDB halts target via SWD; live registers, memory addresses, and TCB states match expected values.
 5. **Physical Scope/Logic Evidence:** External pins probed with oscilloscope or logic analyzer; physical waveforms confirm timing, jitter, and frequency.
@@ -1181,8 +1198,8 @@ All materials in Phase 2 derive strictly from authoritative Tier 0 and Tier 1 sp
 | **S-06** | FreeRTOS-Kernel Upstream Source | FreeRTOS / AWS | Upstream Source Code | Release V11.3.0 (`9b777ae`) | `tasks.c`, `queue.c`, `list.c`, `portable/GCC/ARM_CM3/` | Reference implementation of preemptive scheduler, queues, mutexes. (MIT License). |
 | **S-07** | CMSIS Core (Cortex-M) | Arm Limited / CMSIS | Upstream Source Code | CMSIS_5 v5.9.0 | `CMSIS/Core/Include/core_cm3.h` | Hardware register structs and NVIC inline helper functions. (Apache-2.0). |
 | **S-08** | STM32F1xx CMSIS Device Headers | STMicroelectronics | Upstream Source Code | `cmsis_device_f1` v4.3.5 | `Include/stm32f103xb.h`, `Source/Templates/gcc/startup_stm32f103xb.s` | Peripheral base addresses, bit definitions, startup file. Repository component license: Apache-2.0; retain per-file notices. |
-| **S-09** | Original 64 KB Linker Script | Repository Author | Course Source Code | `stm32f103c8tx_flash.ld` (2026) | Entire file | Original pedagogical linker script for 64 KB C8 target, retaining `.init_array` via KEEP. (MIT License). ST Ac6 template is read-only reference, not redistributed. |
-| **S-10** | Arm GNU Toolchain 13.3.rel1 | Arm Limited | Toolchain Distribution | 13.3.rel1 (Jul 2024) | GCC 13.3.1, Binutils 2.42, GDB 14.2 | Pinned compiler/linker baseline. (GPL-3.0 / LGPL-3.0). |
+| **S-09** | Original 64 KB Linker Script | Repository Author | Course Source Code | `stm32f103c8tx_flash.ld` (2026) | Entire file | Original pedagogical linker script for 64 KB C8 target, retaining `.init_array` via KEEP and boundary symbols for `-nostartfiles` newlib-nano runtime contract. (MIT License). ST Ac6 template is read-only reference, not redistributed. |
+| **S-10** | Arm GNU Toolchain 13.3.rel1 | Arm Limited | Toolchain Distribution | 13.3.rel1 (Jul 2024) | GCC 13.3.1, Binutils 2.42, GDB 14.2 | Pinned compiler/linker baseline with `-nostartfiles` startfile suppression and minimal `_init/_fini` runtime glue. (GPL-3.0 / LGPL-3.0). |
 | **S-11** | Mastering the FreeRTOS Real Time Kernel | Richard Barry / FreeRTOS | Official Guide | 2020 Edition | Chapters 3, 4, 7, 8 | Task management, queue mechanisms, interrupt priorities. |
 
 ---
@@ -1229,7 +1246,7 @@ graph TD
 
 ### Proposed Issue Breakdown:
 1. **Issue 1 (`tutorial/p2-m01-m02`): Bare-Metal Foundations (Startup, Linker, MMIO, Clock, NVIC)**
-   - Implement `P2-M01` (original 64 KB linker script retaining `.init_array` with boundary symbols, assembly startup executing `SystemInit -> copy .data -> zero .bss -> __libc_init_array -> main` with `Reset_Handler` sole entry point, vector table, memory copy loops).
+   - Implement `P2-M01` (original 64 KB linker script retaining `.init_array` with boundary symbols, assembly startup executing `SystemInit -> copy .data -> zero .bss -> __libc_init_array -> main` with `-nostartfiles`, `Reset_Handler` sole entry point, minimal `_init/_fini` glue, vector table, memory copy loops).
    - Implement `P2-M02` (72 MHz clock tree, 1 kHz timer interrupt, GPIO atomic BSRR/BRR, RMW fault lab).
    - Estimated Load: 8.0 h MUST.
 2. **Issue 2 (`tutorial/p2-m03-m04`): Peripheral DMA, ADC Contract & FreeRTOS Core Scheduler**
