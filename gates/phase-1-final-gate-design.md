@@ -326,7 +326,7 @@ The implementation task must seed **two genuinely interdependent defects** selec
 | • Pipe EOF / stream closure hang   | • Data race on shared pipeline state under contention         |
 | • Zombie accumulation / waitpid    | • Named multi-field invariant violation during state transition|
 | • Leaked inherited descriptor      | • Condition-variable predicate misuse (while vs if / TOCTOU)  |
-| • Signal mask inheritance error    | • Lock misuse, ordering deadlock, or shutdown join sequencing |
+| • Exec failure / status propagation| • Lock misuse, ordering deadlock, or shutdown join sequencing |
 +------------------------------------+---------------------------------------------------------------+
 ```
 
