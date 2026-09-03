@@ -73,10 +73,10 @@ requirement → path/command → expected observation → what it proves → wha
 * **Command:** `reviewer/part-d/regression.sh` running broken fixture, `partial_fd_fixed`, `partial_conc_fixed`, and reference implementation, alongside `test_channels.c`.
 * **Expected Observation:**
   1. Broken fixture hits watchdog timeout (exit code 2).
-  2. Live inspection of stalled target child reveals duplicate pipe descriptors in `/proc/<target_pid>/fd`.
+  2. Live inspection of the target child shows two descriptors referencing the exact expected communication `pipe:[inode]` in `/proc/<target_pid>/fd` after the parent writer is closed.
   3. Process/FD-only repair fails with residual concurrency drain error (exit code 1) and active unjoined threads.
   4. Concurrency-only repair stalls on stream EOF (exit code 2).
   5. Fully fixed reference passes 50/50 consecutive cycles (exit code 0).
-* **What it proves:** Proves genuine interaction between the process stream boundary and internal concurrency drain using empirical runtime evidence from actual target executions.
+* **What it proves:** Provides bounded runtime evidence that the exact communication pipe retains a writer reference and that the concurrency lifecycle remains incomplete when only one boundary is repaired; together with both partial-fix runs, this demonstrates the intended interaction on the exercised fixture.
 * **What it does not prove:** A single fixed run alone does not prove interaction; both partial-fix failures must be demonstrated. Watchdog timeout proves bounded execution safety, not root-cause diagnosis.
 * **Pass/Fail:** Pass if all four execution states match expected results and two live evidence channels are documented.
