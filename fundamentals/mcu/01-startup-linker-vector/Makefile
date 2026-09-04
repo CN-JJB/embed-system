@@ -1,7 +1,7 @@
 # ==============================================================================
 # Makefile for Module P2-M01: Reset, Startup, Linker Script, and Vector Table
 # ==============================================================================
-# Toolchain Baseline: Arm GNU Toolchain (arm-none-eabi-gcc 13.x / binutils 2.42)
+# Canonical Toolchain Baseline: Arm GNU Toolchain 13.3.rel1 (GCC 13.3.1 / Binutils 2.42); actual host verification is recorded separately
 # Runtime Contract: Preferred Policy A (-nostartfiles, Reset_Handler entry)
 # ==============================================================================
 
