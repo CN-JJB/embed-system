@@ -175,7 +175,7 @@ The pedagogical linker script [`linker/stm32f103c8tx_flash.ld`](linker/stm32f103
 | [`labs/02-reset-to-main-boot/`](labs/02-reset-to-main-boot/README.md) | Step-by-step verification of reset execution path | **PARTIALLY VERIFIED** (GDB script verified) |
 | [`labs/03-data-bss-init/`](labs/03-data-bss-init/README.md) | Inspect `.data` LMA-to-VMA copy and `.bss` zeroing in memory | **VERIFIED** (disassembly & symbol checks) |
 | [`labs/04-gdb-handlers-vectors/`](labs/04-gdb-handlers-vectors/README.md) | GDB memory dump of vector table and register states | **PARTIALLY VERIFIED** (script documented) |
-| [`labs/05-startup-linker-faults/`](labs/05-startup-linker-faults/README.md) | Guided fault investigation across startup fault families | **VERIFIED** (static regression verified) |
+| [`labs/05-startup-linker-faults/`](labs/05-startup-linker-faults/README.md) | Guided fault investigation across startup fault families | **PARTIALLY VERIFIED** (seeded binary/link properties verified; target runtime symptoms unverified) |
 | [`challenge/`](challenge/README.md) | Blank-directory linker script and startup reconstruction | **AI-Free Challenge** |
 | [`faults/`](faults/README.md) | Reproducible fault fixtures (misaligned vector, LMA error, overflow) | **VERIFIED** |
 | [`gate/`](gate/README.md) | AI-Free Module Gate assessment fixture | **AI-Free Assessment** |
