@@ -142,7 +142,7 @@ This course standardizes on **Preferred Policy A**:
 
 ## 3. Linker Script Architecture
 
-The pedagogical linker script [`linker/stm32f103c8tx_flash.ld`](file:///g:/ai_project/research/emb/fundamentals/mcu/01-startup-linker-vector/linker/stm32f103c8tx_flash.ld) enforces:
+The pedagogical linker script [`linker/stm32f103c8tx_flash.ld`](linker/stm32f103c8tx_flash.ld) enforces:
 - `FLASH (rx) : ORIGIN = 0x08000000, LENGTH = 64K`
 - `RAM (rwx) : ORIGIN = 0x20000000, LENGTH = 20K`
 - Explicit preservation of constructor tables using `KEEP()`:
@@ -171,15 +171,15 @@ The pedagogical linker script [`linker/stm32f103c8tx_flash.ld`](file:///g:/ai_pr
 
 | Path | Description | Verification Status |
 |---|---|---|
-| [`labs/01-elf-vector-inspect/`](file:///g:/ai_project/research/emb/fundamentals/mcu/01-startup-linker-vector/labs/01-elf-vector-inspect/README.md) | Dissect ELF headers, vector table, and Thumb entry address | **VERIFIED** (host toolchain) |
-| [`labs/02-reset-to-main-boot/`](file:///g:/ai_project/research/emb/fundamentals/mcu/01-startup-linker-vector/labs/02-reset-to-main-boot/README.md) | Step-by-step verification of reset execution path | **PARTIALLY VERIFIED** (GDB script verified) |
-| [`labs/03-data-bss-init/`](file:///g:/ai_project/research/emb/fundamentals/mcu/01-startup-linker-vector/labs/03-data-bss-init/README.md) | Inspect `.data` LMA-to-VMA copy and `.bss` zeroing in memory | **VERIFIED** (disassembly & symbol checks) |
-| [`labs/04-gdb-handlers-vectors/`](file:///g:/ai_project/research/emb/fundamentals/mcu/01-startup-linker-vector/labs/04-gdb-handlers-vectors/README.md) | GDB memory dump of vector table and register states | **PARTIALLY VERIFIED** (script documented) |
-| [`labs/05-startup-linker-faults/`](file:///g:/ai_project/research/emb/fundamentals/mcu/01-startup-linker-vector/labs/05-startup-linker-faults/README.md) | Guided fault investigation across startup fault families | **VERIFIED** (static regression verified) |
-| [`challenge/`](file:///g:/ai_project/research/emb/fundamentals/mcu/01-startup-linker-vector/challenge/README.md) | Blank-directory linker script and startup reconstruction | **AI-Free Challenge** |
-| [`faults/`](file:///g:/ai_project/research/emb/fundamentals/mcu/01-startup-linker-vector/faults/README.md) | Reproducible fault fixtures (misaligned vector, LMA error, overflow) | **VERIFIED** |
-| [`gate/`](file:///g:/ai_project/research/emb/fundamentals/mcu/01-startup-linker-vector/gate/README.md) | AI-Free Module Gate assessment fixture | **AI-Free Assessment** |
-| [`reviewer/`](file:///g:/ai_project/research/emb/fundamentals/mcu/01-startup-linker-vector/reviewer/README.md) | Diagnostic solutions, fault root-cause analysis, and regression | **Reviewer Isolated** |
+| [`labs/01-elf-vector-inspect/`](labs/01-elf-vector-inspect/README.md) | Dissect ELF headers, vector table, and Thumb entry address | **VERIFIED** (host toolchain) |
+| [`labs/02-reset-to-main-boot/`](labs/02-reset-to-main-boot/README.md) | Step-by-step verification of reset execution path | **PARTIALLY VERIFIED** (GDB script verified) |
+| [`labs/03-data-bss-init/`](labs/03-data-bss-init/README.md) | Inspect `.data` LMA-to-VMA copy and `.bss` zeroing in memory | **VERIFIED** (disassembly & symbol checks) |
+| [`labs/04-gdb-handlers-vectors/`](labs/04-gdb-handlers-vectors/README.md) | GDB memory dump of vector table and register states | **PARTIALLY VERIFIED** (script documented) |
+| [`labs/05-startup-linker-faults/`](labs/05-startup-linker-faults/README.md) | Guided fault investigation across startup fault families | **VERIFIED** (static regression verified) |
+| [`challenge/`](challenge/README.md) | Blank-directory linker script and startup reconstruction | **AI-Free Challenge** |
+| [`faults/`](faults/README.md) | Reproducible fault fixtures (misaligned vector, LMA error, overflow) | **VERIFIED** |
+| [`gate/`](gate/README.md) | AI-Free Module Gate assessment fixture | **AI-Free Assessment** |
+| [`reviewer/`](reviewer/README.md) | Diagnostic solutions, fault root-cause analysis, and regression | **Reviewer Isolated** |
 
 ---
 
