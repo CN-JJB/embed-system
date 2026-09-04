@@ -42,7 +42,7 @@ In Cortex-M3, peripherals are mapped into the physical address space between `0x
   #define TIM2              ((TIM_TypeDef *)TIM2_BASE)
   ```
 - **What `volatile` Does / Does Not Guarantee**:
-  - In C language semantics, `volatile` designates an access as an observable side effect. For ARM GCC MMIO, this establishes a compiler contract: GCC will not eliminate accesses as dead stores, nor will it cache MMIO register contents in CPU core registers across accesses, emitting an explicit load/store instruction for each source access.
+  - In C language semantics, `volatile` designates accesses as observable side effects. For the 32-bit CMSIS MMIO objects used here, the pinned/host ARM GCC builds can be inspected to confirm the expected explicit loads/stores; do not generalize this into a universal one-source-access/one-instruction rule for every volatile type or compiler.
   - **`volatile` DOES NOT guarantee atomicity** across multi-step read-modify-write sequences (`LDR`, `ORR`/`EOR`, `STR`), nor does it guarantee language-level multi-threaded memory consistency.
   - **`volatile` DOES NOT enforce CPU memory ordering or write-buffer draining** in hardware; architectural memory barriers (`__DSB()`) are required when peripheral transaction ordering must be strictly guaranteed.
   - **BSRR/BRR Atomicity Scope**: Writing to BSRR or BRR is atomic at the bus and peripheral register level because setting or clearing independent bit lines occurs via a single store without reading ODR. However, a software-maintained toggle state variable (e.g., `static volatile state`) can still race if modified concurrently across multiple preempting execution contexts without synchronization.
@@ -120,7 +120,7 @@ When a peripheral event occurs, the peripheral asserts its interrupt line to the
    - Timer 2 input clock: 72 MHz.
 2. **Safe Fallback Profile (`CLOCK_PROFILE_64MHZ_HSI`)**:
    - Uses internal 8 MHz RC oscillator (HSI / 2 * 16 = 64 MHz).
-   - Operates reliably even on boards with broken or missing crystals.
+   - Does not require a functioning external HSE crystal; actual oscillator/PLL behavior remains target-hardware verification.
    - Flash ACR: 2 wait states.
    - AHB /1 (64 MHz), APB2 /1 (64 MHz), APB1 /2 (32 MHz).
    - Timer 2 input clock: 64 MHz.
