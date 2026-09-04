@@ -132,12 +132,12 @@ When a peripheral event occurs, the peripheral asserts its interrupt line to the
 | Path | Description | Verification Status |
 |---|---|---|
 | [`labs/01-mmio-volatile-gdb/`](labs/01-mmio-volatile-gdb/README.md) | Dissect peripheral register addresses, CMSIS structs, and `volatile` disassembly | **VERIFIED** (host toolchain) |
-| [`labs/02-clock-tree-profiles/`](labs/02-clock-tree-profiles/README.md) | Configure 72 MHz HSE PLL & 64 MHz HSI fallback; audit Flash latency wait states | **VERIFIED** (register calculation) |
-| [`labs/03-tim2-1khz-interrupt/`](labs/03-tim2-1khz-interrupt/README.md) | Direct register TIM2 1 kHz periodic interrupt, PSC/ARR derivation, ISR flag clear | **VERIFIED** (compile/link verified) |
-| [`labs/04-nvic-priority-modes/`](labs/04-nvic-priority-modes/README.md) | NVIC logical vs encoded priority, Handler vs Thread mode, `EXC_RETURN` unstacking | **VERIFIED** (disassembly audit) |
-| [`labs/05-rmw-concurrency-hazard/`](labs/05-rmw-concurrency-hazard/README.md) | Controlled demonstration of ODR RMW race condition vs atomic BSRR resolution | **VERIFIED** (code analysis) |
+| [`labs/02-clock-tree-profiles/`](labs/02-clock-tree-profiles/README.md) | Configure 72 MHz HSE PLL & 64 MHz HSI fallback; audit Flash latency wait states | **PARTIALLY VERIFIED** (source/register calculations verified; oscillator/PLL behavior unverified) |
+| [`labs/03-tim2-1khz-interrupt/`](labs/03-tim2-1khz-interrupt/README.md) | Direct register TIM2 1 kHz periodic interrupt, PSC/ARR derivation, ISR flag clear | **PARTIALLY VERIFIED** (compile/link and arithmetic verified; interrupt delivery/waveform unverified) |
+| [`labs/04-nvic-priority-modes/`](labs/04-nvic-priority-modes/README.md) | NVIC logical vs encoded priority, Handler vs Thread mode, `EXC_RETURN` unstacking | **PARTIALLY VERIFIED** (static/disassembly evidence only; live exception behavior unverified) |
+| [`labs/05-rmw-concurrency-hazard/`](labs/05-rmw-concurrency-hazard/README.md) | Controlled demonstration of ODR RMW race condition vs atomic BSRR resolution | **PARTIALLY VERIFIED** (instruction-level hazard verified; physical lost-edge observation unverified) |
 | [`challenge/`](challenge/README.md) | Configure multi-channel software PWM or nested interrupt latency measurement | **AI-Free Challenge** |
-| [`faults/`](faults/README.md) | 5 reproducible fault fixtures (clock gating, storm, math error, NVIC, RMW) | **VERIFIED** |
+| [`faults/`](faults/README.md) | 5 seeded fault fixtures (clock gating, storm, math error, NVIC, RMW) | **PARTIALLY VERIFIED** (seeded static properties verified; runtime symptoms unverified) |
 | [`gate/`](gate/README.md) | AI-Free Module Gate assessment fixture | **AI-Free Assessment** |
 | [`reviewer/`](reviewer/README.md) | Diagnostic solutions, fault root-cause analysis, and regression | **Reviewer Isolated** |
 
