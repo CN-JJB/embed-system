@@ -18,9 +18,9 @@ symptom
 ```
 
 ### Step 1: Symptom
-The Gate firmware in `gate/gate_fault_firmware/` compiles cleanly with zero warnings and executes on hardware or simulation, but:
-1. `g_tim2_ticks` increments to `1` and permanently ceases forward progress; the heartbeat indicator pin (PA1) toggles exactly once at startup and remains permanently frozen.
-2. The main thread loop in `main()` continues running without hanging (no watchdog reset, no hard fault, no interrupt lockup), but periodic timer interrupts cease completely after the first event.
+The Gate firmware in `gate/gate_fault_firmware/` compiles cleanly with zero warnings. **EXPECTED / ILLUSTRATIVE — TARGET RUN UNVERIFIED:**
+1. `g_tim2_ticks` should increment to `1` and then cease; PA1 should toggle once and remain frozen.
+2. Thread mode should remain responsive while periodic TIM2 interrupts cease after the first update event.
 
 ### Step 2: Hypotheses
 1. **One-Pulse Mode Misconfiguration (`TIM_CR1_OPM`)**: Bit 3 (`OPM`) of `TIM2->CR1` was erroneously set alongside `CEN` during timer startup, directing hardware to clear `CEN` upon the first update event.
