@@ -165,8 +165,8 @@ echo "[PASS] Reset_Handler transfers control to main"
 
 # Check data copy path:
 # Must reference _sdata, _edata, _sidata in relocations AND contain a load/store loop in disassembly
-if ! echo "${RELOCS}" | grep -q "_sdata" || ! echo "${RELOCS}" | grep -q "_sidata"; then
-    echo "ERROR: Reset_Handler does not reference _sdata and _sidata symbols!" >&2
+if ! echo "${RELOCS}" | grep -q "_sdata" || ! echo "${RELOCS}" | grep -q "_edata" || ! echo "${RELOCS}" | grep -q "_sidata"; then
+    echo "ERROR: Reset_Handler does not reference _sdata, _edata, and _sidata symbols!" >&2
     exit 1
 fi
 
