@@ -35,14 +35,14 @@ make clean && make
 3. In `main.c`, execute a tight loop calling `gpio_toggle_pa2_non_atomic_rmw()` while TIM2 interrupts fire at 10 kHz:
    Observe on a logic analyzer: occasionally PA1 toggle modifies ODR while PA2 RMW is in flight, resulting in lost edges and glitching.
 4. Replace `gpio_toggle_pa2_non_atomic_rmw()` with `gpio_toggle_pa2_atomic()`:
-   Observe that all edges are clean and no writes are lost.
+   On target, record whether the previously observed lost-edge symptom disappears. This physical regression remains **UNVERIFIED** until measured.
 
 ## Expected Observation
 - Non-atomic RMW on shared registers suffers race hazards when preempted by an ISR.
-- Atomic `BSRR` stores write a single hardware bitmask without reading, guaranteeing race-free execution without disabling global interrupts.
+- Atomic `BSRR`/`BRR` writes avoid the shared-ODR read/modify/write lost-update mechanism for independent bit set/reset operations. They do not make arbitrary software toggle-state logic race-free across contexts.
 
 ## Actual Verification Status
-**VERIFIED** (assembly analysis and logic proof).
+**PARTIALLY VERIFIED**. Disassembly verifies the multi-instruction ODR RMW hazard and single-store BSRR/BRR mechanism. Actual lost-edge reproduction and physical regression remain **UNVERIFIED** without target waveform capture.
 
 ## Questions
 1. Why does `volatile` fail to prevent the RMW race condition?
