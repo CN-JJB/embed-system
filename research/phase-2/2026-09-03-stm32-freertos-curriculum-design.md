@@ -1219,8 +1219,8 @@ GPIO Oscilloscope Instrumentation --> Hardware bring-up, logic analyzer bus trac
 ```
 
 ### Internship & Interview Evidence Portfolio:
-1. **Bare-Metal Boot Fluency:** Ability to explain every line of a linker script and startup file on a whiteboard; explaining how `.data`, `.bss`, and `__libc_init_array()` are initialized without runtime libraries.
-2. **Interrupt & Concurrency Rigor:** Articulating why RMW operations fail on shared registers; demonstrating how `BASEPRI` masking implements bounded-jitter critical sections.
+1. **Bare-Metal Boot Fluency:** Ability to explain every line of the original linker script and startup file, including how `.data`, `.bss`, init-array sections, minimal runtime glue, and newlib-nano participate in the reset-to-`main()` path.
+2. **Interrupt & Concurrency Rigor:** Articulating why RMW operations can lose updates on shared registers; explaining how `BASEPRI` masks the kernel-callable interrupt-priority band and measuring the timing impact on the practiced target.
 3. **Autonomous Data Movement:** Demonstrating a working ADC+DMA circular double-buffered acquisition node running at 1 kHz with live oscilloscope timing evidence.
 4. **Real-Time Determinism:** Explaining priority inversion, reproducing it in a controlled scheduling experiment with identical CPU workloads, and demonstrating priority inheritance resolution in FreeRTOS source code.
 
