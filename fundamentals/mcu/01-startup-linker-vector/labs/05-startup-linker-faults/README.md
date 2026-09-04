@@ -69,13 +69,13 @@ Each fault fixture is located under [`../faults/`](../faults/).
 
 ## Expected Observation
 
-- Fault 1: Even address at vector 1 causes hardware fault.
-- Fault 2: Compilation succeeds, but `.data` variables evaluate to random noise at runtime.
-- Fault 3: Linker stops the build with explicit pedagogical error message.
+- Fault 1: Static binary evidence shows an even reset-vector address; the target fault response is **EXPECTED / UNVERIFIED**.
+- Fault 2: Static linker evidence shows an invalid `.data` load-address contract; the target variable corruption is **EXPECTED / UNVERIFIED**.
+- Fault 3: Host linker execution stops the build with the explicit memory-boundary diagnostic (**VERIFIED**).
 
 ## Actual Verification Status
 
-**VERIFIED** (host toolchain & static regression checks). All three failure mechanisms verified against GNU Binutils 2.42.
+**PARTIALLY VERIFIED**. Host toolchain/static checks verify the seeded ELF/linker properties and the linker-overflow failure. Target runtime symptoms for F1/F2 remain **UNVERIFIED** without hardware or an architecture-accurate simulator run.
 
 ## Questions
 
