@@ -107,7 +107,6 @@ Default_Handler:
  */
   .section .isr_vector,"a",%progbits
   .type g_pfnVectors, %object
-  .size g_pfnVectors, .-g_pfnVectors
 
 g_pfnVectors:
   /* Cortex-M3 Core Exceptions */
@@ -172,6 +171,7 @@ g_pfnVectors:
   .word EXTI15_10_IRQHandler            /* EXTI Line 15..10 */
   .word RTC_Alarm_IRQHandler            /* RTC Alarm through EXTI Line */
   .word USBWakeUp_IRQHandler            /* USB Wakeup from suspend */
+  .size g_pfnVectors, .-g_pfnVectors
 
 /* =============================================================================
  * Weak aliases routing unimplemented handlers to Default_Handler
