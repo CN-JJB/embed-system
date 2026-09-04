@@ -21,8 +21,9 @@
 void gpio_init(void);
 
 /**
- * @brief Toggle PA1 using atomic Bit Set/Reset Register (BSRR).
- * Guaranteed atomic bus access: immune to ISR preemption races.
+ * @brief Toggle PA1 using atomic hardware register writes (BSRR / BRR).
+ * Hardware write is atomic (single store without reading ODR), protecting
+ * concurrent pin states on Port A. Software state tracking is single-context.
  */
 void gpio_toggle_pa1_atomic(void);
 
@@ -33,7 +34,7 @@ void gpio_toggle_pa1_atomic(void);
 void gpio_toggle_pa2_non_atomic_rmw(void);
 
 /**
- * @brief Atomic toggle of PA2 using BSRR/BRR.
+ * @brief Toggle PA2 using atomic hardware register writes (BSRR / BRR).
  */
 void gpio_toggle_pa2_atomic(void);
 

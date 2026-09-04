@@ -55,15 +55,20 @@ void gpio_init(void)
     GPIOC->BSRR = (1U << 13); /* PC13 LED off */
 }
 
+/* Software toggle state (single execution context).
+ * Note: Hardware register writes (BSRR/BRR) are atomic at the peripheral bus level.
+ * If toggle state were shared across preempting contexts, software tracking would
+ * require additional critical section protection.
+ */
 static volatile uint32_t s_pa1_state = 0;
 
 void gpio_toggle_pa1_atomic(void)
 {
     if (s_pa1_state == 0) {
-        GPIOA->BSRR = (1U << 1); /* Atomic set PA1 */
+        GPIOA->BSRR = (1U << 1); /* Atomic hardware set PA1 without reading ODR */
         s_pa1_state = 1;
     } else {
-        GPIOA->BRR  = (1U << 1); /* Atomic reset PA1 */
+        GPIOA->BRR  = (1U << 1); /* Atomic hardware reset PA1 without reading ODR */
         s_pa1_state = 0;
     }
 }

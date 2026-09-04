@@ -42,10 +42,10 @@ In Cortex-M3, peripherals are mapped into the physical address space between `0x
   #define TIM2              ((TIM_TypeDef *)TIM2_BASE)
   ```
 - **What `volatile` Does / Does Not Guarantee**:
-  - `volatile` informs the compiler that the register can change outside the program flow (by hardware) and that writes produce observable hardware side effects.
-  - `volatile` guarantees that GCC emits an explicit memory load or store on every access, preventing register caching and dead-store elimination.
-  - **`volatile` DOES NOT guarantee atomicity** across multi-step read-modify-write sequences!
-  - **`volatile` DOES NOT enforce CPU out-of-order write-buffer synchronization**; hardware memory barriers (`__DSB()`) are required.
+  - In C language semantics, `volatile` designates an access as an observable side effect. For ARM GCC MMIO, this establishes a compiler contract: GCC will not eliminate accesses as dead stores, nor will it cache MMIO register contents in CPU core registers across accesses, emitting an explicit load/store instruction for each source access.
+  - **`volatile` DOES NOT guarantee atomicity** across multi-step read-modify-write sequences (`LDR`, `ORR`/`EOR`, `STR`), nor does it guarantee language-level multi-threaded memory consistency.
+  - **`volatile` DOES NOT enforce CPU memory ordering or write-buffer draining** in hardware; architectural memory barriers (`__DSB()`) are required when peripheral transaction ordering must be strictly guaranteed.
+  - **BSRR/BRR Atomicity Scope**: Writing to BSRR or BRR is atomic at the bus and peripheral register level because setting or clearing independent bit lines occurs via a single store without reading ODR. However, a software-maintained toggle state variable (e.g., `static volatile state`) can still race if modified concurrently across multiple preempting execution contexts without synchronization.
 
 ### 2.2 Read-Modify-Write (RMW) Race Conditions and Atomic BSRR
 When software modifies a register using bitwise operators:
@@ -148,13 +148,13 @@ When a peripheral event occurs, the peripheral asserts its interrupt line to the
 In embedded systems, physical timing evidence must strictly separate three categories:
 
 ```text
-[Observation]
-PA1 exhibits a periodic square wave with 1.0 ms toggle interval (500 Hz frequency).
-Measured on target hardware using logic analyzer / oscilloscope.
+[EXPECTED / TO RECORD ON TARGET]
+PA1 exhibits a periodic square wave with 1.0 ms toggle interval (500 Hz frequency, 2.0 ms full period).
+To be measured on target hardware using logic analyzer / oscilloscope.
 
 [Interpretation]
 The 1.0 ms toggle supports the mathematical calculation that TIM2 prescaler (PSC=71)
-and auto-reload (ARR=999) correctly divide the 72 MHz timer clock to 1000 Hz.
+and auto-reload (ARR=999) correctly divide the 72 MHz timer clock to 1000 Hz update events.
 
 [Non-Proof]
 This single-run observation DOES NOT prove that all board crystals run at exactly 8.000 MHz,

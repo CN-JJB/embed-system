@@ -4,13 +4,25 @@ This directory contains deliberate, reproducible firmware fixtures representing 
 
 ## Fault Family Catalog
 
-| Fixture | Family | Symptom | Diagnostic Tool |
-|---|---|---|---|
-| [`fault1_misaligned_vector/`](faults/fault1_misaligned_vector/) | Vector table / Thumb bit missing | CPU enters `HardFault` / `UsageFault` at reset; PC halts at reset vector | `arm-none-eabi-readelf -h`, `arm-none-eabi-readelf -x .isr_vector` |
-| [`fault2_data_lma_mismatch/`](faults/fault2_data_lma_mismatch/) | Section boundary / LMA-VMA mismatch | Firmware reaches `main()`, but all initialized global variables contain garbage | Linker map inspection (`build/firmware.map`), `arm-none-eabi-readelf -l` |
-| [`fault3_memory_overflow/`](faults/fault3_memory_overflow/) | Memory bounds / physical limits | Build fails at link time with memory exhaustion | GNU `ld` error diagnostic, `ASSERT` checks |
+| Fixture | Observed Symptom | Primary Diagnostic Channel |
+|---|---|---|
+| [`f1/`](f1/) | Target halts immediately after reset; fails to reach `main()` | Binary entry inspection (`readelf -h`), vector table dump (`readelf -x .isr_vector`) |
+| [`f2/`](f2/) | Firmware enters `main()`, but initialized global C variables contain invalid values | Linker map audit (`build/firmware.map`), section headers (`readelf -l`) |
+| [`f3/`](f3/) | Linker aborts build; reports memory allocation boundary error | Toolchain linker output diagnostic, memory map bounds |
 
-## Verification Policy
+## Investigation Protocol
 
-- **Learner-facing files do not reveal the answer or fix.**
-- Detailed root cause analysis, hypothesis chains, and regression proofs are cataloged in [`../reviewer/fault_analysis.md`](reviewer/fault_analysis.md).
+1. Navigate to the fixture directory:
+   ```bash
+   cd faults/f1  # or f2, f3
+   ```
+2. Build the fixture:
+   ```bash
+   make clean && make
+   ```
+3. Formulate 3–5 hypotheses before inspecting source code.
+4. Collect binary/map evidence using GNU Binutils.
+5. Identify the root cause and document the minimal fix.
+
+> [!NOTE]
+> Reviewer solutions and root-cause analyses are isolated in [`../reviewer/fault_analysis.md`](../reviewer/fault_analysis.md).

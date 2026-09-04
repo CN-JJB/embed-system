@@ -27,8 +27,12 @@ int main(void)
     clock_frequencies_t freqs;
     bool clock_ok = clock_init(CLOCK_PROFILE_72MHZ_HSE);
     if (!clock_ok) {
-        /* Failed to lock HSE: safe fallback to 64 MHz HSI */
-        clock_init(CLOCK_PROFILE_64MHZ_HSI);
+        /* Failed to lock HSE or PLL: safe fallback to 64 MHz HSI */
+        bool fallback_ok = clock_init(CLOCK_PROFILE_64MHZ_HSI);
+        if (!fallback_ok) {
+            /* Fallback PLL failed: system remains on default 8 MHz HSI */
+            SystemCoreClock = 8000000U;
+        }
     }
     clock_get_frequencies(&freqs);
 

@@ -5,9 +5,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-M02_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-echo "=== Verifying P2-M02 Challenge Requirements ==="
+echo "=== Verifying P2-M02 Challenge Validator ==="
 
 # 1. Verify 10 kHz / 100 us Timer Arithmetic for 100 Hz 100-step PWM
 TIMCLK=72000000
@@ -30,8 +29,16 @@ if [ "${PWM_FREQ}" -ne 100 ]; then
 fi
 echo "[PASS] PWM base frequency verified: ${FREQ} Hz / 100 steps = ${PWM_FREQ} Hz"
 
-# 3. Check base firmware builds cleanly
-make -C "${M02_DIR}" clean all >/dev/null
-echo "[PASS] Module base firmware compiles cleanly with zero warnings"
+# 3. Validate target challenge directory (defaults to reference)
+TARGET_DIR="${1:-${SCRIPT_DIR}/reference}"
+bash "${SCRIPT_DIR}/validate.sh" "${TARGET_DIR}"
+
+# 4. Negative test: confirm incomplete starter fails validation
+echo "Checking that incomplete starter fails validation as expected..."
+if bash "${SCRIPT_DIR}/validate.sh" "${SCRIPT_DIR}/starter" >/dev/null 2>&1; then
+    echo "ERROR: Starter unexpectedly passed validation!" >&2
+    exit 1
+fi
+echo "[PASS] Negative test confirmed: incomplete starter correctly fails validation"
 
 echo "=== P2-M02 CHALLENGE SPECIFICATION VERIFIED ==="

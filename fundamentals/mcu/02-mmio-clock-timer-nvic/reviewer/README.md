@@ -6,3 +6,5 @@
 - [`fault_analysis.md`](fault_analysis.md): Detailed root causes for all 5 M02 fault families.
 - [`challenge_solution.md`](challenge_solution.md): Reference solution for 4-channel software PWM.
 - [`gate_solution.md`](gate_solution.md): Hypothesis-driven diagnostic walkthrough for the M02 Gate assessment.
+- [`verify_gate_regression.sh`](verify_gate_regression.sh): Automated binary regression test proving Gate fixture failure properties.
+

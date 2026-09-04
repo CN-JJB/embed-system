@@ -27,13 +27,13 @@ Apply a disciplined, hypothesis-driven debugging methodology to diagnose common 
 
 ## Build
 
-Each fault fixture is located under [`../../faults/`](file:///g:/ai_project/research/emb/fundamentals/mcu/01-startup-linker-vector/faults/).
+Each fault fixture is located under [`../faults/`](../faults/).
 
 ## Procedure
 
-### Investigation 1: The Missing Thumb Bit Fault
-1. Navigate to `faults/fault1_misaligned_vector`.
-2. Build the faulty firmware:
+### Investigation 1: Reset Execution Halt (Fixture F1)
+1. Navigate to `faults/f1`.
+2. Build the fixture:
    ```bash
    make clean && make
    ```
@@ -42,22 +42,21 @@ Each fault fixture is located under [`../../faults/`](file:///g:/ai_project/rese
    arm-none-eabi-readelf -h build/firmware.elf
    arm-none-eabi-readelf -x .isr_vector build/firmware.elf
    ```
-4. Observe that vector 1 contains an even address (bit 0 = 0).
-5. Document what the hardware will do upon reset: when the CPU branches to an even PC in Thumb state, it triggers an immediate `UsageFault` (INVSTATE).
+4. Check vector entry 1 and compare its parity against architectural execution requirements.
+5. Formulate hypotheses and document why the processor halts immediately upon reset.
 
-### Investigation 2: The LMA-VMA Pointer Corruption Fault
-1. Navigate to `faults/fault2_data_lma_mismatch`.
-2. Examine the generated map file:
+### Investigation 2: Data Section Initialization Failure (Fixture F2)
+1. Navigate to `faults/f2`.
+2. Build and examine the generated map file:
    ```bash
    make clean && make
    grep -A 10 "\.data" build/firmware.map
    ```
-3. Check the symbol `_sidata` vs `LOADADDR(.data)`.
-4. In this faulty build, `_sidata` was defined as `ADDR(.data)` instead of `LOADADDR(.data)`.
-5. Trace what happens at boot: the copy loop attempts to copy from SRAM address `0x20000000` to `0x20000000`, copying uninitialized SRAM garbage over itself instead of loading initial values from Flash!
+3. Audit the relationship between runtime VMA and load-time LMA symbols.
+4. Trace the memory copy loop behavior in `Reset_Handler` using the observed symbol values.
 
-### Investigation 3: The SRAM Overflow Fault
-1. Navigate to `faults/fault3_memory_overflow`.
+### Investigation 3: Memory Boundary Overflow (Fixture F3)
+1. Navigate to `faults/f3`.
 2. Attempt to build:
    ```bash
    make clean && make

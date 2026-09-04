@@ -69,13 +69,24 @@ fi
 echo "[PASS] Entry point correctly points to Thumb Reset_Handler: ${ACTUAL_ENTRY}"
 
 # 5. Check Vector Table entry 0 (_estack) and entry 1 (Reset_Handler)
-VEC0=$(arm-none-eabi-readelf -x .isr_vector "${ELF}" | awk '/0x08000000/ {print $2}')
-# 00500020 in byte-order hex = 0x20005000
-if [ "${VEC0}" != "00500020" ]; then
-    echo "ERROR: Vector 0 (initial MSP) is not 0x20005000 (got: ${VEC0})!" >&2
+VEC0_RAW=$(arm-none-eabi-readelf -x .isr_vector "${ELF}" | awk '/0x08000000/ {print $2}')
+VEC0_ADDR="0x${VEC0_RAW:6:2}${VEC0_RAW:4:2}${VEC0_RAW:2:2}${VEC0_RAW:0:2}"
+if [ "${VEC0_ADDR}" != "0x20005000" ]; then
+    echo "ERROR: Vector 0 (initial MSP) is not 0x20005000 (got: ${VEC0_ADDR})!" >&2
     exit 1
 fi
 echo "[PASS] Vector table entry 0 (initial MSP) correctly set to 0x20005000"
+
+VEC1_RAW=$(arm-none-eabi-readelf -x .isr_vector "${ELF}" | awk '/0x08000000/ {print $3}')
+VEC1_ADDR="0x${VEC1_RAW:6:2}${VEC1_RAW:4:2}${VEC1_RAW:2:2}${VEC1_RAW:0:2}"
+VEC1_INT=$((VEC1_ADDR))
+EXPECTED_RESET_VEC=$((0x${RESET_HANDLER_ADDR} | 1))
+
+if [ "${VEC1_INT}" -ne "${EXPECTED_RESET_VEC}" ]; then
+    echo "ERROR: Vector 1 (Reset vector 0x$(printf '%x' ${VEC1_INT})) does not match Thumb Reset_Handler (0x$(printf '%x' ${EXPECTED_RESET_VEC}))!" >&2
+    exit 1
+fi
+echo "[PASS] Vector table entry 1 (Reset vector) directly verified against Thumb Reset_Handler: 0x$(printf '%x' ${VEC1_INT})"
 
 # 6. Check init-array symbols
 REQUIRED_SYMBOLS=("__init_array_start" "__init_array_end" "__libc_init_array" "_init" "_fini" "_sidata" "_sdata" "_edata" "_sbss" "_ebss")

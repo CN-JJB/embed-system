@@ -34,8 +34,11 @@ typedef struct {
 /**
  * @brief Initialize system clock using the specified profile.
  * Configures Flash latency wait states, prefetch buffer, PLL, and bus dividers.
- * @param profile Target clock profile.
- * @return true if clock locked successfully, false if oscillator timed out.
+ * All hardware ready polling (HSE/HSI, PLL lock, SYSCLK switch) is strictly bounded.
+ *
+ * @param profile Target clock profile (CLOCK_PROFILE_72MHZ_HSE or CLOCK_PROFILE_64MHZ_HSI).
+ * @return true if the requested clock profile and PLL locked successfully.
+ *         false if oscillator or PLL timed out (system is safely reverted to 8 MHz HSI default).
  */
 bool clock_init(clock_profile_t profile);
 

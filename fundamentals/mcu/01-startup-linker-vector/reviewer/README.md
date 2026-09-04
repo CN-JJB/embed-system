@@ -8,3 +8,5 @@
 - [`fault_analysis.md`](fault_analysis.md): Detailed root-cause breakdown of all deliberate faults.
 - [`challenge_solution.md`](challenge_solution.md): Reference implementation for the blank-directory challenge.
 - [`gate_solution.md`](gate_solution.md): Hypothesis-driven diagnostic walkthrough and minimal fix for the Gate assessment.
+- [`verify_gate_regression.sh`](verify_gate_regression.sh): Automated binary regression test proving Gate fixture failure properties.
+

@@ -1,3 +1,10 @@
+/*
+ * =============================================================================
+ * P2-M01 Challenge Reference Linker Script
+ * STM32F103C8T6 (64 KB Flash, 20 KB RAM)
+ * =============================================================================
+ */
+
 ENTRY(Reset_Handler)
 
 MEMORY
@@ -11,13 +18,6 @@ _min_stack_size = 0x400;
 
 SECTIONS
 {
-    .boot_meta :
-    {
-        . = ALIGN(4);
-        KEEP(*(.boot_meta*))
-        . = ALIGN(4);
-    } > FLASH
-
     .isr_vector :
     {
         . = ALIGN(4);
@@ -74,4 +74,17 @@ SECTIONS
         . = ALIGN(4);
         _ebss = .;
     } > RAM
+
+    ._user_stack :
+    {
+        . = ALIGN(8);
+        . = . + _min_stack_size;
+        . = ALIGN(8);
+    } > RAM
 }
+
+ASSERT(_ebss + _min_stack_size <= ORIGIN(RAM) + LENGTH(RAM),
+       "Linker Error: RAM exhausted!")
+
+ASSERT(LOADADDR(.data) + SIZEOF(.data) <= ORIGIN(FLASH) + LENGTH(FLASH),
+       "Linker Error: Flash exhausted!")

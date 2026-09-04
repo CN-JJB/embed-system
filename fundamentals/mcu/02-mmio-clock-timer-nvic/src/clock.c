@@ -33,6 +33,8 @@
 
 #define HSE_STARTUP_TIMEOUT   0x00050000U
 #define HSI_STARTUP_TIMEOUT   0x00010000U
+#define PLL_LOCK_TIMEOUT      0x00050000U
+#define SWS_SWITCH_TIMEOUT    0x00010000U
 
 bool clock_init(clock_profile_t profile)
 {
@@ -45,8 +47,10 @@ bool clock_init(clock_profile_t profile)
         RCC->CR |= RCC_CR_HSEON;
         while (!(RCC->CR & RCC_CR_HSERDY)) {
             if (++timeout > HSE_STARTUP_TIMEOUT) {
-                /* HSE failed to stabilize: fallback to safe HSI profile */
-                return clock_init(CLOCK_PROFILE_64MHZ_HSI);
+                /* HSE failed to stabilize: disable HSE and return false
+                 * Caller can choose to fall back to HSI profile. */
+                RCC->CR &= ~RCC_CR_HSEON;
+                return false;
             }
         }
 
@@ -68,17 +72,35 @@ bool clock_init(clock_profile_t profile)
                     RCC_CFGR_PLLSRC      |  /* PLL entry clock: HSE */
                     RCC_CFGR_PLLMULL9;      /* PLL multiplication factor: x9 */
 
-        /* 4. Enable PLL */
+        /* 4. Enable PLL with bounded timeout */
         RCC->CR |= RCC_CR_PLLON;
+        timeout = 0;
         while (!(RCC->CR & RCC_CR_PLLRDY)) {
-            /* Wait for PLL to lock */
+            if (++timeout > PLL_LOCK_TIMEOUT) {
+                /* PLL failed to lock: turn off PLL, disable HSE, revert Flash, safe HSI default */
+                RCC->CR &= ~RCC_CR_PLLON;
+                RCC->CR &= ~RCC_CR_HSEON;
+                RCC->CFGR &= ~RCC_CFGR_SW;
+                FLASH->ACR = FLASH_ACR_LATENCY_0;
+                SystemCoreClock = 8000000U;
+                return false;
+            }
         }
 
-        /* 5. Select PLL as system clock source */
+        /* 5. Select PLL as system clock source with bounded timeout */
         RCC->CFGR &= ~RCC_CFGR_SW;
         RCC->CFGR |=  RCC_CFGR_SW_PLL;
+        timeout = 0;
         while ((RCC->CFGR & RCC_CFGR_SWS) != RCC_CFGR_SWS_PLL) {
-            /* Wait until PLL is used as system clock source */
+            if (++timeout > SWS_SWITCH_TIMEOUT) {
+                /* Switch timed out: revert to HSI, turn off PLL and HSE */
+                RCC->CFGR &= ~RCC_CFGR_SW;
+                RCC->CR &= ~RCC_CR_PLLON;
+                RCC->CR &= ~RCC_CR_HSEON;
+                FLASH->ACR = FLASH_ACR_LATENCY_0;
+                SystemCoreClock = 8000000U;
+                return false;
+            }
         }
 
         SystemCoreClock = 72000000U;
@@ -87,7 +109,7 @@ bool clock_init(clock_profile_t profile)
     } else {
         /* --- FALLBACK PROFILE: 64 MHz SYSCLK via 8 MHz HSI --- */
 
-        /* 1. Ensure HSI is enabled and stable */
+        /* 1. Ensure HSI is enabled and stable with bounded timeout */
         RCC->CR |= RCC_CR_HSION;
         while (!(RCC->CR & RCC_CR_HSIRDY)) {
             if (++timeout > HSI_STARTUP_TIMEOUT) {
@@ -110,17 +132,33 @@ bool clock_init(clock_profile_t profile)
                     RCC_CFGR_PPRE1_DIV2  |  /* APB1 /2 (32 MHz) */
                     RCC_CFGR_PLLMULL16;     /* PLL x16 (HSI/2 * 16 = 64 MHz) */
 
-        /* 4. Enable PLL */
+        /* 4. Enable PLL with bounded timeout */
         RCC->CR |= RCC_CR_PLLON;
+        timeout = 0;
         while (!(RCC->CR & RCC_CR_PLLRDY)) {
-            /* Wait for PLL to lock */
+            if (++timeout > PLL_LOCK_TIMEOUT) {
+                /* Fallback PLL failed: disable PLL, revert Flash, remain on safe 8 MHz HSI */
+                RCC->CR &= ~RCC_CR_PLLON;
+                RCC->CFGR &= ~RCC_CFGR_SW;
+                FLASH->ACR = FLASH_ACR_LATENCY_0;
+                SystemCoreClock = 8000000U;
+                return false;
+            }
         }
 
-        /* 5. Select PLL as system clock */
+        /* 5. Select PLL as system clock with bounded timeout */
         RCC->CFGR &= ~RCC_CFGR_SW;
         RCC->CFGR |=  RCC_CFGR_SW_PLL;
+        timeout = 0;
         while ((RCC->CFGR & RCC_CFGR_SWS) != RCC_CFGR_SWS_PLL) {
-            /* Wait until PLL is selected */
+            if (++timeout > SWS_SWITCH_TIMEOUT) {
+                /* Switch timed out: revert to HSI, turn off PLL */
+                RCC->CFGR &= ~RCC_CFGR_SW;
+                RCC->CR &= ~RCC_CR_PLLON;
+                FLASH->ACR = FLASH_ACR_LATENCY_0;
+                SystemCoreClock = 8000000U;
+                return false;
+            }
         }
 
         SystemCoreClock = 64000000U;

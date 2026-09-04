@@ -4,25 +4,28 @@ This document details the complete hypothesis-driven diagnostic chains for all d
 
 ---
 
-## Fault 1: Misaligned / Even Reset Vector (`faults/fault1_misaligned_vector/`)
+## Fixture F1: Misaligned / Even Reset Vector (`faults/f1/`)
 
 - **Symptom**:
-  The MCU halts immediately at boot. In GDB, the CPU traps in `UsageFault` or `HardFault` before entering `Reset_Handler` or `main()`.
+  The MCU halts immediately at boot. When running under a debugger, the CPU traps in `UsageFault` or `HardFault` before entering `Reset_Handler` or `main()`.
 - **Hypotheses**:
   1. Boot pins (BOOT0 / BOOT1) are improperly strapped, booting from System Memory or SRAM instead of Flash.
   2. The reset vector in the vector table has an even address (bit 0 = 0), violating the Cortex-M Thumb execution contract.
   3. Memory at address `0x08000000` is corrupted or blank (unprogrammed Flash).
   4. Stack pointer is pointing to an invalid memory region.
 - **Evidence**:
+  Static binary verification (VERIFIED on host):
   ```bash
   arm-none-eabi-readelf -x .isr_vector build/firmware.elf
   ```
-  Output shows word 1 (bytes 0x04..0x07) contains an even address ending in `0x08000220` (bit 0 = 0).
-  In GDB:
-  ```gdb
-  x/2wx 0x08000000
+  Binary dump shows word 1 (bytes 0x04..0x07) contains an even address ending in `0x08000220` (bit 0 = 0).
+  
+  Target GDB Inspection (Expected / Illustrative; hardware run UNVERIFIED):
+  ```text
+  (gdb) x/2wx 0x08000000
+  0x8000000: 0x20005000  0x08000220   <-- Word 1 bit 0 is 0!
   ```
-  Confirms the hardware attempts to load PC with an even address, triggering `UsageFault` (CFSR `INVSTATE` bit set).
+  Expected behavior on silicon: The processor attempts to load PC with an even address, triggering `UsageFault` (CFSR `INVSTATE` bit set) because Cortex-M3 never supports Arm 32-bit execution mode.
 - **Root Cause**:
   In `startup_faulty.s`, `.type Reset_Handler, %function` was omitted. The GNU assembler and linker therefore treat `Reset_Handler` as raw data rather than a Thumb function, omitting the required `+1` Thumb execution bit in the vector table entry.
 - **Minimal Fix**:
@@ -35,7 +38,7 @@ This document details the complete hypothesis-driven diagnostic chains for all d
 
 ---
 
-## Fault 2: LMA-VMA Symbol Mismatch (`faults/fault2_data_lma_mismatch/`)
+## Fixture F2: LMA-VMA Symbol Mismatch (`faults/f2/`)
 
 - **Symptom**:
   Firmware boots and executes cleanly into `main()`, but all initialized global and static C variables evaluate to `0` or random uninitialized values instead of their compile-time initializers.
@@ -45,7 +48,7 @@ This document details the complete hypothesis-driven diagnostic chains for all d
   3. `_sidata` (Flash LMA load address) was assigned the VMA RAM address instead of `LOADADDR(.data)`.
   4. The compiler placed initialized variables into `.bss` instead of `.data`.
 - **Evidence**:
-  Inspect the generated map file:
+  Inspect the generated map file (VERIFIED):
   ```bash
   grep -A 10 "\.data" build/firmware.map
   ```
@@ -69,7 +72,7 @@ This document details the complete hypothesis-driven diagnostic chains for all d
 
 ---
 
-## Fault 3: SRAM Overflow Assertion (`faults/fault3_memory_overflow/`)
+## Fixture F3: SRAM Overflow Assertion (`faults/f3/`)
 
 - **Symptom**:
   The linker aborts the build process with an error message, refusing to generate `firmware.elf`.
@@ -79,6 +82,7 @@ This document details the complete hypothesis-driven diagnostic chains for all d
   3. Linker memory region `RAM` has overflowed because statically allocated arrays exceed 20 KB capacity.
   4. User `ASSERT` directive in the linker script was triggered by memory exhaustion.
 - **Evidence**:
+  Host toolchain build execution (VERIFIED):
   ```bash
   make clean && make
   ```
