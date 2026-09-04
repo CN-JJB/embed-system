@@ -15,5 +15,5 @@ This document registers the authoritative specifications, upstream source reposi
 
 ## Provenance and Exclusion Notice
 
-- **Original Linker Script:** The linker script [`linker/stm32f103c8tx_flash.ld`](file:///g:/ai_project/research/emb/fundamentals/mcu/01-startup-linker-vector/linker/stm32f103c8tx_flash.ld) is an original pedagogical work written from GNU `ld` documentation and the STM32F103C8 memory specification.
+- **Original Linker Script:** The linker script [`linker/stm32f103c8tx_flash.ld`](linker/stm32f103c8tx_flash.ld) is an original pedagogical work written from GNU `ld` documentation and the STM32F103C8 memory specification.
 - **Ac6 Vendor Linker Scripts Excluded:** Ac6 / System Workbench linker templates carry non-redistribution restrictions and define 128 KB Flash. They are strictly prohibited and not redistributed in this curriculum.
