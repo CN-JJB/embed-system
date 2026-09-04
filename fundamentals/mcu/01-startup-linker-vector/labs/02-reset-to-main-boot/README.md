@@ -81,7 +81,7 @@ make clean && make
 ## Actual Verification Status
 
 - **Host Disassembly & Link Structure:** **VERIFIED** via `arm-none-eabi-objdump -d -S`.
-- **Target Hardware Execution:** **PARTIALLY VERIFIED** (disassembly and register mapping verified statically; physical target flash/run is marked UNVERIFIED in headless runner).
+- **Target Hardware Execution:** **UNVERIFIED** (no physical target flash/run was performed; host disassembly/register mapping evidence is reported separately above).
 
 ## Questions
 
