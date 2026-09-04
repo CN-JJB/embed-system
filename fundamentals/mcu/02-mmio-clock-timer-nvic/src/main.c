@@ -49,7 +49,7 @@ int main(void)
         if (g_tim2_ticks != last_tick) {
             last_tick = g_tim2_ticks;
 
-            /* Toggle User LED every 500 ms (0.5 Hz blink = 1.0s period) */
+            /* Toggle User LED every 500 ms (1 Hz square-wave blink, 1.0 s period) */
             if ((last_tick % 500) == 0) {
                 if (GPIOC->ODR & (1U << 13)) {
                     GPIOC->BRR = (1U << 13);  /* LED ON */
