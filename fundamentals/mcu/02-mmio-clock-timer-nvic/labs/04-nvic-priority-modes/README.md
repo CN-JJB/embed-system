@@ -41,7 +41,7 @@ make clean && make
    ```gdb
    print /x $lr
    ```
-   Observe `0xFFFFFFF9` or `0xFFFFFFFD`.
+   Expected return value: `0xFFFFFFF9` or `0xFFFFFFFD`.
 4. Inspect physical priority byte written to NVIC:
    ```gdb
    # TIM2 IRQ number is 28. Physical register is NVIC->IP[28]
@@ -54,7 +54,7 @@ make clean && make
 - `NVIC->IP[28]` contains `0x60` ($6 \ll 4$).
 
 ## Actual Verification Status
-**VERIFIED** (host disassembly and symbol audit).
+**PARTIALLY VERIFIED**. Disassembly and symbol audit are **VERIFIED** on host toolchain. Target runtime GDB sessions (`IPSR`, `EXC_RETURN`, and live hardware priority register reads) are **EXPECTED / ILLUSTRATIVE — TARGET RUN UNVERIFIED**.
 
 ## Questions
 1. Why does STM32F103 put the 4 priority bits in the upper nibble (`[7:4]`) rather than the lower nibble (`[3:0]`)?

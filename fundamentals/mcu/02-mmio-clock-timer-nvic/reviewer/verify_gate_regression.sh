@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # verify_gate_regression.sh: Reviewer Verification for M02 Gate Fault Fixture
-# Proves that the seeded Gate fixture exhibits the timer prescaler and uncleared flag defects.
+# Proves that the seeded Gate fixture exhibits the One-Pulse Mode (TIM_CR1_OPM) defect.
 # ==============================================================================
 set -euo pipefail
 
@@ -22,25 +22,20 @@ fi
 
 DISASM=$(arm-none-eabi-objdump -d "${ELF}")
 
-# 2. Check TIM2_IRQHandler for omission of SR clear
-ISR_DISASM=$(echo "${DISASM}" | awk '/<TIM2_IRQHandler>:/,/(^$|^[0-9a-f]+ <)/')
-# In STM32F1, TIM2_BASE is 0x40000000, SR is offset 0x10.
-# A clear would write ~TIM_SR_UIF (0xFFFE) to offset 0x10.
-# The seeded fault deliberately omits this write.
-if echo "${ISR_DISASM}" | grep -E "str.*\[.*#16\]|strh.*\[.*#16\]" >/dev/null 2>&1; then
-    echo "ERROR: Seeded fault missing! TIM2_IRQHandler unexpectedly contains a store to offset 16 (SR)!" >&2
+# 2. Check tim2_init_1khz for seeded One-Pulse Mode configuration (TIM_CR1_CEN | TIM_CR1_OPM = 0x9)
+INIT_DISASM=$(echo "${DISASM}" | awk '/<tim2_init_1khz>:/ {flag=1} flag && !/<tim2_init_1khz>:/ && /<[a-zA-Z0-9_]+>:/ {flag=0} flag {print}')
+if ! echo "${INIT_DISASM}" | grep -E "movs\s+r[0-9]+,\s*#9" >/dev/null 2>&1 || ! echo "${INIT_DISASM}" | grep -E "str\s+r[0-9]+,\s*\[r[0-9]+,\s*#0\]" >/dev/null 2>&1; then
+    echo "ERROR: Seeded fault missing! tim2_init_1khz does not configure CR1 with #9 (TIM_CR1_CEN | TIM_CR1_OPM)!" >&2
     exit 1
 fi
-echo "[PASS] Disassembly confirms TIM2_IRQHandler omits clearing TIM2->SR (seeded interrupt storm)"
+echo "[PASS] Disassembly confirms tim2_init_1khz writes #9 (TIM_CR1_CEN | TIM_CR1_OPM) to TIM2->CR1"
 
-# 3. Check tim2_init_1khz for incorrect prescaler math (division by 2,000,000)
-# GCC optimizes (timclk / 2 / 1000000) into unsigned division by 2,000,000 via reciprocal
-# multiplication with magic constant 0x431bde83.
-INIT_DISASM=$(echo "${DISASM}" | grep -A 35 "<tim2_init_1khz>:")
-if ! echo "${INIT_DISASM}" | grep -qi "431bde83"; then
-    echo "ERROR: Seeded fault missing! tim2_init_1khz does not divide by 2,000,000 (missing reciprocal 0x431bde83)!" >&2
+# 3. Check TIM2_IRQHandler to verify UIF is properly cleared (no interrupt storm; pure OPM fault)
+ISR_DISASM=$(echo "${DISASM}" | awk '/<TIM2_IRQHandler>:/ {flag=1} flag && !/<TIM2_IRQHandler>:/ && /<[a-zA-Z0-9_]+>:/ {flag=0} flag {print}')
+if ! echo "${ISR_DISASM}" | grep -E "str.*\[.*#16\]|strh.*\[.*#16\]" >/dev/null 2>&1; then
+    echo "ERROR: Seeded fixture invalid! TIM2_IRQHandler must clear UIF (offset 16) so fault is purely One-Pulse Mode!" >&2
     exit 1
 fi
-echo "[PASS] Disassembly confirms tim2_init_1khz divides by 2,000,000 (reciprocal 0x431bde83 for halved clock assumption)"
+echo "[PASS] Disassembly confirms TIM2_IRQHandler clears TIM2->SR (clean OPM halt, no interrupt storm)"
 
 echo "=== M02 GATE FAULT FIXTURE PROVEN CORRECT (STATIC/BINARY REGRESSION PASSED) ==="

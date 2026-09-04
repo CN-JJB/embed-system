@@ -11,10 +11,9 @@ Implement a 4-channel 100 Hz software PWM controller on GPIOA pins PA0–PA3 usi
 5. Verify timing on an oscilloscope or logic analyzer.
 
 ## Directory Structure
-- `starter/`: Starter scaffold with incomplete PWM logic (used for negative verification).
-- `reference/`: Fully working reference implementation meeting all timing, atomic MMIO, and interface criteria.
-- `validate.sh`: Comprehensive validator that inspects and builds an arbitrary learner challenge directory.
-- `verify_challenge.sh`: Verification script that runs `validate.sh` on reference and verifies negative rejection of starter.
+- `starter/`: Starter scaffold with challenge header and template source.
+- `validate.sh`: Acceptance validator that compiles, links, and inspects your submission artifact.
+- `verify_challenge.sh`: Local challenge test runner.
 
 ## Verification
 To validate your submission:

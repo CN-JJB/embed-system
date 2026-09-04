@@ -36,13 +36,13 @@ bool pwm_init(uint32_t timclk_hz)
 
     /* 3. Configure TIM2 for 10 kHz tick (100 us)
      *    Target: 10,000 updates/sec.
-     *    Prescaler: prescale to 1 MHz (timclk / 1000000 - 1)
+     *    Prescaler: prescale to 1 MHz (timclk / 1000000 - 1) -> 71 at 72 MHz
      *    ARR: 100 - 1 = 99 (100 us period)
      */
     uint32_t prescaler = (timclk_hz / 1000000U) - 1U;
     TIM2->CR1 = 0;
     TIM2->PSC = (uint16_t)prescaler;
-    TIM2->ARR = 99U;
+    TIM2->ARR = (uint16_t)(PWM_STEPS - 1U); /* 99 -> 100 counts */
     TIM2->CNT = 0;
 
     /* Generate update event to load shadow registers */
@@ -64,11 +64,49 @@ bool pwm_init(uint32_t timclk_hz)
 
 bool pwm_set_duty(uint8_t channel, uint8_t duty_percent)
 {
-    if (channel >= PWM_NUM_CHANNELS || duty_percent > 100) {
+    if (channel >= PWM_NUM_CHANNELS || duty_percent > PWM_STEPS) {
         return false;
     }
     g_channel_duty[channel] = duty_percent;
     return true;
+}
+
+uint8_t pwm_get_duty(uint8_t channel)
+{
+    if (channel >= PWM_NUM_CHANNELS) {
+        return 0xFF;
+    }
+    return g_channel_duty[channel];
+}
+
+uint8_t pwm_step(void)
+{
+    static uint8_t step = 0;
+    uint32_t set_mask = 0;
+    uint32_t rst_mask = 0;
+
+    for (uint8_t ch = 0; ch < PWM_NUM_CHANNELS; ch++) {
+        if (step < g_channel_duty[ch]) {
+            set_mask |= (1U << ch);
+        } else {
+            rst_mask |= (1U << ch);
+        }
+    }
+
+    /* Atomic GPIO output updates */
+    if (set_mask) {
+        GPIOA->BSRR = set_mask;
+    }
+    if (rst_mask) {
+        GPIOA->BRR = rst_mask;
+    }
+
+    uint8_t current_step = step;
+    step++;
+    if (step >= PWM_STEPS) {
+        step = 0;
+    }
+    return current_step;
 }
 
 void TIM2_IRQHandler(void)
@@ -78,30 +116,6 @@ void TIM2_IRQHandler(void)
         TIM2->SR = (uint16_t)~TIM_SR_UIF;
         (void)TIM2->SR; /* Read back to ensure register write commits */
 
-        static uint8_t step = 0;
-
-        uint32_t set_mask = 0;
-        uint32_t rst_mask = 0;
-
-        for (uint8_t ch = 0; ch < PWM_NUM_CHANNELS; ch++) {
-            if (step < g_channel_duty[ch]) {
-                set_mask |= (1U << ch);
-            } else {
-                rst_mask |= (1U << ch);
-            }
-        }
-
-        /* Atomic GPIO output updates */
-        if (set_mask) {
-            GPIOA->BSRR = set_mask;
-        }
-        if (rst_mask) {
-            GPIOA->BRR = rst_mask;
-        }
-
-        step++;
-        if (step >= 100) {
-            step = 0;
-        }
+        pwm_step();
     }
 }

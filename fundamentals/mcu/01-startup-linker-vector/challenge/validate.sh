@@ -48,7 +48,7 @@ if ! grep -qi "ASSERT" "${LDSCRIPT}"; then
 fi
 echo "[PASS] Linker overflow assertions (ASSERT) verified"
 
-# 2. Inspect Startup Assembly
+# 2. Inspect Startup Assembly file existence
 STARTUP_SRC=$(find "${SUBMISSION_DIR}" -maxdepth 1 -name "*.s" | head -n 1)
 if [ -z "${STARTUP_SRC}" ] || [ ! -f "${STARTUP_SRC}" ]; then
     echo "ERROR: No startup assembly file (*.s) found in '${SUBMISSION_DIR}'!" >&2
@@ -56,53 +56,41 @@ if [ -z "${STARTUP_SRC}" ] || [ ! -f "${STARTUP_SRC}" ]; then
 fi
 echo "[PASS] Found startup assembly: $(basename "${STARTUP_SRC}")"
 
-# Verify Reset_Handler sequence requirements
-if ! grep -q "SystemInit" "${STARTUP_SRC}"; then
-    echo "ERROR: Startup code must call SystemInit!" >&2
-    exit 1
-fi
-if ! grep -q "_sdata" "${STARTUP_SRC}" || ! grep -q "_sidata" "${STARTUP_SRC}"; then
-    echo "ERROR: Startup code must implement .data copy loop from Flash to RAM!" >&2
-    exit 1
-fi
-if ! grep -q "_sbss" "${STARTUP_SRC}" || ! grep -q "_ebss" "${STARTUP_SRC}"; then
-    echo "ERROR: Startup code must implement .bss zeroing loop in RAM!" >&2
-    exit 1
-fi
-if ! grep -q "__libc_init_array" "${STARTUP_SRC}"; then
-    echo "ERROR: Startup code must call __libc_init_array!" >&2
-    exit 1
-fi
-if ! grep -q "main" "${STARTUP_SRC}"; then
-    echo "ERROR: Startup code must branch to main!" >&2
-    exit 1
-fi
-echo "[PASS] Startup assembly contains complete reset sequence (SystemInit, data copy, bss zero, init_array, main)"
-
-# 3. Build submission against test harness using strict flags (-nostartfiles, -Wall, -Wextra, -Werror)
+# 3. Compile and Link submission against test harness using strict flags (-nostartfiles, -Wall, -Wextra, -Werror)
 rm -rf "${TEST_BUILD_DIR}"
 mkdir -p "${TEST_BUILD_DIR}"
 
+TEST_STARTUP_OBJ="${TEST_BUILD_DIR}/startup.o"
 TEST_ELF="${TEST_BUILD_DIR}/submission_test.elf"
 TEST_MAP="${TEST_BUILD_DIR}/submission_test.map"
 
+# Compile startup file individually to inspect relocations
+if ! arm-none-eabi-gcc -mcpu=cortex-m3 -mthumb -g3 -c "${STARTUP_SRC}" -o "${TEST_STARTUP_OBJ}" 2>"${TEST_BUILD_DIR}/startup_err.log"; then
+    echo "ERROR: Startup assembly compilation failed!" >&2
+    cat "${TEST_BUILD_DIR}/startup_err.log" >&2
+    exit 1
+fi
+
 echo "Compiling and linking submission with test harness..."
-arm-none-eabi-gcc -mcpu=cortex-m3 -mthumb -mfloat-abi=soft \
+if ! arm-none-eabi-gcc -mcpu=cortex-m3 -mthumb -mfloat-abi=soft \
     -O2 -g3 -Wall -Wextra -Werror \
     -ffunction-sections -fdata-sections \
     -DSTM32F103xB -I"${M01_DIR}/include" -I"${CMSIS_DIR}" \
     -T"${LDSCRIPT}" -nostartfiles -Wl,-e,Reset_Handler \
     -Wl,--gc-sections -Wl,-Map="${TEST_MAP}",--cref \
     --specs=nano.specs --specs=nosys.specs \
-    "${STARTUP_SRC}" \
+    "${TEST_STARTUP_OBJ}" \
     "${M01_DIR}/src/main.c" \
     "${M01_DIR}/src/system_stm32f1xx.c" \
     "${M01_DIR}/src/runtime_glue.c" \
-    -o "${TEST_ELF}"
-
+    -o "${TEST_ELF}" 2>"${TEST_BUILD_DIR}/link_err.log"; then
+    echo "ERROR: Link failed against test harness!" >&2
+    cat "${TEST_BUILD_DIR}/link_err.log" >&2
+    exit 1
+fi
 echo "[PASS] Submission compiled and linked cleanly with -nostartfiles and -Werror"
 
-# 4. Binary and Architectural Inspection
+# 4. Binary and Architectural Inspection of Linked Artifact
 # Check memory footprint
 FLASH_SIZE=$(arm-none-eabi-size -B "${TEST_ELF}" | awk 'NR==2 {print $1 + $2}')
 RAM_SIZE=$(arm-none-eabi-size -B "${TEST_ELF}" | awk 'NR==2 {print $2 + $3}')
@@ -123,6 +111,10 @@ echo "[PASS] Vector 0 correctly sets initial MSP to 0x20005000"
 
 # Check vector table Reset vector (Vector 1)
 RESET_SYM_ADDR=$(arm-none-eabi-nm -n "${TEST_ELF}" | grep " Reset_Handler" | head -n 1 | awk '{print $1}')
+if [ -z "${RESET_SYM_ADDR}" ]; then
+    echo "ERROR: Reset_Handler symbol missing from ELF symbol table!" >&2
+    exit 1
+fi
 EXPECTED_RESET_VEC=$((0x${RESET_SYM_ADDR} | 1))
 
 VEC1_RAW=$(arm-none-eabi-readelf -x .isr_vector "${TEST_ELF}" | awk '/0x08000000/ {print $3}')
@@ -143,6 +135,59 @@ if [ "${ACTUAL_ENTRY}" -ne "${EXPECTED_RESET_VEC}" ]; then
     exit 1
 fi
 echo "[PASS] ELF header entry point correctly points to Thumb Reset_Handler"
+
+# 5. Inspect Reset_Handler Relocations and Linked Disassembly
+# Do NOT rely solely on source grepping: inspect actual compiled instructions and relocations
+RELOCS=$(arm-none-eabi-objdump -r "${TEST_STARTUP_OBJ}")
+DISASM=$(arm-none-eabi-objdump -d "${TEST_ELF}")
+RESET_DISASM=$(echo "${DISASM}" | awk '/<Reset_Handler>:/ {flag=1} flag && !/<Reset_Handler>:/ && /^[0-9a-f]+ </ {flag=0} flag {print}')
+
+# Check actual call to SystemInit
+if ! echo "${RESET_DISASM}" | grep -qE "bl.*<SystemInit>"; then
+    echo "ERROR: Reset_Handler does not execute branch to SystemInit!" >&2
+    exit 1
+fi
+echo "[PASS] Reset_Handler contains genuine call to SystemInit"
+
+# Check actual call to __libc_init_array
+if ! echo "${RESET_DISASM}" | grep -qE "bl.*<__libc_init_array>"; then
+    echo "ERROR: Reset_Handler does not execute branch to __libc_init_array!" >&2
+    exit 1
+fi
+echo "[PASS] Reset_Handler contains genuine call to __libc_init_array"
+
+# Check actual transfer to main
+if ! echo "${RESET_DISASM}" | grep -qE "(bl|b|bx|blx).*<main>"; then
+    echo "ERROR: Reset_Handler does not transfer control to main!" >&2
+    exit 1
+fi
+echo "[PASS] Reset_Handler transfers control to main"
+
+# Check data copy path:
+# Must reference _sdata, _edata, _sidata in relocations AND contain a load/store loop in disassembly
+if ! echo "${RELOCS}" | grep -q "_sdata" || ! echo "${RELOCS}" | grep -q "_sidata"; then
+    echo "ERROR: Reset_Handler does not reference _sdata and _sidata symbols!" >&2
+    exit 1
+fi
+
+# In disassembly: must have ldr, str, cmp, and backward branch loop for data copy
+# Check that Reset_Handler contains at least 2 distinct loops (one for data copy, one for bss zero)
+STORE_COUNT=$(echo "${RESET_DISASM}" | grep -cE "str(\.w)?\s+r[0-9]" || true)
+LOAD_COUNT=$(echo "${RESET_DISASM}" | grep -cE "ldr(\.w)?\s+r[0-9]" || true)
+LOOP_BRANCH_COUNT=$(echo "${RESET_DISASM}" | grep -cE "(bcc|blo|bne|bcs)\.n?\s+[0-9a-f]+" || true)
+
+if [ "${LOAD_COUNT}" -lt 4 ] || [ "${STORE_COUNT}" -lt 2 ] || [ "${LOOP_BRANCH_COUNT}" -lt 2 ]; then
+    echo "ERROR: Reset_Handler lacks authentic data-copy and bss-zeroing loops in compiled code!" >&2
+    exit 1
+fi
+echo "[PASS] Reset_Handler contains authentic data copy and BSS zeroing loops"
+
+# Check BSS zero path:
+if ! echo "${RELOCS}" | grep -q "_sbss" || ! echo "${RELOCS}" | grep -q "_ebss"; then
+    echo "ERROR: Reset_Handler does not reference _sbss and _ebss symbols!" >&2
+    exit 1
+fi
+echo "[PASS] Reset_Handler references _sbss and _ebss symbols"
 
 # Check required sections
 REQUIRED_SECTIONS=(".isr_vector" ".text" ".rodata" ".init_array" ".data" ".bss")

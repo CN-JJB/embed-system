@@ -3,7 +3,7 @@
 > Status: **Author Implementation Complete — Leader Review Required**  
 > Author: Antigravity Automated Bare-Metal Subsystem Engineer  
 > Date: **2026-09-04**  
-> Baseline Reference: Issue #16, `roadmap/phase-2-stm32-freertos.md`, `research/phase-2/2026-09-03-stm32-freertos-curriculum-design.md`, Leader Rework #1 (Issue #16 comment `5540619118`)  
+> Baseline Reference: Issue #16, `roadmap/phase-2-stm32-freertos.md`, `research/phase-2/2026-09-03-stm32-freertos-curriculum-design.md`, Leader Rework #1 (Issue #16 comment `5540619118`), Leader Rework #2 (Issue #16 comment `5541016423`)  
 > Target Branch: `tutorial/p2-m01-m02`  
 > Scope Implemented: **P2-M01 (3.5 h MUST) + P2-M02 (4.5 h MUST) = 8.0 h MUST**
 
@@ -18,6 +18,8 @@
 - [x] **NO** Linux / U-Boot / Buildroot.
 - [x] **NO** HAL cookbooks or auto-generated STM32Cube code in MUST paths.
 - [x] **NO** Ac6 vendor linker script redistribution.
+- [x] Challenge reference isolation: references moved to `reviewer/challenge-reference/`, learner READMEs clean.
+- [x] Assessment validity: disassembly & relocation inspection, dynamic mutation suites, novel OPM Gate fault.
 
 ---
 
@@ -74,7 +76,7 @@ All verification claims are audited against actual execution:
 | **M01 Vector Entry 0 & 1** | Decoded `.isr_vector` in `verify_m01.sh` | Word 0 = `0x20005000` (MSP), Word 1 = `0x08000221` (Thumb Reset) | **VERIFIED** | Vector table words 0 and 1 strictly match silicon reset boot contract. | Does not prove power-on reset rise time. |
 | **M01 Symbols & Allocator Contract** | `arm-none-eabi-nm -n build/firmware.elf` | `Reset_Handler`, `_sidata`, `_sdata`, `__init_array` present; `_start`, `malloc` absent | **VERIFIED** | Suppresses CRT startfiles; no heap allocator bloat. | Does not prove dynamic allocations in optional extensions. |
 | **M01 Automated Static Suite** | `bash fundamentals/mcu/01-startup-linker-vector/scripts/verify_m01.sh` | All 9 static checks PASS | **VERIFIED** | Memory bounds, ELF entry, vector 0/1, sections, and Makefile dependency tracking verified. | Does not replace physical hardware probe. |
-| **M01 Challenge Validator** | `bash fundamentals/mcu/01-startup-linker-vector/challenge/verify_challenge.sh` | Reference PASSES, Starter FAILS | **VERIFIED** | Validator inspects actual submission for 64K/20K bounds, vector 0/1, data copy, bss zero, init_array, and rejects empty/starter code. | Does not evaluate coding style or manual documentation quality. |
+| **M01 Challenge Validator & Mutations** | `bash fundamentals/mcu/01-startup-linker-vector/challenge/verify_challenge.sh` | Reference PASSES; all 6 negative mutations rejected | **VERIFIED** | Validator inspects linked binary and disassembly (SystemInit, copy/zero loops, init_array, main transfer) and catches all mutations. | Does not evaluate coding style or manual documentation quality. |
 | **M01 Fault F1 (Missing Thumb bit)** | `make -C faults/f1 clean all` && `arm-none-eabi-readelf -x .isr_vector` | Vector 1 has even address `0x08000090` | **PARTIALLY VERIFIED** | Binary has even address in vector 1. | Target `UsageFault (INVSTATE)` remains UNVERIFIED without hardware. |
 | **M01 Fault F2 (LMA/VMA Mismatch)** | `make -C faults/f2 clean all` && `arm-none-eabi-readelf -s` | `_sidata = 0x20000000` (RAM instead of Flash) | **PARTIALLY VERIFIED** | Linker symbol `_sidata` incorrectly points to RAM VMA. | Target memory corruption remains UNVERIFIED without hardware. |
 | **M01 Fault F3 (Memory Overflow)** | `make -C faults/f3 clean all` | Linker error: SRAM exhausted (ASSERT triggered) | **VERIFIED** | Linker assertion statically halts build on overflow. | Does not prove dynamic stack collision during runtime. |
@@ -84,13 +86,13 @@ All verification claims are audited against actual execution:
 | **M02 Timer Arithmetic Check** | Static shell arithmetic in `verify_m02.sh` | 72 MHz / 72 / 1000 == 1000 Hz update event rate | **VERIFIED** | Prescaler and ARR calculations strictly produce 1 kHz event rate (500 Hz toggle square wave). | Does not prove crystal PPM tolerance. |
 | **M02 Bounded Clock Initialization** | Code inspection & compile of `clock.c` | Bounded loops with explicit retry counters for HSE/HSI, PLL lock, and SWS switch | **VERIFIED** | Prevents infinite loop hang on oscillator/PLL failure; caller receives explicit success/fail status. | Hardware fallback transition remains UNVERIFIED without physical clock glitching. |
 | **M02 Automated Static Suite** | `bash fundamentals/mcu/02-mmio-clock-timer-nvic/scripts/verify_m02.sh` | All checks PASS | **VERIFIED** | Absence of HAL/Cube code, register symbols present, arithmetic verified. | Does not prove physical square wave. |
-| **M02 Challenge Validator** | `bash fundamentals/mcu/02-mmio-clock-timer-nvic/challenge/verify_challenge.sh` | Reference PASSES, Starter FAILS | **VERIFIED** | Validator inspects 4-channel PWM, atomic BSRR/BRR writes, 10 kHz tick, zero HAL, and rejects incomplete starter. | Physical PWM duty cycle accuracy on pins remains UNVERIFIED without oscilloscope. |
+| **M02 Challenge Validator & Mutations** | `bash fundamentals/mcu/02-mmio-clock-timer-nvic/challenge/verify_challenge.sh` | Reference PASSES; all 6 negative mutations rejected | **VERIFIED** | Host unit harness tests bounds/wrap/ODR; cross-compilation disassembly verifies ARR=99, DIER, UIF clear, BSRR/BRR, 0 ODR, 4 channels, wrap. | Physical PWM duty cycle accuracy on pins remains UNVERIFIED without oscilloscope. |
 | **M02 Fault F1 (Unclocked Peripheral)** | `make -C faults/f1 clean all` | Builds without APB1 timer clock enable | **PARTIALLY VERIFIED** | Source code confirms RCC APB1ENR clock gate omitted. | Silent register write ignore on peripheral bus remains UNVERIFIED without hardware. |
 | **M02 Fault F2 (Uncleared UIF Flag)** | `make -C faults/f2 clean all` && `arm-none-eabi-objdump -d` | Disassembly confirms no store to `TIM2->SR` | **PARTIALLY VERIFIED** | Disassembly proves interrupt flag is never cleared. | Target interrupt storm and core starvation remain UNVERIFIED without hardware. |
 | **M02 Fault F3 (Timer Doubler Math)** | `make -C faults/f3 clean all` && Disassembly | Prescaler set to 35 (2000 events/s) | **PARTIALLY VERIFIED** | Disassembly confirms PSC=35 derived from halved clock assumption. | 1 kHz output square wave remains UNVERIFIED without oscilloscope. |
 | **M02 Fault F4 (NVIC Priority Encoding)** | `make -C faults/f4 clean all` | Raw logical 6 written to unshifted `NVIC->IP` | **PARTIALLY VERIFIED** | Source confirms raw integer write without `<< 4` shift. | Hardware reading back 0x00 from unimplemented bits [3:0] remains UNVERIFIED without hardware. |
 | **M02 Fault F5 (RMW Concurrency Hazard)** | `make -C faults/f5 clean all` && Disassembly | Disassembly confirms non-atomic `LDR-EOR-STR` sequence on `GPIOA->ODR` | **PARTIALLY VERIFIED** | Non-atomic instruction sequence proven in ELF disassembly. | Intermittent pulse loss remains UNVERIFIED without logic analyzer under interrupt load. |
-| **M02 Gate Fixture** | `bash fundamentals/mcu/02-mmio-clock-timer-nvic/reviewer/verify_gate_regression.sh` | Disassembly proves uncleared SR and reciprocal division by 2,000,000 | **PARTIALLY VERIFIED** | Disassembly confirms presence of both seeded defects (storm and prescaler). | Target execution hang remains UNVERIFIED without hardware. |
+| **M02 Gate Fixture (One-Pulse Mode)** | `bash fundamentals/mcu/02-mmio-clock-timer-nvic/reviewer/verify_gate_regression.sh` | Disassembly proves CR1 configured with OPM and ISR clears SR | **PARTIALLY VERIFIED** | Disassembly confirms presence of seeded OPM fault and clean ISR flag clearance. | Target execution single-pulse halt remains UNVERIFIED without hardware. |
 | **Top-Level Foundation Suite** | `make -C fundamentals/mcu check` | Exited code 0, all static checks PASS | **VERIFIED** | Module 1 and Module 2 automated suites execute and pass end-to-end. | - |
 | **Target Silicon Flashing & Run** | OpenOCD / ST-Link target flash | None (Headless runner; no hardware attached) | **UNVERIFIED** | - | Physical flashing, run-mode entry, and reset behavior. |
 | **Live GDB Register Inspection** | OpenOCD SWD remote target attach | None (Headless runner; no hardware attached) | **UNVERIFIED** | - | Live target register reads (`TIM2->SR`, `NVIC->IP`). GDB commands are illustrative. |

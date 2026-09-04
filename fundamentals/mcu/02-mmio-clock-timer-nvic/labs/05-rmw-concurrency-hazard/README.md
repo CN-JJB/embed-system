@@ -33,7 +33,7 @@ make clean && make
    str  r1, [r0, #12]   ; Write back ODR
    ```
 3. In `main.c`, execute a tight loop calling `gpio_toggle_pa2_non_atomic_rmw()` while TIM2 interrupts fire at 10 kHz:
-   Observe on a logic analyzer: occasionally PA1 toggle modifies ODR while PA2 RMW is in flight, resulting in lost edges and glitching.
+   Target behavior on logic analyzer (EXPECTED / UNVERIFIED without physical probe): occasionally PA1 toggle modifies ODR while PA2 RMW is in flight, resulting in lost edges and glitching.
 4. Replace `gpio_toggle_pa2_non_atomic_rmw()` with `gpio_toggle_pa2_atomic()`:
    On target, record whether the previously observed lost-edge symptom disappears. This physical regression remains **UNVERIFIED** until measured.
 

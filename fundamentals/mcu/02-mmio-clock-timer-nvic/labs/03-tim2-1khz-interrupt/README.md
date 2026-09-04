@@ -41,12 +41,11 @@ make clean && make
 
 ## Actual Verification Status
 - **Target Compile/Link**: **VERIFIED** via GNU Binutils.
-- **Physical Waveform Evidence**: **UNVERIFIED** (Headless runner; hardware probe verification required on physical bench).
-- **Evidence Statement**:
+- **Evidence Statement (EXPECTED / TARGET RUN UNVERIFIED)**:
   ```text
-  Observation: PA1 periodic toggle measured at 1.0 ms period on hardware.
+  Expected Observation: PA1 periodic toggle at 1.0 ms period (500 Hz square wave) on hardware.
   Interpretation: Verifies PSC=71, ARR=999 divides 72 MHz clock to 1 kHz.
-  Non-Proof: Does not prove board crystal precision across temperature.
+  Non-Proof: Static build does not measure physical crystal precision or temperature drift.
   ```
 
 ## Questions

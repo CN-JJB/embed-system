@@ -45,7 +45,7 @@ make clean && make
 - Timer clock doubling rule ensures APB1 timer clock is 72 MHz, NOT 36 MHz.
 
 ## Actual Verification Status
-**VERIFIED** (host toolchain & static calculation check). Arithmetic validated by `verify_m02.sh`.
+**PARTIALLY VERIFIED**. Toolchain build and clock arithmetic are **VERIFIED** on host by `verify_m02.sh`. Live target register readout via GDB is **EXPECTED / ILLUSTRATIVE — TARGET RUN UNVERIFIED**.
 
 ## Questions
 1. What occurs if `FLASH->ACR` latency is left at 0 wait states and SYSCLK is switched to 72 MHz? (Hint: CPU attempts to fetch instructions faster than Flash access time).

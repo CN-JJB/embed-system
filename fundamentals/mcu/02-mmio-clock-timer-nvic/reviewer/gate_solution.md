@@ -18,41 +18,57 @@ symptom
 ```
 
 ### Step 1: Symptom
-The Gate firmware in `gate/gate_fault_firmware/` compiles cleanly with zero warnings, but upon execution on hardware or simulation:
-1. The processor enters an infinite loop inside `TIM2_IRQHandler`; the main thread loop in `main()` ceases forward progress.
-2. Timing analysis indicates that before lockup, update events occur at 2000 events/s (2.0 kHz event rate). Because PA1 toggles once per event, the resulting square wave on an oscilloscope is 1000 Hz (1.0 ms square-wave period: 500 us HIGH, 500 us LOW), whereas the intended 1000 events/s rate should produce a 500 Hz square wave (2.0 ms square-wave period: 1.0 ms HIGH, 1.0 ms LOW).
+The Gate firmware in `gate/gate_fault_firmware/` compiles cleanly with zero warnings and executes on hardware or simulation, but:
+1. `g_tim2_ticks` increments to `1` and permanently ceases forward progress; the heartbeat indicator pin (PA1) toggles exactly once at startup and remains permanently frozen.
+2. The main thread loop in `main()` continues running without hanging (no watchdog reset, no hard fault, no interrupt lockup), but periodic timer interrupts cease completely after the first event.
 
 ### Step 2: Hypotheses
-1. **Clock prescaler math error**: The timer prescaler `TIM2->PSC` was calculated using an assumed 36 MHz clock instead of recognizing the doubled 72 MHz timer clock on APB1.
-2. **Interrupt storm**: The peripheral interrupt flag in `TIM2->SR` is not cleared inside `TIM2_IRQHandler`, or is cleared without a memory synchronization barrier (`__DSB()`).
-3. **NVIC priority conflict**: `TIM2` priority was configured with an unshifted priority value.
-4. **Flash wait state failure**: Flash latency was left at 0 WS, causing instruction prefetch corruptions.
+1. **One-Pulse Mode Misconfiguration (`TIM_CR1_OPM`)**: Bit 3 (`OPM`) of `TIM2->CR1` was erroneously set alongside `CEN` during timer startup, directing hardware to clear `CEN` upon the first update event.
+2. **Interrupt Flag Omission (`TIM_SR_UIF`)**: The interrupt service routine failed to clear UIF, causing an interrupt storm (Refuted: Main thread loop continues forward progress, confirming no starvation).
+3. **Timer Prescaler / Auto-Reload Overflow**: PSC or ARR was set to `0xFFFFFFFF` or misconfigured so that the next period is too long to observe.
+4. **NVIC Masking / Priority Lockout**: The NVIC interrupt line was masked by BASEPRI / PRIMASK or disabled in software after the first firing.
 
 ### Step 3: Evidence Collection
 Static binary audit (VERIFIED on host):
-1. Disassembly of `TIM2_IRQHandler` in `gate_fault_firmware` reveals no store (`STR`) to `TIM2_BASE + 0x10` (`TIM2->SR`).
-2. Disassembly of `tim2_init_1khz` reveals `TIM2->PSC` is loaded with literal `35` (`0x23`).
+1. Disassembly of `tim2_init_1khz` in `gate_fault_firmware` reveals:
+   ```text
+   movs r3, #9
+   str  r3, [r2, #0]
+   ```
+   where `r2` holds `TIM2_BASE` (`0x40000000`) and offset `0` corresponds to `TIM2->CR1`. Value `0x09` is `TIM_CR1_CEN (0x01) | TIM_CR1_OPM (0x08)`.
+2. Disassembly of `TIM2_IRQHandler` confirms `TIM2->SR = (uint16_t)~TIM_SR_UIF;` is properly executed:
+   ```text
+   movw r2, #65534   @ 0xfffe
+   str  r2, [r3, #16]
+   ldr  r3, [r3, #16]
+   ```
+   ruling out an interrupt storm.
 
 Diagnostic command and expected interpretation on target hardware (Target run UNVERIFIED):
 ```text
 (gdb) continue
 ^C
-(gdb) backtrace
-#0  TIM2_IRQHandler () at timer_gate.c:30
-#1  <signal handler called>
-#2  main () at ../../src/main.c:28
+(gdb) print g_tim2_ticks
+$1 = 1      <-- Incremented exactly once upon startup
+
+(gdb) print /x TIM2->CR1
+$2 = 0x8    <-- OPM bit (bit 3) is set; CEN (bit 0) was automatically cleared by hardware on update event!
 
 (gdb) print /x TIM2->SR
-$1 = 0x1    <-- Bit 0 (UIF) remains asserted; hardware request line never clears!
-
-(gdb) print TIM2->PSC
-$2 = 35     <-- Prescaler is 35 (yields 2.0 MHz counter clock -> 2000 events/s)
+$3 = 0x0    <-- UIF cleared; no pending interrupt
 ```
 
 ### Step 4: Root Cause
-Two distinct defects are present in `timer_gate.c`:
-1. **Interrupt Flag Omission**: `TIM2_IRQHandler` toggles PA1 and increments tick, but omits clearing `TIM2->SR = ~TIM_SR_UIF;`. When the core executes exception return (`BX LR`), the NVIC observes the peripheral line still active and immediately re-enters the ISR, completely starving Thread mode.
-2. **Timer Clock Prescaler Miscalculation**: The calculation `assumed_clk = timclk_hz / 2U;` assumes the timer clock is halved by the APB1 prescaler (/2). Per RM0008 Section 6.2, when APB1 prescaler != 1, the timer clock is multiplied by 2, restoring it to 72 MHz. Dividing by 36 MHz derived `PSC = 35`, doubling the update event rate from 1000 Hz to 2000 Hz.
+In `gate/gate_fault_firmware/timer_gate.c`:
+```c
+/* Configure timer control register */
+TIM2->CR1 = TIM_CR1_CEN | TIM_CR1_OPM;
+```
+Bit 3 (`TIM_CR1_OPM`) enables One-Pulse Mode. Per RM0008 Section 15.3.10 and Section 15.4.1 (Control Register 1):
+- `OPM = 0`: Counter is not stopped at update event (continuous periodic mode).
+- `OPM = 1`: Counter stops counting at the next update event (hardware automatically clears `CEN`).
+
+When the first 1 ms update event occurs, timer hardware generates the update interrupt, fires `TIM2_IRQHandler`, and simultaneously clears the `CEN` enable bit in `TIM2->CR1`. The timer counter stops, preventing any further periodic interrupts while Thread mode continues uninterrupted.
 
 ### Step 5: Minimal Fix
 
@@ -61,25 +77,13 @@ In `gate/gate_fault_firmware/timer_gate.c`:
 ```diff
 --- a/gate/gate_fault_firmware/timer_gate.c
 +++ b/gate/gate_fault_firmware/timer_gate.c
-@@ -10,8 +10,7 @@ void tim2_init_1khz(uint32_t timclk_hz)
- {
-     RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;
+@@ -22,5 +22,5 @@ void tim2_init_1khz(uint32_t timclk_hz)
+     NVIC_EnableIRQ(TIM2_IRQn);
  
--    uint32_t assumed_clk = timclk_hz / 2U;
--    uint32_t psc_val = (assumed_clk / 1000000U) - 1U;
-+    uint32_t psc_val = (timclk_hz / 1000000U) - 1U;
-     uint32_t arr_val = 999U;
- 
-     TIM2->PSC = (uint16_t)psc_val;
-@@ -28,6 +27,8 @@ void tim2_init_1khz(uint32_t timclk_hz)
- void TIM2_IRQHandler(void)
- {
-     if (TIM2->SR & TIM_SR_UIF) {
-+        TIM2->SR = ~TIM_SR_UIF;
-+        __DSB();
-         gpio_toggle_pa1_atomic();
-         g_tim2_ticks++;
-     }
+     /* Configure timer control register */
+-    TIM2->CR1 = TIM_CR1_CEN | TIM_CR1_OPM;
++    TIM2->CR1 = TIM_CR1_CEN;
+ }
 ```
 
 ### Step 6: Regression Verification
@@ -87,8 +91,10 @@ Recompile:
 ```bash
 make -C gate/gate_fault_firmware clean all
 ```
-1. Verify `TIM2->PSC` is `71`:
-   $$\frac{72000000}{(71 + 1) \times (999 + 1)} = \frac{72000000}{72000} = 1000\text{ events/s}$$
-   $$f_{\text{square\_wave}} = \frac{1000}{2} = 500\text{ Hz (2.0 ms period)}$$
-2. Verify `main()` loop executes continuously without being locked in the ISR.
-3. Run `make check` from module root to verify static checks.
+1. Verify `TIM2->CR1` is loaded with `1` (`TIM_CR1_CEN` only):
+   Disassembly should show `movs r3, #1` stored to `[r2, #0]`.
+2. Target run (UNVERIFIED): Verify `g_tim2_ticks` increments continuously at 1000 Hz and PA1 toggles at 500 Hz square wave.
+3. Run reviewer regression script:
+   ```bash
+   bash reviewer/verify_gate_regression.sh
+   ```

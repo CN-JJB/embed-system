@@ -16,10 +16,9 @@ Reconstruct a complete, working bare-metal startup assembly file and linker scri
 5. Strict compiler/linker flags (`-Wall -Wextra -Werror -nostartfiles`).
 6. Memory assertions guarding against Flash/RAM overflow.
 ## Directory Structure
-- `starter/`: Incomplete template with missing reset sequences (used for negative verification).
-- `reference/`: Verified working reference implementation meeting all acceptance criteria.
-- `validate.sh`: Comprehensive validator that inspects and builds an arbitrary learner submission directory.
-- `verify_challenge.sh`: Verification script running `validate.sh` against reference and confirming rejection of starter.
+- `starter/`: Skeleton directory with template files to assist reconstruction.
+- `validate.sh`: Acceptance validator that compiles, links, and inspects your submission artifact.
+- `verify_challenge.sh`: Local challenge test runner.
 
 ## Verification
 To validate your submission:

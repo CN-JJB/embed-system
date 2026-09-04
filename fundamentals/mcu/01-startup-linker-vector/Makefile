@@ -62,14 +62,14 @@ DEPS := $(OBJS:.o=.d)
 
 all: $(TARGET).elf $(TARGET).bin $(TARGET).hex $(TARGET).asm size
 
-$(BUILD_DIR):
+$(BUILD_DIR)/src:
 	mkdir -p $(BUILD_DIR)/src
 
-$(BUILD_DIR)/src/%.o: src/%.c | $(BUILD_DIR)
+$(BUILD_DIR)/src/%.o: src/%.c | $(BUILD_DIR)/src
 	@echo "[CC] $<"
 	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
 
-$(BUILD_DIR)/src/%.o: src/%.s | $(BUILD_DIR)
+$(BUILD_DIR)/src/%.o: src/%.s | $(BUILD_DIR)/src
 	@echo "[AS] $<"
 	$(CC) $(ASFLAGS) -c $< -o $@
 
