@@ -82,7 +82,7 @@ make clean && make
 ## Actual Verification Status
 
 - **GDB Script and Symbol Resolution:** **VERIFIED** on host ELF image via `gdb-multiarch` batch mode.
-- **Physical Hardware Observation:** **PARTIALLY VERIFIED** (GDB commands verified on ELF; physical target trace is marked UNVERIFIED until attached to hardware probe).
+- **Physical Hardware Observation:** **UNVERIFIED** (GDB commands/symbol resolution were checked against the ELF, but no live target register/exception trace was captured).
 
 ## Questions
 
