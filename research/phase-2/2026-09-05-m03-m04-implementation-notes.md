@@ -80,7 +80,7 @@ TIM3 Update @ 10 kHz
 
 ### Pedagogical Assessment & Reviewer Fixtures
 - **Labs**: 6 structured labs (01 Clock/Prescaler, 02 Calibration/Sequence, 03 TIM3 TRGO, 04 DMA1 Circular, 05 HT/TC Milestones, 06 Fault Investigation).
-- **Controlled Faults**: `f1` (ADCPRE out-of-spec), `f2` (Calibration omitted), `f3` (CNDTR mismatch), `f4` (DMA buffer alignment), `f5` (Missing ISR flag clear).
+- **Controlled Faults**: `f1` (ADCPRE out-of-spec), `f2` (trigger routing misconfiguration), `f3` (DMA transfer-width mismatch), `f4` (DMA buffer lifetime violation), `f5` (ADC DMA-request enable omitted).
 - **Challenge & Validator**: `challenge/acquisition.c`, `challenge/validate.sh`.
 - **Reviewer Suite**: 8 negative mutations in `reviewer/mutations/` (`test_m03_validator_mutations.sh` 8/8 rejected).
 - **Module Gate**: Seeded hardware defect `TIM_CR1_UDIS` blocking TRGO events. Verified by `reviewer/verify_gate_regression.sh`.
