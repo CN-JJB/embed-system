@@ -15,7 +15,8 @@ All code and architecture across P2-M05 and P2-M06 derive from authoritative pri
 - **FreeRTOS Kernel**: Official upstream tag `V11.3.0`, commit `9b777ae5c5b8e9e456065a00294d1e5f5f9facf5`.
 - **CMSIS Core / Device**: ARM CMSIS_5 `5.9.0` (`2b7495b`) and ST `cmsis_device_f1` `v4.3.5` (`8a76309`).
 - **Hardware Reference**: STMicroelectronics Reference Manual RM0008 (DocID 13902 Rev 21) and Cortex-M3 Programming Manual PM0056 (DocID 15491 Rev 7).
-- **Toolchain**: Arm GNU Toolchain 13.3.rel1 / Ubuntu `arm-none-eabi-gcc 13.2.1`. Zero proprietary HAL, CubeMX, or CMSIS-RTOS wrappers.
+- **Canonical toolchain baseline**: Arm GNU Toolchain 13.3.rel1 (GCC 13.3.1 / Binutils 2.42 / GDB 14.2 / Newlib 4.4.0).
+- **Actual host verification toolchain**: Ubuntu/WSL `arm-none-eabi-gcc 13.2.1` with Binutils 2.42. Canonical 13.3.rel1 was not the executed host compiler for these reported checks. Zero proprietary HAL, CubeMX, or CMSIS-RTOS wrappers.
 
 ---
 
