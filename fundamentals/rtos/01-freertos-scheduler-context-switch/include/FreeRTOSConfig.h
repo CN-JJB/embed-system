@@ -50,7 +50,7 @@ extern uint32_t SystemCoreClock;
 
 /* Course deterministic assertion handler */
 void vAssertCalled(const char *pcFile, unsigned long ulLine);
-#define configASSERT(x)                         if ((x) == 0) { vAssertCalled(__FILE__, __LINE__); }
+#define configASSERT(x)                         do { if ((x) == 0) { vAssertCalled(__FILE__, __LINE__); } } while (0)
 
 /* =============================================================================
  * Synchronization Primitives (Reserved for P2-M05 / M06)
