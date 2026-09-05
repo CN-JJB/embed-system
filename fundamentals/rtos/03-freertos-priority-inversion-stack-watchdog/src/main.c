@@ -5,7 +5,7 @@
  * Demonstrates:
  *  - Deterministic 3-task priority inversion experiment (High 3, Med 2, Low 1)
  *  - Comparison: Binary Semaphore control vs Mutex with Priority Inheritance
- *  - Identical Low CPU workload (~5 ms, strictly no vTaskDelay in critical section)
+ *  - Identical Low CPU workload (DESIGN TARGET / UNVERIFIED: ~5 ms; strictly no vTaskDelay in critical section)
  *  - Stack watermark monitoring (words to bytes) and overflow detection level 2
  *  - STM32F103 Independent Watchdog (IWDG) configuration and reset-cause audit
  * =============================================================================
