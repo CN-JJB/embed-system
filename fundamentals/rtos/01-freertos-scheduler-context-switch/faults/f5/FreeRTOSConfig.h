@@ -21,12 +21,6 @@ extern uint32_t SystemCoreClock;
 #define configSUPPORT_DYNAMIC_ALLOCATION        1
 #define configAPPLICATION_ALLOCATED_HEAP        0
 
-/*
- * NOTE: Defect in Fixture f5:
- * Heap size is throttled to 512 bytes.
- * A single 128-word task requires 512 bytes for stack alone plus ~84 bytes for TCB,
- * plus alignment headers. Allocation of user tasks and kernel Idle task fails immediately.
- */
 #define configTOTAL_HEAP_SIZE                   ((size_t)512)
 
 #define configUSE_IDLE_HOOK                     0

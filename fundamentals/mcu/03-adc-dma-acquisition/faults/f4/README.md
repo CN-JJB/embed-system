@@ -1,10 +1,22 @@
 # Fault Investigation: Fixture `f4`
 
 ## Observed Symptom
-Firmware runs and DMA transfers start correctly. However, as soon as `init_acquisition()` exits and the main application begins calling subroutines or handling interrupts, the system crashes with a `HardFault` or local variables in deep stack frames are overwritten with ADC sensor readings!
+**Scenario-provided symptom (not author-captured evidence)**:
+Initial acquisition begins normally, but after the initialization sequence completes and subsequent subroutines execute, unexpected system crashes or memory corruption in unrelated variables is observed.
 
 ## Objective
-Identify the storage duration and lifetime violation of the buffer passed to `DMA1_Channel1->CMAR`.
+Trace the destination memory buffer address and storage duration across the firmware lifecycle. Formulate a hypothesis, collect evidence from symbol and register state, identify the memory corruption mechanism, and provide a minimal fix.
+
+## Allowed Tools
+- Disassembly (`arm-none-eabi-objdump -d`)
+- Symbol table and section inspection (`arm-none-eabi-readelf -s -S`, `nm`)
+- DMA address register inspection (`DMA1_Channel1->CMAR`) vs linker script memory regions
+- Memory map and calling convention analysis
+
+## Deliverables
+1. Hypothesized root cause backed by memory and symbol evidence.
+2. Technical explanation of the storage duration violation.
+3. Minimal source diff resolving the defect.
 
 ## Build
 ```bash

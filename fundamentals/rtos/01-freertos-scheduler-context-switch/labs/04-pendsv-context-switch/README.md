@@ -84,12 +84,16 @@ xPortPendSVHandler:
 ```
 
 ### 3. Dual Stack Pointer Partitioning (MSP vs PSP)
-- **MSP (Main Stack Pointer)**: Used by OS kernel, exception handlers, and ISRs. Configured in linker script at `_estack` (`0x20005000`).
-- **PSP (Process Stack Pointer)**: Exclusively used by FreeRTOS tasks in Thread mode.
-- When `bx r14` is executed with `r14 == 0xFFFFFFFD`:
-  - Bit 2 of `EXC_RETURN` is `1`: return to Thread mode using **PSP**.
-  - Bit 3 of `EXC_RETURN` is `1`: return to Thread mode (not Handler mode).
-  - The Cortex-M hardware automatically pops `R0-R3`, `R12`, `LR`, `PC`, and `xPSR` from PSP into the CPU registers, resuming the newly selected task seamlessly.
+- **MSP (Main Stack Pointer)**: Used by the processor after reset and by Handler mode (ISRs and system exceptions).
+- **PSP (Process Stack Pointer)**: Exclusively used by FreeRTOS tasks executing in Thread mode.
+- **Privilege Level**: Standard non-MPU FreeRTOS tasks execute in **privileged Thread mode on PSP**.
+- **The EXC_RETURN Lifecycle**:
+  - In `vPortSVCHandler` (first task launch), the exception return code is dynamically formed from the SVC handler's entry LR via `orr r14, #0xd; bx r14`. No `EXC_RETURN` word is ever stored on the task stack.
+  - In `PendSV_Handler` (subsequent context switches), the active exception LR (`EXC_RETURN`) is saved on the **MSP** (`stmdb sp!, {r3, r14}`) to protect it while `vTaskSwitchContext()` executes, and restored from MSP (`ldmia sp!, {r3, r14}`). It is handler-level exception state, not a per-task stack word.
+  - When `bx r14` executes with `r14 == 0xFFFFFFFD`:
+    - Bit 2 is `1`: return to Thread mode using **PSP**.
+    - Bit 3 is `1`: return to Thread mode (not Handler mode).
+    - The Cortex-M hardware automatically unrolls `R0-R3`, `R12`, `LR`, `PC`, and `xPSR` from the incoming task's PSP into the CPU registers, seamlessly transferring control to the new task.
 
 ## Step-by-Step Procedure
 

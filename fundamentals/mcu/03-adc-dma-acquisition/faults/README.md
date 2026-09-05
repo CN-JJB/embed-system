@@ -6,13 +6,13 @@ Learner fault directories use **neutral identifiers** (`f1` through `f5`) to pre
 
 ## Fault Directory Index
 
-| Fixture ID | Observed Symptom | Execution Context | Relevant Peripherals |
+| Fixture ID | Scenario-Reported Symptom | System Context | Investigation Domain |
 |---|---|---|---|
-| **`f1`** | ADC conversions exhibit severe non-linearity, high noise, and occasional missing codes | Bare-metal 72 MHz system run | RCC, ADC1 clock prescaler |
-| **`f2`** | `g_adc_buffer` remains completely empty (all zeroes); PA3/PA4 markers are silent | TIM3 running, ADC1 initialized | TIM3, ADC1 trigger multiplexer |
-| **`f3`** | Buffer data contains interleaved zeroes and corrupt high-byte readings; buffer fills twice as fast | TIM3 and DMA active | DMA1 Channel 1 CCR data sizing |
-| **`f4`** | Initial conversions appear valid, but buffer values become unpredictably corrupted after subsequent function calls | Post-initialization runtime | SRAM stack bounds, DMA CMAR |
-| **`f5`** | TIM3 counter is running and ADC indicates conversion ready, but DMA never transfers data | TIM3 running, ADC1 active | ADC1 control register, DMA request |
+| **`f1`** | Sampled ADC conversion values appear noisy and unstable under 72 MHz clock | Bare-metal 72 MHz system run | Analog subsystem clocking |
+| **`f2`** | Destination buffer remains unpopulated (all zeroes); no transfer interrupts fire | TIM3 running, ADC1 initialized | Trigger routing & sequencing |
+| **`f3`** | Destination buffer values appear byte-corrupted and misaligned when read as 16-bit items | TIM3 and DMA active | Transfer configuration & memory layout |
+| **`f4`** | Initial acquisition starts, but memory corruption or crashes occur after init function exits | Post-initialization runtime | Memory lifetime & storage duration |
+| **`f5`** | Timer triggers run and ADC indicates conversions, but DMA transfer count does not decrement | TIM3 running, ADC1 active | Peripheral handshake & DMA signaling |
 
 ---
 

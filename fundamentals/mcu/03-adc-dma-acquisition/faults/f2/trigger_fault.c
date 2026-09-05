@@ -16,11 +16,7 @@ int adc_trigger_fault_init(void)
     ADC1->CR2 |= ADC_CR2_CAL;
     while (ADC1->CR2 & ADC_CR2_CAL);
 
-    /*
-     * SEEDED FAULT: EXTSEL configured with 0b000 (TIM1_CC1) instead of 0b100 (TIM3_TRGO)
-     * Even though EXTTRIG is enabled, no trigger edge ever arrives from TIM1!
-     */
-    ADC1->CR2 &= ~ADC_CR2_EXTSEL; /* 0b000: TIM1_CC1 */
+    ADC1->CR2 &= ~ADC_CR2_EXTSEL;
     ADC1->CR2 |= ADC_CR2_EXTTRIG | ADC_CR2_DMA;
 
     return 0;

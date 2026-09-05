@@ -3,16 +3,12 @@
 
 void init_acquisition_with_stack_buffer(void)
 {
-    /*
-     * SEEDED FAULT: Buffer declared with automatic storage duration (local stack array)!
-     * When this function returns, SP unwinds, but DMA continues streaming into this memory.
-     */
     uint16_t local_stack_buffer[128];
 
     RCC->AHBENR |= RCC_AHBENR_DMA1EN;
     DMA1_Channel1->CCR &= ~DMA_CCR_EN;
     DMA1_Channel1->CPAR = (uint32_t)&(ADC1->DR);
-    DMA1_Channel1->CMAR = (uint32_t)local_stack_buffer; /* Dangling physical address after return! */
+    DMA1_Channel1->CMAR = (uint32_t)local_stack_buffer;
     DMA1_Channel1->CNDTR = 128;
     DMA1_Channel1->CCR = DMA_CCR_CIRC | DMA_CCR_MINC | DMA_CCR_PSIZE_0 | DMA_CCR_MSIZE_0 | DMA_CCR_EN;
 }

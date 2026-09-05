@@ -50,11 +50,6 @@ void vAssertCalled(const char *pcFile, unsigned long ulLine);
 #define configMAX_SYSCALL_INTERRUPT_PRIORITY \
     (configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY << (8 - configPRIO_BITS))
 
-/*
- * NOTE: Defect in Fixture f1:
- * The mapping macros (vPortSVCHandler -> SVC_Handler, etc.) are omitted.
- * The vector table in startup assembly will retain its weak binding to Default_Handler.
- */
 
 #define INCLUDE_vTaskPrioritySet                1
 #define INCLUDE_uxTaskPriorityGet               1

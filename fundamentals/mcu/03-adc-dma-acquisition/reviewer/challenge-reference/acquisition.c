@@ -8,8 +8,9 @@
 volatile uint16_t g_acq_buffer[2][ACQ_HALF_BUFFER_SIZE] __attribute__((aligned(4)));
 volatile uint32_t g_acq_ht_events = 0;
 volatile uint32_t g_acq_tc_events = 0;
+volatile uint32_t g_acq_te_events = 0;
 
-int acquisition_pipeline_init(uint32_t sysclk_hz)
+int acquisition_pipeline_init(uint32_t timclk_hz)
 {
     /* 1. Clock Gates */
     RCC->APB1ENR |= RCC_APB1ENR_TIM3EN;
@@ -59,7 +60,7 @@ int acquisition_pipeline_init(uint32_t sysclk_hz)
     ADC1->CR2 |= ADC_CR2_DMA;
 
     /* 7. Configure TIM3 for 10 kHz Update TRGO */
-    uint32_t psc = (sysclk_hz / 1000000U) - 1U;
+    uint32_t psc = (timclk_hz / 1000000U) - 1U;
     uint32_t arr = (1000000U / 10000U) - 1U;
     TIM3->PSC = psc;
     TIM3->ARR = arr;
@@ -79,7 +80,8 @@ int acquisition_pipeline_init(uint32_t sysclk_hz)
                          DMA_CCR_PSIZE_0 |
                          DMA_CCR_MSIZE_0 |
                          DMA_CCR_HTIE |
-                         DMA_CCR_TCIE;
+                         DMA_CCR_TCIE |
+                         DMA_CCR_TEIE;
 
     NVIC_SetPriority(DMA1_Channel1_IRQn, 5);
     NVIC_EnableIRQ(DMA1_Channel1_IRQn);
@@ -105,6 +107,7 @@ void DMA1_Channel1_IRQHandler(void)
     }
     if (isr & DMA_ISR_TEIF1) {
         DMA1->IFCR = DMA_IFCR_CTEIF1;
+        g_acq_te_events++;
     }
     __DSB();
 }

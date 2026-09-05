@@ -22,13 +22,13 @@ extern uint32_t SystemCoreClock;
 #define configAPPLICATION_ALLOCATED_HEAP        0
 #define configTOTAL_HEAP_SIZE                   ((size_t)(10 * 1024))
 
-#define configUSE_IDLE_HOOK                     0
+#define configUSE_IDLE_HOOK                     1
 #define configUSE_TICK_HOOK                     0
 #define configCHECK_FOR_STACK_OVERFLOW          0
 #define configUSE_MALLOC_FAILED_HOOK            1
 
 void vAssertCalled(const char *pcFile, unsigned long ulLine);
-#define configASSERT(x)                         if ((x) == 0) { vAssertCalled(__FILE__, __LINE__); }
+#define configASSERT(x)                         do { if ((x) == 0) { vAssertCalled(__FILE__, __LINE__); } } while (0)
 
 #define configUSE_MUTEXES                       0
 #define configUSE_RECURSIVE_MUTEXES             0
@@ -47,15 +47,8 @@ void vAssertCalled(const char *pcFile, unsigned long ulLine);
 #define configKERNEL_INTERRUPT_PRIORITY \
     (configLIBRARY_LOWEST_INTERRUPT_PRIORITY << (8 - configPRIO_BITS))
 
-/*
- * GATE DEFECT:
- * Erroneously configured configMAX_SYSCALL_INTERRUPT_PRIORITY to unshifted '5'.
- * On Cortex-M3 (4 priority bits), priorities must be shifted into the upper 4 bits
- * (configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY << (8 - configPRIO_BITS) = 0x50).
- * Writing an unshifted 5 to BASEPRI causes Cortex-M3 hardware to discard the lower 4 bits,
- * resulting in BASEPRI = 0 (all interrupts unmasked), destroying all scheduler critical sections!
- */
-#define configMAX_SYSCALL_INTERRUPT_PRIORITY    5
+#define configMAX_SYSCALL_INTERRUPT_PRIORITY \
+    (configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY << (8 - configPRIO_BITS))
 
 #define vPortSVCHandler                         SVC_Handler
 #define xPortPendSVHandler                      PendSV_Handler

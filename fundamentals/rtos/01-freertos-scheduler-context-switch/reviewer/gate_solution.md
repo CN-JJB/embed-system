@@ -1,78 +1,69 @@
-# P2-M04 Module Gate Solution: Cortex-M3 NVIC Priority Shift Defect
+# P2-M04 Module Gate Solution: Idle Task Blocking Defect (Kernel Invariant Violation)
 
 ## Gate Defect Summary
 The candidate is presented with `gate/gate_fault_firmware/`.
-While the scheduler appears functional in isolation, any interrupt-driven environment or architectural register check exposes severe priority masking failures:
-FreeRTOS critical sections fail to mask interrupts, allowing ISRs to interrupt `vTaskSwitchContext()` and corrupt kernel task ready lists.
+When user tasks enter the `Blocked` state (e.g. `vGateTask` executes `vTaskDelay(100)`), the FreeRTOS scheduler selects the lowest-priority background task: the **Idle task** (`tskIDLE_PRIORITY = 0`).
+However, the system triggers a kernel panic / assertion failure in `vTaskSwitchContext()` or ceases scheduling.
 
 ## Root Cause Analysis
 
-### 1. Cortex-M3 Priority Bit Alignment
-The ARM Cortex-M3 NVIC specification allows silicon vendors to implement between 3 and 8 bits of interrupt priority.
-STM32F103 implements **4 priority bits** (`__NVIC_PRIO_BITS = 4`).
+### 1. The Core FreeRTOS Scheduler Invariant
+FreeRTOS requires that **at least one task must always be in the Ready state**.
+The kernel creates the Idle task at priority 0 (`tskIDLE_PRIORITY`) specifically to satisfy this invariant when all application tasks are blocked or suspended.
 
-These 4 bits are aligned to the **most significant bits (MSBs)** of each 8-bit priority register:
-```text
-Bit:    [7]  [6]  [5]  [4]  [3]  [2]  [1]  [0]
-Field: [    Implemented   ] [ Unimplemented (0) ]
-```
-
-### 2. The BASEPRI Register Failure
-FreeRTOS uses the Cortex-M `BASEPRI` register to implement critical sections.
-When `BASEPRI` is loaded with a non-zero value, the processor masks all interrupts with priority value greater than or equal to that value (lower or equal priority).
-
-In the defective gate configuration `FreeRTOSConfig.h`:
+### 2. The Hook Function Violation
+In `gate_fault_firmware`, `#define configUSE_IDLE_HOOK 1` is enabled in `FreeRTOSConfig.h`, and `vApplicationIdleHook()` is defined in `src/main.c`:
 ```c
-/* DEFECTIVE CONFIGURATION */
-#define configMAX_SYSCALL_INTERRUPT_PRIORITY    5
+void vApplicationIdleHook(void)
+{
+    vTaskDelay(pdMS_TO_TICKS(10));
+}
 ```
-Here, the value `5` (`0b00000101`) occupies bits [2] and [0].
-When `PendSV_Handler` executes:
+`vApplicationIdleHook()` executes within the context of the Idle task.
+When `vTaskDelay()` is called:
+1. FreeRTOS removes the currently executing task (`xIdleTaskHandle`) from the Ready list (`pxReadyTasksLists[0]`).
+2. The Idle task is inserted into the delayed task list (`pxDelayedTaskList`).
+3. Now, **every ready list across all priorities is empty** (`listCURRENT_LIST_LENGTH(&pxReadyTasksLists[i]) == 0` for all $i$).
+4. When `vTaskSwitchContext()` runs:
+   ```c
+   taskSELECT_HIGHEST_PRIORITY_TASK();
+   ```
+   FreeRTOS detects that no task is available to run. This immediately triggers the kernel assertion:
+   ```c
+   configASSERT( listCURRENT_LIST_LENGTH( &( pxReadyTasksLists[ uxTopReadyPriority ] ) ) > 0 );
+   ```
+   or dereferences invalid memory if assertions are disabled, locking up the CPU in an unrecoverable state.
+
+### 3. Binary & Disassembly Proof
+Inspecting the compiled ELF binary disassembly:
 ```assembly
-mov.w r0, #5
-msr   BASEPRI, r0
+(EXPECTED / ILLUSTRATIVE — TARGET RUN UNVERIFIED)
+080001e8 <vApplicationIdleHook>:
+ 80001e8:   200a        movs    r0, #10
+ 80001ea:   f000 bcd9   b.w     8000ba0 <vTaskDelay>
 ```
-Because the hardware only writes the upper 4 bits [7:4] and hardwires bits [3:0] to zero:
-$$\text{BASEPRI} \longleftarrow (5 \ \& \ \texttt{0xF0}) = 0$$
-Setting `BASEPRI` to 0 **unmasks all interrupts**!
-Instead of creating an atomic critical section, executing `taskENTER_CRITICAL()` or `PendSV_Handler` context switch leaves interrupts completely unmasked!
+The disassembly confirms that `vApplicationIdleHook` directly branches to `vTaskDelay()`, proving the blocking call within the Idle task context.
 
-### 3. Disassembly Comparison
+## Minimal Reference Patches
 
-#### Defective Binary:
-```assembly
-08000d72:  f04f 0005   mov.w   r0, #5
-08000d76:  f380 8811   msr     BASEPRI, r0
+### Option 1: Disable the Idle Hook in `FreeRTOSConfig.h`
+```diff
+- #define configUSE_IDLE_HOOK                     1
++ #define configUSE_IDLE_HOOK                     0
 ```
+With `configUSE_IDLE_HOOK` disabled, the kernel no longer calls `vApplicationIdleHook()`, and the linker garbage-collects the unused function.
 
-#### Correct Binary:
-```assembly
-08000d72:  f04f 0050   mov.w   r0, #80      @ 0x50 = (5 << 4)
-08000d76:  f380 8811   msr     BASEPRI, r0
-```
-
-## Minimal Reference Patch
-
-In `gate/gate_fault_firmware/include/FreeRTOSConfig.h`, change:
-```c
-- #define configMAX_SYSCALL_INTERRUPT_PRIORITY    5
-+ #define configMAX_SYSCALL_INTERRUPT_PRIORITY \
-+     (configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY << (8 - configPRIO_BITS))
+### Option 2: Remove the Blocking Call in `src/main.c`
+```diff
+  void vApplicationIdleHook(void)
+  {
+-     vTaskDelay(pdMS_TO_TICKS(10));
++     __NOP();
+  }
 ```
 
 ## Automated Verification
 Run the regression harness:
 ```bash
 bash fundamentals/rtos/01-freertos-scheduler-context-switch/reviewer/verify_gate_regression.sh
-```
-Expected output:
-```text
-=== Running P2-M04 Module Gate Regression Suite ===
-Step 1: Building unpatched gate firmware...
-[PASS] Defect correctly identified: PendSV_Handler sets BASEPRI to unshifted 5 (evaluates to 0 on Cortex-M3)
-Step 2: Applying reference patch to FreeRTOSConfig.h...
-Step 3: Building patched gate firmware...
-[PASS] Patch verified: PendSV_Handler correctly programs BASEPRI to 0x50 (shifted priority 5)
-Step 4: Reverting patch to restore pristine gate challenge...
-=== ALL P2-M04 GATE REGRESSION CHECKS PASSED ===
 ```

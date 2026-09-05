@@ -1,10 +1,22 @@
 # Fault Investigation: Fixture `f5`
 
 ## Observed Symptom
-TIM3 is firing 10 kHz update triggers, and ADC1 converts samples as verified by the `EOC` flag in `ADC1->SR`. However, `DMA1_Channel1->CNDTR` never decrements from its initial value of 128, and no data is transferred to `g_adc_buffer`.
+**Scenario-provided symptom (not author-captured evidence)**:
+Periodic timer triggers are active and ADC status indications show conversion activity, but the DMA transfer count register does not decrement from its initial value and no data arrives in `g_adc_buffer`.
 
 ## Objective
-Diagnose why the peripheral (ADC1) is not asserting DMA request signals to the DMA1 controller despite ongoing analog conversions.
+Investigate peripheral signaling and handshake configuration between the ADC and the DMA controller. Formulate a hypothesis, collect register evidence explaining why transfers are not initiated, and provide a minimal fix.
+
+## Allowed Tools
+- Disassembly (`arm-none-eabi-objdump -d`)
+- Symbol and ELF inspection (`arm-none-eabi-readelf`)
+- Peripheral register inspection (`ADC1`, `DMA1`)
+- ST RM0008 Reference Manual (ADC and DMA interconnection)
+
+## Deliverables
+1. Hypothesized root cause backed by register inspection evidence.
+2. Register bit analysis explaining the missing transfer initiation signal.
+3. Minimal source diff resolving the defect.
 
 ## Build
 ```bash

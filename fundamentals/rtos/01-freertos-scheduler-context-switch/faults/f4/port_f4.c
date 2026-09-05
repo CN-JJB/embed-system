@@ -75,7 +75,7 @@ typedef void ( * portISR_t )( void );
 #define portVECTACTIVE_MASK                   ( 0xFFUL )
 
 /* Constants required to set up the initial stack. */
-#define portINITIAL_XPSR                      ( 0x00000000UL ) /* FAULT f4: Missing Thumb bit 24 */
+#define portINITIAL_XPSR                      ( 0x00000000UL )
 
 /* The systick is a 24-bit counter. */
 #define portMAX_24_BIT_NUMBER                 ( 0xffffffUL )

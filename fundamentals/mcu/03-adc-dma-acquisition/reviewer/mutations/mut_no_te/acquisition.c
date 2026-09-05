@@ -21,19 +21,23 @@ int acquisition_pipeline_init(uint32_t timclk_hz)
 
     ADC1->SMPR2 &= ~ADC_SMPR2_SMP0;
     ADC1->SMPR2 |= (ADC_SMPR2_SMP0_0 | ADC_SMPR2_SMP0_2);
-    ADC1->SQR1 &= ~ADC_SQR1_L;
-    ADC1->SQR3 &= ~ADC_SQR3_SQ1;
 
     ADC1->CR2 |= ADC_CR2_ADON;
     for (volatile uint32_t i = 0; i < 1000; i++) __NOP();
-    ADC1->CR2 |= ADC_CR2_RSTCAL;
-    while (ADC1->CR2 & ADC_CR2_RSTCAL);
-    ADC1->CR2 |= ADC_CR2_CAL;
-    while (ADC1->CR2 & ADC_CR2_CAL);
 
-    /* MUTATION: ADC_CR2_DMA omitted */
+    ADC1->CR2 |= ADC_CR2_RSTCAL;
+    uint32_t timeout = 100000;
+    while (ADC1->CR2 & ADC_CR2_RSTCAL) {
+        if (--timeout == 0) return -1;
+    }
+    ADC1->CR2 |= ADC_CR2_CAL;
+    timeout = 100000;
+    while (ADC1->CR2 & ADC_CR2_CAL) {
+        if (--timeout == 0) return -2;
+    }
+
     ADC1->CR2 &= ~ADC_CR2_EXTSEL;
-    ADC1->CR2 |= ADC_CR2_EXTSEL_2 | ADC_CR2_EXTTRIG;
+    ADC1->CR2 |= ADC_CR2_EXTSEL_2 | ADC_CR2_EXTTRIG | ADC_CR2_DMA;
 
     uint32_t psc = (timclk_hz / 1000000U) - 1U;
     uint32_t arr = (1000000U / 10000U) - 1U;
@@ -47,7 +51,8 @@ int acquisition_pipeline_init(uint32_t timclk_hz)
     DMA1_Channel1->CPAR = (uint32_t)&(ADC1->DR);
     DMA1_Channel1->CMAR = (uint32_t)g_acq_buffer;
     DMA1_Channel1->CNDTR = ACQ_TOTAL_BUFFER_SIZE;
-    DMA1_Channel1->CCR = DMA_CCR_CIRC | DMA_CCR_MINC | DMA_CCR_PSIZE_0 | DMA_CCR_MSIZE_0 | DMA_CCR_HTIE | DMA_CCR_TCIE | DMA_CCR_TEIE | DMA_CCR_EN;
+    /* MUTATION: TEIE omitted from CCR */
+    DMA1_Channel1->CCR = DMA_CCR_CIRC | DMA_CCR_MINC | DMA_CCR_PSIZE_0 | DMA_CCR_MSIZE_0 | DMA_CCR_HTIE | DMA_CCR_TCIE | DMA_CCR_EN;
     NVIC_SetPriority(DMA1_Channel1_IRQn, 5);
     NVIC_EnableIRQ(DMA1_Channel1_IRQn);
     return 0;
@@ -64,6 +69,6 @@ void DMA1_Channel1_IRQHandler(void)
         DMA1->IFCR = DMA_IFCR_CTCIF1;
         g_acq_tc_events++;
     }
-    if (isr & DMA_ISR_TEIF1) { DMA1->IFCR = DMA_IFCR_CTEIF1; g_acq_te_events++; }
+    /* MUTATION: TEIF1 not handled */
     __DSB();
 }

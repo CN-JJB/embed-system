@@ -3,7 +3,7 @@ graph TD
         HW_FRAME[Hardware Exception Frame - Pushed Automatically by NVIC on Entry]
         xPSR["xPSR (Bit 24 T-Bit = 1: Thumb State)"]
         PC["PC (Task Entry / Resume Instruction Address)"]
-        LR["LR (prvTaskExitError / Exception Return Hook)"]
+        LR["LR (portTASK_RETURN_ADDRESS / prvTaskExitError: Task Return Trap)"]
         R12["R12 (Intra-Procedure Scratch Register)"]
         R3["R3 (Argument Register 4)"]
         R2["R2 (Argument Register 3)"]

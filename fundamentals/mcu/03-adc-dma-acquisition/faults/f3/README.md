@@ -1,10 +1,22 @@
 # Fault Investigation: Fixture `f3`
 
 ## Observed Symptom
-The circular acquisition path runs and interrupts fire, but inspecting the 16-bit array `g_adc_buffer` reveals corrupted values. Half of each 16-bit entry appears to contain zero, and high-byte conversion data is lost or misaligned. The buffer also appears to advance through memory twice as slowly.
+**Scenario-provided symptom (not author-captured evidence)**:
+The circular acquisition path runs and interrupts trigger, but inspecting destination memory when interpreted as an array of `uint16_t` conversion samples reveals corrupted, misaligned data. The buffer also appears to advance through memory at an unexpected byte stride.
 
 ## Objective
-Analyze the DMA channel configuration register (`CCR`) data-size definitions and explain why memory sizing must match peripheral sizing.
+Investigate the DMA controller configuration and destination memory layout. Formulate a hypothesis, collect register evidence, explain the hardware transfer width and address increment behavior, and provide a minimal fix.
+
+## Allowed Tools
+- Disassembly (`arm-none-eabi-objdump -d`)
+- Symbol and ELF inspection (`arm-none-eabi-readelf`)
+- Peripheral register inspection (`DMA1`)
+- ST RM0008 Reference Manual Section 13 (DMA programmable data width)
+
+## Deliverables
+1. Hypothesized root cause backed by register inspection evidence.
+2. Technical explanation of how transfer width affects destination memory addressing and data alignment.
+3. Minimal source diff resolving the defect.
 
 ## Build
 ```bash

@@ -41,11 +41,11 @@ Under `configSUPPORT_DYNAMIC_ALLOCATION == 1`:
 On Cortex-M3, when an exception occurs, the hardware automatically pushes 8 words (32 bytes) onto the active stack (PSP for tasks):
 
 ```text
-Higher Memory Address (Top of Stack / Stack Growth Downward)
+Higher Memory Address (Initial Stack Base / Stack Grows Downward)
 +-------------------------------------------------------------+
 | xPSR       (Program Status Register, bit 24 T-bit = 1)      | <-- Hardware frame
-| PC         (Task Function Entry Point: pxTaskCode)          |
-| LR         (prvTaskExitError - catches illegal task return) |
+| PC         (Task Function Entry Point: pxTaskCode)          |     (pushed/popped by hardware)
+| LR         (portTASK_RETURN_ADDRESS / prvTaskExitError)     |
 | R12        (General Purpose Register 12)                    |
 | R3         (General Purpose Register 3)                     |
 | R2         (General Purpose Register 2)                     |
@@ -53,20 +53,30 @@ Higher Memory Address (Top of Stack / Stack Growth Downward)
 | R0         (Task Parameter: pvParameters passed to task)    |
 +-------------------------------------------------------------+
 | R11        (General Purpose Register 11)                    | <-- Software frame
-| R10        (General Purpose Register 10)                    |     (pushed by PendSV)
+| R10        (General Purpose Register 10)                    |     (pushed/popped by FreeRTOS port)
 | R9         (General Purpose Register 9)                     |
 | R8         (General Purpose Register 8)                     |
 | R7         (General Purpose Register 7)                     |
 | R6         (General Purpose Register 6)                     |
 | R5         (General Purpose Register 5)                     |
-| R4         (General Purpose Register 4)                     |
+| R4         (General Purpose Register 4)                     | <-- pxTopOfStack in TCB
 +-------------------------------------------------------------+
-| EXC_RETURN (0xFFFFFFFD: Return to Thread mode using PSP)    | <-- pxTopOfStack
 Lower Memory Address
 ```
 
-Total initial context size: $16\text{ words} = 64\text{ bytes}$.
-The top-of-stack pointer `pxTopOfStack` in the TCB points to the lowest allocated word (`R4` or `EXC_RETURN` depending on FreeRTOS port variant).
+Total initial context size: exactly $16\text{ words} = 64\text{ bytes}$.
+The top-of-stack pointer `pxTopOfStack` in the task TCB points directly to `R4` in the software-saved region.
+
+Important architectural distinctions:
+1. **Task LR slot vs Exception LR**: The `LR` value in the task's hardware frame is initialized to `portTASK_RETURN_ADDRESS` (`prvTaskExitError`), an error trap function executed only if a task function erroneously returns without calling `vTaskDelete(NULL)`. It is **not** an exception return code (`EXC_RETURN`).
+2. **First-task startup (`vPortSVCHandler`)**: When the scheduler launches the first task via `SVC 0`, `vPortSVCHandler()` pops `R4-R11` from the task's initial stack, points `PSP` to the hardware frame, and derives the exception return code dynamically from the handler's entry LR:
+   ```assembly
+   orr r14, #0xd    /* Form EXC_RETURN (0xFFFFFFFD: Thread mode, PSP) */
+   bx  r14          /* Hardware unrolls R0-R3, R12, LR, PC, xPSR into CPU */
+   ```
+   No `EXC_RETURN` word is ever stored on the task stack.
+3. **Subsequent context switches (`PendSV_Handler`)**: During later context switches, `PendSV_Handler` saves the active exception `r14` (`EXC_RETURN`) on the **MSP** (`stmdb sp!, {r3, r14}`) across the call to `vTaskSwitchContext()`, and restores it from MSP. The exception return value is exception-handler state on MSP, not a permanent word in the task's PSP stack.
+4. **Privilege Mode**: Standard non-MPU FreeRTOS tasks execute in **privileged Thread mode using PSP**.
 
 ### 3. The Critical `xPSR` Thumb Bit (Bit 24)
 Cortex-M3 only supports the **Thumb-2** instruction set; it has no legacy 32-bit ARM instruction execution mode.

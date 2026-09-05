@@ -44,7 +44,9 @@ FreeRTOS solves this using **PendSV**:
 4. When the last ISR returns, the NVIC immediately **tail-chains** into `PendSV_Handler` without intermediate unstacking:
    - Saves `R4-R11` to the outgoing task's PSP.
    - Saves `PSP` to `pxCurrentTCB->pxTopOfStack`.
+   - Saves `&pxCurrentTCB` and handler exception LR (`EXC_RETURN`) onto MSP (`stmdb sp!, {r3, r14}`).
    - Calls `vTaskSwitchContext()` under `BASEPRI = 0x50` protection.
+   - Restores `&pxCurrentTCB` and handler `EXC_RETURN` from MSP (`ldmia sp!, {r3, r14}`).
    - Restores `PSP` from incoming `pxCurrentTCB->pxTopOfStack`.
    - Restores `R4-R11` from incoming task's PSP.
    - Executes `bx lr` (`0xFFFFFFFD`), triggering hardware unstacking into the new task.

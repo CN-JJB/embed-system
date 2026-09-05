@@ -80,9 +80,9 @@ TIM3 Update @ 10 kHz
 
 ### Pedagogical Assessment & Reviewer Fixtures
 - **Labs**: 6 structured labs (01 Clock/Prescaler, 02 Calibration/Sequence, 03 TIM3 TRGO, 04 DMA1 Circular, 05 HT/TC Milestones, 06 Fault Investigation).
-- **Controlled Faults**: `f1` (ADCPRE out-of-spec), `f2` (trigger routing misconfiguration), `f3` (DMA transfer-width mismatch), `f4` (DMA buffer lifetime violation), `f5` (ADC DMA-request enable omitted).
-- **Challenge & Validator**: `challenge/acquisition.c`, `challenge/validate.sh`.
-- **Reviewer Suite**: 8 negative mutations in `reviewer/mutations/` (`test_m03_validator_mutations.sh` 8/8 rejected).
+- **Controlled Faults**: `f1` (ADCPRE out-of-spec clock contract), `f2` (trigger routing misconfiguration), `f3` (DMA transfer-width mismatch with byte-packed MINC consequence), `f4` (DMA buffer lifetime violation), `f5` (ADC DMA-request enable omitted). Learner sources and READMEs stripped of all answer leaks; symptoms strictly formatted as `Scenario-provided symptom (not author-captured evidence)`.
+- **Challenge & Validator**: `challenge/acquisition.c`, `challenge/validate.sh` (validates 10 kHz rate, clock doubling contract `timclk_hz`, circular DMA, ADC sequence, bounded calibration, and TE handling with 5s timeout).
+- **Reviewer Suite**: 10 negative mutations in `reviewer/mutations/` (`test_m03_validator_mutations.sh` positive control PASSED, 10/10 negative mutations rejected).
 - **Module Gate**: Seeded hardware defect `TIM_CR1_UDIS` blocking TRGO events. Verified by `reviewer/verify_gate_regression.sh`.
 
 ---
@@ -90,7 +90,7 @@ TIM3 Update @ 10 kHz
 ## 5. Module P2-M04 Implementation Audit
 
 ### FreeRTOS Kernel Core & Context Switch Architecture
-- **Upstream Pinning**: FreeRTOS V11.3.0 pinned and vendored directly under `fundamentals/rtos/vendor/freertos/`.
+- **Upstream Pinning**: FreeRTOS V11.3.0 pinned and vendored directly under `fundamentals/rtos/vendor/freertos/` (Git commit `9b777ae5c5b8e9e456065a00294d1e5f5f9facf5`).
 - **Vector Table Remapping**:
   ```c
   #define vPortSVCHandler     SVC_Handler     /* Vector 11 (0x2C) */
@@ -100,14 +100,14 @@ TIM3 Update @ 10 kHz
   Ensures vector entries resolve to `port.c` rather than `Default_Handler` infinite loops.
 - **Dynamic Clock Coherence**:
   `#define configCPU_CLOCK_HZ (SystemCoreClock)` dynamically tracks 72 MHz HSE or 64 MHz HSI fallback, preventing 12.5% timing dilation.
-- **Dual Stack Architecture**:
-  - MSP: Kernel and ISRs (`0x20005000` downward).
-  - PSP: FreeRTOS tasks in Thread mode.
-  - Initial synthetic stack frame initializes bit 24 of `xPSR` to 1 (`portINITIAL_XPSR = 0x01000000`), avoiding Cortex-M `INVSTATE` UsageFaults.
-- **Context Switch Mechanics**:
-  - `portSAVE_CONTEXT`: `mrs r0, psp`, `stmdb r0!, {r4-r11}`, `str r0, [pxCurrentTCB]`.
-  - `vTaskSwitchContext`: Protected by `msr basepri, #0x50`.
-  - `portRESTORE_CONTEXT`: `ldr r0, [pxCurrentTCB]`, `ldmia r0!, {r4-r11}`, `msr psp, r0`, `bx lr` (`0xFFFFFFFD`).
+- **Stack Architecture & Initial Frame Model**:
+  - Cortex-M3 stack model: Standard non-MPU FreeRTOS tasks execute in **privileged Thread mode on PSP**. Handlers execute in Handler mode on MSP.
+  - Initial task stack frame: Exactly 16 words (64 bytes).
+    - 8 hardware words: `xPSR` (`0x01000000` Thumb bit 24 set), `PC` (task entry function), `LR` (`portTASK_RETURN_ADDRESS / prvTaskExitError`), `R12`, `R3`, `R2`, `R1`, `R0` (`pvParameters`).
+    - 8 software words: `R11`, `R10`, `R9`, `R8`, `R7`, `R6`, `R5`, `R4`.
+    - Initial `pxTopOfStack` points to `R4`. No fake 17th `EXC_RETURN` word exists on task stack.
+  - First-task launch (`vPortSVCHandler`): Restores R4–R11, sets PSP, and forms exception return via handler LR (`orr r14, #0xd; bx r14`).
+  - Context switch (`xPortPendSVHandler`): Preserves handler exception LR (`EXC_RETURN`) temporarily on **MSP** (`stmdb sp!, {r3, r14}`) across `vTaskSwitchContext()`; task PSP frame only holds architectural integer registers.
 - **Memory Management**:
   - `heap_4.c` with 8-byte alignment, first-fit scanning, and contiguous block coalescing.
   - `configTOTAL_HEAP_SIZE = 10 KB` (`10240` bytes).
@@ -127,9 +127,10 @@ TIM3 Update @ 10 kHz
   - `f3`: Undersized stack (16 words, immediate overflow).
   - `f4`: Initial xPSR missing Thumb bit (`INVSTATE` UsageFault).
   - `f5`: Heap exhaustion (`configTOTAL_HEAP_SIZE = 512 B`).
-- **Challenge & Validator**: `challenge/app_tasks.c`, `challenge/validate.sh`.
-- **Reviewer Suite**: 8 negative mutations in `reviewer/mutations/` (`test_m04_validator_mutations.sh` 8/8 rejected).
-- **Module Gate**: Seeded unshifted `configMAX_SYSCALL_INTERRUPT_PRIORITY = 5` defect (causes `BASEPRI = 0`, unmasking critical sections). Verified by `reviewer/verify_gate_regression.sh`.
+  All learner code and README files stripped of answer leaks; symptoms clearly identified as scenario-provided.
+- **Challenge & Validator**: Redesigned M04 transfer challenge (`challenge/scheduler_app.c`, `challenge/validate.sh`) validating 14 core M04 competencies (exact FreeRTOS pin, vector table entries 11/14/15, lowest interrupt priority, dynamic 72/64 MHz tick math, 2-task priority relationship, Task A blocking via `vTaskDelay(pdMS_TO_TICKS(5))`, `vTaskStartScheduler()`, 10 KB heap_4, absence of libc malloc, PendSV/SVC disassembly). Excludes premature M05/M06 topics.
+- **Reviewer Suite**: 8 negative mutations in `reviewer/mutations/` (`test_m04_validator_mutations.sh` positive control PASSED, 8/8 negative mutations rejected).
+- **Module Gate**: Pure M04 defect: `vApplicationIdleHook` calling `vTaskDelay` (violates Idle task never-block invariant). Replaced out-of-scope `configMAX_SYSCALL` defect. Verified by `reviewer/verify_gate_regression.sh` with Leader cleanup trap preservation.
 
 ---
 
@@ -143,7 +144,7 @@ TIM3 Update @ 10 kHz
 | **M03 Hardware Registers** | `03-adc-dma-acquisition/build/firmware.elf` | `arm-none-eabi-objdump -d` | ADC1->CR2, TIM3->CR2, DMA1->IFCR | **VERIFIED** |
 | **M03 Automated Harness** | `03-adc-dma-acquisition/scripts/verify_m03.sh` | Bash automated runner | All static checks passed | **VERIFIED** |
 | **M03 Faults f1–f5** | `03-adc-dma-acquisition/faults/f1..f5` | `make clean all` | All 5 compile cleanly with -Werror | **VERIFIED** |
-| **M03 Mutations 1–8** | `03-adc-dma-acquisition/reviewer/mutations/` | `test_m03_validator_mutations.sh` | 8/8 correctly rejected | **VERIFIED** |
+| **M03 Mutations 1–10** | `03-adc-dma-acquisition/reviewer/mutations/` | `test_m03_validator_mutations.sh` | Positive control PASSED; 10/10 mutations correctly rejected | **VERIFIED** |
 | **M03 Gate Regression** | `03-adc-dma-acquisition/reviewer/verify_gate_regression.sh` | Automated regression test | Defect detected, patch verified | **VERIFIED** |
 | **M04 Firmware Build** | `01-freertos-scheduler-context-switch/build/firmware.elf` | `make -C fundamentals/rtos/01-freertos-scheduler-context-switch clean all` | Clean build, 0 warnings | **VERIFIED** |
 | **M04 Memory Bounds** | `01-freertos-scheduler-context-switch/build/firmware.elf` | `arm-none-eabi-size` | Flash: 5204 B, RAM: 11576 B | **VERIFIED** |
@@ -152,8 +153,8 @@ TIM3 Update @ 10 kHz
 | **M04 Libc Malloc Absence** | `01-freertos-scheduler-context-switch/build/firmware.elf` | `arm-none-eabi-nm` | malloc, _malloc_r absent | **VERIFIED** |
 | **M04 Automated Harness** | `01-freertos-scheduler-context-switch/scripts/verify_m04.sh` | Bash automated runner | All static checks passed | **VERIFIED** |
 | **M04 Faults f1–f5** | `01-freertos-scheduler-context-switch/faults/f1..f5` | `make clean all` | All 5 compile cleanly with -Werror | **VERIFIED** |
-| **M04 Mutations 1–8** | `01-freertos-scheduler-context-switch/reviewer/mutations/` | `test_m04_validator_mutations.sh` | 8/8 correctly rejected | **VERIFIED** |
-| **M04 Gate Regression** | `01-freertos-scheduler-context-switch/reviewer/verify_gate_regression.sh` | Automated regression test | Defect detected, patch verified | **VERIFIED** |
+| **M04 Mutations 1–8** | `01-freertos-scheduler-context-switch/reviewer/mutations/` | `test_m04_validator_mutations.sh` | Positive control PASSED; 8/8 mutations correctly rejected | **VERIFIED** |
+| **M04 Gate Regression** | `01-freertos-scheduler-context-switch/reviewer/verify_gate_regression.sh` | Automated regression test | Idle hook block defect detected, patch verified | **VERIFIED** |
 | **Top-Level MCU Base Check** | `fundamentals/mcu/Makefile` | `make -C fundamentals/mcu check` | M01, M02, M03 base module static checks passed | **VERIFIED** |
 | **Top-Level RTOS Base Check** | `fundamentals/rtos/Makefile` | `make -C fundamentals/rtos check` | M04 base module static checks passed | **VERIFIED** |
 | **Live Hardware Signals** | STM32F103 Pins PA0, PA1, PA2, PA3, PA4, PC13 | Oscilloscope / Logic Analyzer | No physical hardware connected | **UNVERIFIED** |

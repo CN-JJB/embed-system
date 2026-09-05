@@ -21,19 +21,19 @@ int acquisition_pipeline_init(uint32_t timclk_hz)
 
     ADC1->SMPR2 &= ~ADC_SMPR2_SMP0;
     ADC1->SMPR2 |= (ADC_SMPR2_SMP0_0 | ADC_SMPR2_SMP0_2);
-    ADC1->SQR1 &= ~ADC_SQR1_L;
-    ADC1->SQR3 &= ~ADC_SQR3_SQ1;
 
     ADC1->CR2 |= ADC_CR2_ADON;
     for (volatile uint32_t i = 0; i < 1000; i++) __NOP();
+
+    /* MUTATION: Unbounded calibration loop without timeout counter */
     ADC1->CR2 |= ADC_CR2_RSTCAL;
     while (ADC1->CR2 & ADC_CR2_RSTCAL);
+
     ADC1->CR2 |= ADC_CR2_CAL;
     while (ADC1->CR2 & ADC_CR2_CAL);
 
-    /* MUTATION: ADC_CR2_DMA omitted */
     ADC1->CR2 &= ~ADC_CR2_EXTSEL;
-    ADC1->CR2 |= ADC_CR2_EXTSEL_2 | ADC_CR2_EXTTRIG;
+    ADC1->CR2 |= ADC_CR2_EXTSEL_2 | ADC_CR2_EXTTRIG | ADC_CR2_DMA;
 
     uint32_t psc = (timclk_hz / 1000000U) - 1U;
     uint32_t arr = (1000000U / 10000U) - 1U;
@@ -64,6 +64,9 @@ void DMA1_Channel1_IRQHandler(void)
         DMA1->IFCR = DMA_IFCR_CTCIF1;
         g_acq_tc_events++;
     }
-    if (isr & DMA_ISR_TEIF1) { DMA1->IFCR = DMA_IFCR_CTEIF1; g_acq_te_events++; }
+    if (isr & DMA_ISR_TEIF1) {
+        DMA1->IFCR = DMA_IFCR_CTEIF1;
+        g_acq_te_events++;
+    }
     __DSB();
 }

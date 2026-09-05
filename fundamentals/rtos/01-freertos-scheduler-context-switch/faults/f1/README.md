@@ -1,10 +1,10 @@
 # Fault Investigation: Fixture `f1`
 
-## Observed Symptom
+## Scenario-Reported Symptom (Scenario-provided symptom, not author-captured evidence)
 When the firmware is flashed to the microcontroller, the target appears completely dead. The heartbeat LED never illuminates or toggles, and attaching a debugger reveals that the core is trapped in an infinite loop inside `Default_Handler` immediately after calling `vTaskStartScheduler()`.
 
 ## Objective
-Analyze the vector table bindings and FreeRTOS exception handler mappings to diagnose why task scheduling fails to initiate.
+Diagnose why task scheduling fails to initiate and why the core enters `Default_Handler`.
 
 ## Build
 ```bash

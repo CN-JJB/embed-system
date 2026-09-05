@@ -5,10 +5,6 @@ int adc_fault_init(void)
 {
     RCC->APB2ENR |= RCC_APB2ENR_ADC1EN | RCC_APB2ENR_IOPAEN;
 
-    /*
-     * SEEDED FAULT: Prescaler left at reset default or set to DIV2 (0b00)
-     * At 72 MHz, ADCCLK = 36 MHz (violating 14 MHz electrical ceiling)!
-     */
     RCC->CFGR &= ~RCC_CFGR_ADCPRE;
     RCC->CFGR |= RCC_CFGR_ADCPRE_DIV2;
 

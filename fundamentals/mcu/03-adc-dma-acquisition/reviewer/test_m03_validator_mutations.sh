@@ -7,17 +7,28 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 M03_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 VALIDATE_SH="${M03_DIR}/challenge/validate.sh"
+REF_DIR="${SCRIPT_DIR}/challenge-reference"
 MUTATIONS_DIR="${SCRIPT_DIR}/mutations"
 
-echo "=== Running P2-M03 Challenge Validator Negative Mutation Suite ==="
+echo "=== Running P2-M03 Challenge Validator Regression Suite ==="
 
+# 1. Positive Control: Reviewer reference MUST PASS
+echo -n "Testing positive control (reviewer reference)... "
+if bash "${VALIDATE_SH}" "${REF_DIR}" >/dev/null 2>&1; then
+    echo "PASSED (Reference solution correctly accepted)"
+else
+    echo "FAILED (Validator falsely REJECTED authoritative reference!)" >&2
+    exit 1
+fi
+
+# 2. Negative Controls: All negative mutations MUST FAIL
 PASS_COUNT=0
 FAIL_COUNT=0
 
 for mut in "${MUTATIONS_DIR}"/*; do
     if [ -d "${mut}" ]; then
         mut_name="$(basename "${mut}")"
-        echo -n "Testing mutation [${mut_name}]... "
+        echo -n "Testing negative mutation [${mut_name}]... "
         if bash "${VALIDATE_SH}" "${mut}" >/dev/null 2>&1; then
             echo "FAILED (Validator falsely ACCEPTED defective mutation!)"
             FAIL_COUNT=$((FAIL_COUNT + 1))
@@ -34,4 +45,4 @@ if [ "${FAIL_COUNT}" -ne 0 ]; then
     exit 1
 fi
 
-echo "=== ALL P2-M03 VALIDATOR MUTATIONS REJECTED SUCCESSFULLY ==="
+echo "=== ALL P2-M03 POSITIVE AND NEGATIVE VALIDATOR CHECKS PASSED ==="

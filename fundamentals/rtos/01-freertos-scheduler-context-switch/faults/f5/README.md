@@ -1,10 +1,10 @@
 # Fault Investigation: Fixture `f5`
 
-## Observed Symptom
+## Scenario-Reported Symptom (Scenario-provided symptom, not author-captured evidence)
 When the firmware is flashed, the microcontroller halts execution inside `vApplicationMallocFailedHook` (or hits a software breakpoint) during boot before entering thread mode. The scheduler never starts, and debugging indicates that `pvPortMalloc` returned a `NULL` pointer during kernel initialization.
 
 ## Objective
-Analyze heap allocation parameters, task stack memory requirements, and internal TCB footprints to determine the cause of memory allocation failure.
+Diagnose why dynamic memory allocation fails during task creation and kernel startup.
 
 ## Build
 ```bash

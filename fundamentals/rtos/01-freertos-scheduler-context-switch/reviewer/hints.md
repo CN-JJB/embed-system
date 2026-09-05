@@ -1,32 +1,30 @@
 # P2-M04 Socratic Hints & Pedagogical Guidance
 
-## Challenge Hints (Dual-Task Scheduler & Telemetry)
+## Challenge Hints (Dual-Task Scheduler & Context Integration)
 
-### Level 1: Conceptual Understanding
-- Why does a periodic sensor task using `vTaskDelay()` gradually drift over time if another task preempts it?
-- Look up `vTaskDelayUntil()`. What is the significance of the first parameter `pxPreviousWakeTime`?
+### Level 1: Clock Coherence
+- How does `configCPU_CLOCK_HZ` ensure a 1000 Hz SysTick downcounter period when the clock tree switches between 72 MHz HSE and 64 MHz HSI?
+- What global CMSIS variable tracks the core frequency, and where should it be referenced?
 
-### Level 2: Memory & Thread Safety
-- The telemetry structure is written by the Telemetry task and read by `app_tasks_get_telemetry()`. What prevents a context switch from occurring halfway through copying a 32-bit field?
-- FreeRTOS provides `taskENTER_CRITICAL()` and `taskEXIT_CRITICAL()`. What Cortex-M register do these macros manipulate?
+### Level 2: Vector Table Integration
+- How does the startup vector table link to FreeRTOS port handlers?
+- Check `FreeRTOSConfig.h`: what `#define` statements map `vPortSVCHandler`, `xPortPendSVHandler`, and `xPortSysTickHandler` to `SVC_Handler`, `PendSV_Handler`, and `SysTick_Handler`?
 
-### Level 3: Stack Headroom
-- How does `uxTaskGetStackHighWaterMark()` determine how much unused stack remains?
-- If `TASK_STACK_SIZE_WORDS` is 128, how many bytes of RAM are allocated for the task stack?
+### Level 3: Dual-Task Scheduling Dynamics
+- If Task A has priority 2 (`tskIDLE_PRIORITY + 2`) and Task B has priority 1 (`tskIDLE_PRIORITY + 1`), how does Task B ever get CPU time?
+- Why must Task A explicitly transition to the `Blocked` list using `vTaskDelay(pdMS_TO_TICKS(5))`? What does the scheduler do when Task A blocks?
 
----
+## Gate Hints (Scheduler Lockup & Kernel Invariant)
 
-## Gate Hints (NVIC Priority Masking Defect)
+### Level 1: Kernel Readiness Invariant
+- Under what condition does FreeRTOS execute the Idle task?
+- What fundamental invariant must always hold regarding the number of tasks in the Ready state?
 
-### Level 1: Symptoms & Scope
-- Disassemble `PendSV_Handler` using `arm-none-eabi-objdump -d build/firmware.elf`. Look at the instruction setting `BASEPRI` right before calling `vTaskSwitchContext()`.
-- What value is being loaded into `r0` before `msr BASEPRI, r0`?
+### Level 2: Hook Function Execution Context
+- Check `FreeRTOSConfig.h`: what hook functions are enabled (`configUSE_...`)?
+- In which task's context does `vApplicationIdleHook()` execute?
 
-### Level 2: Architectural Details
-- Read STM32F103 Reference Manual (RM0008) section on NVIC priority registers and Cortex-M3 Technical Reference Manual on `BASEPRI`.
-- How many priority bits are physically implemented on STM32F103 (`__NVIC_PRIO_BITS`)?
-- Which bit positions in an 8-bit priority byte do these implemented bits occupy?
-
-### Level 3: The Calculation
-- If you write the binary value `0b00000101` (5) to a register whose lower 4 bits are hardwired to zero, what is the resulting value inside the register?
-- How should `configMAX_SYSCALL_INTERRUPT_PRIORITY` be defined to ensure the priority level 5 is shifted into bits [7:4]?
+### Level 3: Task State Transitions
+- What state does a task transition to when it calls `vTaskDelay()`?
+- If the Idle task is placed onto the Delayed list while all application tasks are also blocked, how many tasks remain in the Ready list?
+- Look at `vTaskSwitchContext()`: what happens when `taskSELECT_HIGHEST_PRIORITY_TASK()` finds an empty ready list?

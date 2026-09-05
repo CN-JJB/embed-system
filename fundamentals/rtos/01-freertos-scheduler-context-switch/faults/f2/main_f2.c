@@ -9,7 +9,7 @@ static void vBlinkTask(void *pvParameters)
     (void)pvParameters;
     for (;;) {
         GPIOC->ODR ^= GPIO_ODR_ODR13;
-        /* Expected 1000 ms, but runs at 1125 ms due to static 72 MHz assumption */
+        /* Requested 1000 ms periodic interval */
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }

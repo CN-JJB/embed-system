@@ -16,14 +16,8 @@ int adc_dma_req_fault_init(void)
     ADC1->CR2 |= ADC_CR2_CAL;
     while (ADC1->CR2 & ADC_CR2_CAL);
 
-    /*
-     * SEEDED FAULT: EXTSEL is set to TIM3_TRGO and EXTTRIG is enabled,
-     * but ADC_CR2_DMA (bit 8) is NOT set!
-     * Conversions occur, but the ADC never asserts a DMA request line to DMA1.
-     */
     ADC1->CR2 &= ~ADC_CR2_EXTSEL;
     ADC1->CR2 |= ADC_CR2_EXTSEL_2 | ADC_CR2_EXTTRIG;
-    /* ADC1->CR2 |= ADC_CR2_DMA;  <-- OMITTED */
 
     return 0;
 }

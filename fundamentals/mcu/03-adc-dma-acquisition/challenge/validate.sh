@@ -51,13 +51,13 @@ if ! gcc -O2 -Wall -Wextra -Wno-int-to-pointer-cast \
     exit 1
 fi
 
-echo "Running host-side MMIO and pipeline verification..."
-if ! "${HOST_BIN}" >"${TEST_BUILD_DIR}/host_run.log" 2>&1; then
-    echo "ERROR: Host-side logic assertion failed!" >&2
+echo "Running host-side MMIO, timing, TEIE, and calibration timeout verification..."
+if ! timeout 5s "${HOST_BIN}" >"${TEST_BUILD_DIR}/host_run.log" 2>&1; then
+    echo "ERROR: Host-side logic assertion failed or timed out!" >&2
     cat "${TEST_BUILD_DIR}/host_run.log" >&2
     exit 1
 fi
-echo "[PASS] Host-side MMIO verified (clocks, TIM3 PSC/ARR/MMS, ADCPRE, SMP0, EXTSEL, DMA1 CPAR/CMAR/CNDTR/CCR, ISR)"
+echo "[PASS] Host-side MMIO verified (clocks, TIM3 PSC/ARR/MMS, ADCPRE, SMP0, EXTSEL, DMA1 CPAR/CMAR/CNDTR/CCR, ISR, TEIE, Cal Timeout)"
 
 # 4. Reviewer-Controlled Cross-Compilation for ARM Target
 TEST_ELF="${TEST_BUILD_DIR}/firmware_test.elf"
@@ -93,7 +93,7 @@ fi
 echo "[PASS] Footprint verified (Flash: ${FLASH_SIZE}/65536, RAM: ${RAM_SIZE}/20480)"
 
 NM_OUT=$(arm-none-eabi-nm "${TEST_ELF}")
-for sym in "acquisition_pipeline_init" "DMA1_Channel1_IRQHandler" "g_acq_buffer" "g_acq_ht_events" "g_acq_tc_events"; do
+for sym in "acquisition_pipeline_init" "DMA1_Channel1_IRQHandler" "g_acq_buffer" "g_acq_ht_events" "g_acq_tc_events" "g_acq_te_events"; do
     if ! echo "${NM_OUT}" | grep -qw "${sym}"; then
         echo "ERROR: Required symbol '${sym}' missing from symbol table!" >&2
         exit 1

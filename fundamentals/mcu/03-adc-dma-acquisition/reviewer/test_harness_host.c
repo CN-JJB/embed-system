@@ -1,10 +1,11 @@
 /**
  * test_harness_host.c: Host-side unit test harness for learner acquisition logic (P2-M03)
  * Verifies direct-register MMIO hardware configuration:
- *  - TIM3 TRGO (PSC=71/63, ARR=99, MMS=010, CEN=1)
- *  - ADC1 (ADCPRE=/6, PA0 analog, SMP0=55.5 cycles, calibration, EXTSEL=100, EXTTRIG=1, DMA=1)
- *  - DMA1 Channel 1 (CPAR=&ADC1->DR, CMAR=g_acq_buffer, CNDTR=128, CIRC, MINC, 16-bit, HTIE, TCIE, EN)
- *  - DMA1_Channel1_IRQHandler (HTIF1/TCIF1 clear in IFCR, PA3/PA4 pulse, counter increments)
+ *  - TIM3 TRGO (PSC=71/63 from timclk_hz, ARR=99, MMS=010, CEN=1)
+ *  - ADC1 (ADCPRE=/6, PA0 analog, SMP0=55.5 cycles, bounded calibration, EXTSEL=100, EXTTRIG=1, DMA=1)
+ *  - DMA1 Channel 1 (CPAR=&ADC1->DR, CMAR=g_acq_buffer, CNDTR=128, CIRC, MINC, 16-bit, HTIE, TCIE, TEIE, EN)
+ *  - DMA1_Channel1_IRQHandler (HTIF1/TCIF1/TEIF1 clear in IFCR, PA3/PA4 pulse, counter increments)
+ *  - Calibration timeout handling (init must fail gracefully when hardware calibration stalls)
  */
 #include <stdio.h>
 #include <stdint.h>
@@ -36,15 +37,20 @@ static NVIC_Type           s_mock_nvic;
 
 static bool s_rstcal_witnessed = false;
 static bool s_cal_witnessed = false;
+static bool s_mock_cal_timeout_inject = false;
 
 static inline ADC_TypeDef* mock_adc1_access(void) {
     if (s_mock_adc1.CR2 & ADC_CR2_RSTCAL) {
         s_rstcal_witnessed = true;
-        s_mock_adc1.CR2 &= ~ADC_CR2_RSTCAL; /* Simulate hardware self-clearing RSTCAL */
+        if (!s_mock_cal_timeout_inject) {
+            s_mock_adc1.CR2 &= ~ADC_CR2_RSTCAL; /* Simulate hardware self-clearing RSTCAL */
+        }
     }
     if (s_mock_adc1.CR2 & ADC_CR2_CAL) {
         s_cal_witnessed = true;
-        s_mock_adc1.CR2 &= ~ADC_CR2_CAL;    /* Simulate hardware self-clearing CAL */
+        if (!s_mock_cal_timeout_inject) {
+            s_mock_adc1.CR2 &= ~ADC_CR2_CAL;    /* Simulate hardware self-clearing CAL */
+        }
     }
     return &s_mock_adc1;
 }
@@ -105,47 +111,50 @@ int main(void)
     memset(&s_mock_dma1_ch1, 0, sizeof(s_mock_dma1_ch1));
     memset(&s_mock_rcc, 0, sizeof(s_mock_rcc));
     memset(&s_mock_nvic, 0, sizeof(s_mock_nvic));
+
     s_rstcal_witnessed = false;
     s_cal_witnessed = false;
+    s_mock_cal_timeout_inject = false;
 
-    if (acquisition_pipeline_init(72000000U) != 0) {
-        fprintf(stderr, "ERROR: acquisition_pipeline_init(72000000U) failed!\n");
+    int ret = acquisition_pipeline_init(72000000U);
+    if (ret != 0) {
+        fprintf(stderr, "ERROR: acquisition_pipeline_init(72000000U) returned error code: %d\n", ret);
         return 1;
     }
 
-    /* 1.1 Peripheral Clock Gates */
+    /* 1.1 Clock Gates */
     if (!(s_mock_rcc.APB1ENR & RCC_APB1ENR_TIM3EN)) {
-        fprintf(stderr, "ERROR: TIM3 clock not enabled in RCC->APB1ENR!\n");
+        fprintf(stderr, "ERROR: TIM3 clock gate (RCC_APB1ENR_TIM3EN) not enabled!\n");
         return 2;
     }
     if (!(s_mock_rcc.APB2ENR & RCC_APB2ENR_ADC1EN)) {
-        fprintf(stderr, "ERROR: ADC1 clock not enabled in RCC->APB2ENR!\n");
+        fprintf(stderr, "ERROR: ADC1 clock gate (RCC_APB2ENR_ADC1EN) not enabled!\n");
         return 3;
     }
     if (!(s_mock_rcc.APB2ENR & RCC_APB2ENR_IOPAEN)) {
-        fprintf(stderr, "ERROR: GPIOA clock not enabled in RCC->APB2ENR!\n");
+        fprintf(stderr, "ERROR: GPIOA clock gate (RCC_APB2ENR_IOPAEN) not enabled!\n");
         return 4;
     }
     if (!(s_mock_rcc.AHBENR & RCC_AHBENR_DMA1EN)) {
-        fprintf(stderr, "ERROR: DMA1 clock not enabled in RCC->AHBENR!\n");
+        fprintf(stderr, "ERROR: DMA1 clock gate (RCC_AHBENR_DMA1EN) not enabled!\n");
         return 5;
     }
 
-    /* 1.2 TIM3 Prescaler and ARR for 10 kHz */
+    /* 1.2 TIM3 Trigger Engine (10 kHz update event TRGO) */
     if (s_mock_tim3.PSC != 71) {
-        fprintf(stderr, "ERROR: TIM3->PSC is %u, expected 71 at 72 MHz!\n", s_mock_tim3.PSC);
+        fprintf(stderr, "ERROR: TIM3->PSC is %u, expected 71 at 72 MHz timclk!\n", s_mock_tim3.PSC);
         return 6;
     }
     if (s_mock_tim3.ARR != 99) {
-        fprintf(stderr, "ERROR: TIM3->ARR is %u, expected 99 for 10 kHz!\n", s_mock_tim3.ARR);
+        fprintf(stderr, "ERROR: TIM3->ARR is %u, expected 99 for 10 kHz rate!\n", s_mock_tim3.ARR);
         return 7;
     }
     if ((s_mock_tim3.CR2 & TIM_CR2_MMS) != TIM_CR2_MMS_1) {
-        fprintf(stderr, "ERROR: TIM3->CR2 MMS is not set to 0b010 (Update as TRGO)!\n");
+        fprintf(stderr, "ERROR: TIM3 CR2 MMS is not 0b010 (Update event as TRGO)!\n");
         return 8;
     }
     if (!(s_mock_tim3.CR1 & TIM_CR1_CEN)) {
-        fprintf(stderr, "ERROR: TIM3 counter not enabled (TIM_CR1_CEN)!\n");
+        fprintf(stderr, "ERROR: TIM3 counter (CEN) not enabled!\n");
         return 9;
     }
 
@@ -218,15 +227,19 @@ int main(void)
         fprintf(stderr, "ERROR: DMA1_Channel1 TCIE interrupt enable missing!\n");
         return 24;
     }
+    if (!(s_mock_dma1_ch1.CCR & DMA_CCR_TEIE)) {
+        fprintf(stderr, "ERROR: DMA1_Channel1 TEIE transfer error interrupt enable missing!\n");
+        return 25;
+    }
     if (!(s_mock_dma1_ch1.CCR & DMA_CCR_EN)) {
         fprintf(stderr, "ERROR: DMA1_Channel1 is not enabled (DMA_CCR_EN)!\n");
-        return 25;
+        return 26;
     }
 
     /* 1.8 NVIC IRQ Enabled */
     if (!(s_mock_nvic.ISER[DMA1_Channel1_IRQn >> 5] & (1UL << (DMA1_Channel1_IRQn & 0x1F)))) {
         fprintf(stderr, "ERROR: DMA1_Channel1_IRQn not enabled in NVIC ISER!\n");
-        return 26;
+        return 27;
     }
 
     /* =========================================================================
@@ -235,11 +248,11 @@ int main(void)
     memset(&s_mock_tim3, 0, sizeof(s_mock_tim3));
     if (acquisition_pipeline_init(64000000U) != 0) {
         fprintf(stderr, "ERROR: acquisition_pipeline_init(64000000U) failed!\n");
-        return 27;
+        return 28;
     }
     if (s_mock_tim3.PSC != 63) {
         fprintf(stderr, "ERROR: TIM3->PSC at 64 MHz is %u, expected 63!\n", s_mock_tim3.PSC);
-        return 28;
+        return 29;
     }
 
     /* =========================================================================
@@ -247,6 +260,7 @@ int main(void)
      * ========================================================================= */
     g_acq_ht_events = 0;
     g_acq_tc_events = 0;
+    g_acq_te_events = 0;
     s_mock_dma1.IFCR = 0;
 
     /* Simulate Half-Transfer interrupt */
@@ -254,11 +268,11 @@ int main(void)
     DMA1_Channel1_IRQHandler();
     if (!(s_mock_dma1.IFCR & DMA_IFCR_CHTIF1)) {
         fprintf(stderr, "ERROR: DMA1_Channel1_IRQHandler did not clear HTIF1 in DMA1->IFCR!\n");
-        return 29;
+        return 30;
     }
     if (g_acq_ht_events != 1) {
         fprintf(stderr, "ERROR: g_acq_ht_events did not increment!\n");
-        return 30;
+        return 31;
     }
 
     /* Simulate Transfer-Complete interrupt */
@@ -267,13 +281,38 @@ int main(void)
     DMA1_Channel1_IRQHandler();
     if (!(s_mock_dma1.IFCR & DMA_IFCR_CTCIF1)) {
         fprintf(stderr, "ERROR: DMA1_Channel1_IRQHandler did not clear TCIF1 in DMA1->IFCR!\n");
-        return 31;
+        return 32;
     }
     if (g_acq_tc_events != 1) {
         fprintf(stderr, "ERROR: g_acq_tc_events did not increment!\n");
-        return 32;
+        return 33;
     }
 
-    printf("[HOST TEST HARNESS] All MMIO, TIM3 TRGO, ADC1, DMA1, and ISR tests PASSED.\n");
+    /* Simulate Transfer-Error interrupt */
+    s_mock_dma1.IFCR = 0;
+    s_mock_dma1.ISR = DMA_ISR_TEIF1;
+    DMA1_Channel1_IRQHandler();
+    if (!(s_mock_dma1.IFCR & DMA_IFCR_CTEIF1)) {
+        fprintf(stderr, "ERROR: DMA1_Channel1_IRQHandler did not clear TEIF1 in DMA1->IFCR!\n");
+        return 34;
+    }
+    if (g_acq_te_events != 1) {
+        fprintf(stderr, "ERROR: g_acq_te_events did not increment on TEIF1!\n");
+        return 35;
+    }
+
+    /* =========================================================================
+     * Test 4: Calibration Timeout Failure Handling
+     * ========================================================================= */
+    s_mock_adc1.CR2 |= ADC_CR2_CAL;
+    s_mock_cal_timeout_inject = true;
+    int cal_ret = acquisition_pipeline_init(72000000U);
+    if (cal_ret >= 0) {
+        fprintf(stderr, "ERROR: acquisition_pipeline_init did not fail on calibration timeout!\n");
+        return 36;
+    }
+    s_mock_cal_timeout_inject = false;
+
+    printf("[HOST TEST HARNESS] All MMIO, TIM3 TRGO, ADC1, DMA1, TEIE, and calibration timeout tests PASSED.\n");
     return 0;
 }

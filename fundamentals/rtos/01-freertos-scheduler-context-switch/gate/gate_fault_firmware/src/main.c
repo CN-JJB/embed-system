@@ -11,6 +11,11 @@ static void vGateTask(void *pvParameters)
     }
 }
 
+void vApplicationIdleHook(void)
+{
+    vTaskDelay(pdMS_TO_TICKS(10));
+}
+
 int main(void)
 {
     clock_init(CLOCK_PROFILE_72MHZ_HSE);

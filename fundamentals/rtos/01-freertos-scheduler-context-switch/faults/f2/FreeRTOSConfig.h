@@ -7,11 +7,6 @@
 #define configUSE_TIME_SLICING                  1
 #define configUSE_PORT_OPTIMISED_TASK_SELECTION 0
 
-/*
- * NOTE: Defect in Fixture f2:
- * Clock frequency is statically hardcoded to 72 MHz.
- * It fails to dynamically track SystemCoreClock when the system falls back to 64 MHz HSI.
- */
 #define configCPU_CLOCK_HZ                      ((uint32_t)72000000UL)
 #define configTICK_RATE_HZ                      ((TickType_t)1000)
 #define configMAX_PRIORITIES                    (5)
