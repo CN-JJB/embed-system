@@ -31,14 +31,14 @@ Consider three tasks:
 2. `Task_Medium` (Priority 2): Unrelated computation task.
 3. `Task_Low` (Priority 1): Background logging task accessing a shared resource `R`.
 
-**The Failure Sequence (Unbounded Inversion):**
+**The Priority-Inversion Sequence:**
 1. `Task_Low` acquires resource `R` (using a synchronization primitive without inheritance).
 2. `Task_High` unblocks and preempts `Task_Low`.
 3. `Task_High` attempts to acquire `R`, finds it locked, and transitions to the `Blocked` state waiting for `R`.
 4. Control returns to `Task_Low`.
 5. `Task_Medium` unblocks due to an external event or timer. Because Priority 2 > Priority 1, `Task_Medium` preempts `Task_Low`.
 6. `Task_Medium` executes arbitrary computation while `Task_Low` remains paused with `R` locked.
-7. Consequently, `Task_High` is delayed by `Task_Medium`, violating the fundamental preemption contract of real-time scheduling. If multiple medium-priority tasks run, the inversion duration is **unbounded**.
+7. Consequently, `Task_High` is delayed by `Task_Medium`. In this course experiment the Medium workload is finite, so the reproduced inversion is **bounded**. In the general case, continuously runnable medium-priority work can extend the high-priority blocking without the mutex inheritance bound.
 
 ### 1.2 FreeRTOS Priority Inheritance Mechanics
 
