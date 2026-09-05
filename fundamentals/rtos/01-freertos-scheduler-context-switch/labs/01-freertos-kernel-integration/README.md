@@ -57,7 +57,7 @@ In the pinned FreeRTOS V11.3.0 `ARM_CM3/port.c`:
   portNVIC_SHPR3_REG |= portNVIC_SYSTICK_PRI;
   ```
 - Because STM32F103 implements only the upper 4 bits of each priority byte, writing `255` (`0xFF`) sets the priority field to `0xF0` (logical priority 15, minimum urgency / lowest preemption priority).
-- Therefore, PendSV and SysTick automatically execute at minimum priority so they never delay hardware peripheral interrupts. This behavior is established directly by the pinned port implementation; `configKERNEL_INTERRUPT_PRIORITY` is not used by this port.
+- Therefore, PendSV and SysTick execute at the minimum implemented urgency and do not preempt higher-urgency peripheral interrupts. This behavior is established directly by the pinned port implementation; `configKERNEL_INTERRUPT_PRIORITY` is not used by this port.
 - `configMAX_SYSCALL_INTERRUPT_PRIORITY`: This module keeps the port configuration technically valid at $5 \ll 4 = \texttt{0x50}$. Detailed ISR API eligibility and syscall-priority auditing are deferred to P2-M05. BASEPRI at this threshold does not mask priorities 0 to 4; that is not the same as making those interrupts globally non-maskable.
 
 ## Step-by-Step Procedure
