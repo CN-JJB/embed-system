@@ -26,8 +26,14 @@ else
     exit 1
 fi
 
-# Backup original file
-cp "${CONFIG_H}" "${CONFIG_H}.bak"
+# Backup original file and guarantee restoration even if a later command fails.
+BACKUP_CONFIG="$(mktemp)"
+cp "${CONFIG_H}" "${BACKUP_CONFIG}"
+restore_gate_config() {
+    cp "${BACKUP_CONFIG}" "${CONFIG_H}"
+    rm -f "${BACKUP_CONFIG}"
+}
+trap restore_gate_config EXIT
 
 # 3. Apply reference patch
 echo "Step 2: Applying reference patch to FreeRTOSConfig.h..."
@@ -45,14 +51,13 @@ if echo "${PATCHED_PENDSV}" | grep -qE "mov\.w\s+r0,\s+#80"; then
     echo "[PASS] Patch verified: PendSV_Handler correctly programs BASEPRI to 0x50 (shifted priority 5)"
 else
     echo "ERROR: Patched binary does not program BASEPRI with 0x50 (80)!" >&2
-    # Restore original file before exiting
-    mv "${CONFIG_H}.bak" "${CONFIG_H}"
     exit 1
 fi
 
 # 6. Revert patch to preserve gate challenge state for students
 echo "Step 4: Reverting patch to restore pristine gate challenge..."
-mv "${CONFIG_H}.bak" "${CONFIG_H}"
+restore_gate_config
+trap - EXIT
 make -C "${GATE_DIR}" clean all >/dev/null 2>&1
 
 echo "=== ALL P2-M04 GATE REGRESSION CHECKS PASSED ==="
