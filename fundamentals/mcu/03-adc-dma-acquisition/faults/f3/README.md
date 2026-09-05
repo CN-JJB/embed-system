@@ -5,7 +5,7 @@
 The circular acquisition path runs and interrupts trigger, but inspecting destination memory when interpreted as an array of `uint16_t` conversion samples reveals corrupted, misaligned data. The buffer also appears to advance through memory at an unexpected byte stride.
 
 ## Objective
-Investigate the DMA controller configuration and destination memory layout. Formulate a hypothesis, collect register evidence, explain the hardware transfer width and address increment behavior, and provide a minimal fix.
+Investigate the DMA transfer path and destination memory layout. Formulate 3–5 hypotheses, collect register and memory evidence, explain the observed byte pattern, and provide a minimal fix.
 
 ## Allowed Tools
 - Disassembly (`arm-none-eabi-objdump -d`)
@@ -15,7 +15,7 @@ Investigate the DMA controller configuration and destination memory layout. Form
 
 ## Deliverables
 1. Hypothesized root cause backed by register inspection evidence.
-2. Technical explanation of how transfer width affects destination memory addressing and data alignment.
+2. Technical explanation connecting the observed memory pattern to the proven DMA configuration.
 3. Minimal source diff resolving the defect.
 
 ## Build
