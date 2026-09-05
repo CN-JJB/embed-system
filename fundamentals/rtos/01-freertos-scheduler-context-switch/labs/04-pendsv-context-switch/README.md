@@ -1,7 +1,7 @@
 # Lab 04: The PendSV Context Switch Mechanism and Assembly Level Deep-Dive
 
 ## Objective
-Dissect the Cortex-M3 PendSV assembly handler (`xPortPendSVHandler`), analyze step-by-step context saving (`portSAVE_CONTEXT`) and restoring (`portRESTORE_CONTEXT`), verify the dual stack pointer architecture (MSP vs PSP), and understand interrupt priority tail-chaining.
+Dissect the Cortex-M3 PendSV assembly handler (`xPortPendSVHandler`), analyze its explicit R4-R11 save/restore sequence, verify the dual stack pointer architecture (MSP vs PSP), and understand when low-priority PendSV can benefit from exception tail-chaining.
 
 ## Prerequisites
 - Lab 01: FreeRTOS kernel exception mapping.
@@ -30,10 +30,10 @@ To solve this, ARM Cortex-M provides **PendSV (Pended System Call)**:
    ```c
    portNVIC_INT_CTRL_REG = portNVIC_PENDSVSET_BIT;
    ```
-2. Because PendSV is configured to the **lowest possible interrupt priority** (`0xF0`):
-   - The hardware postpones executing PendSV until all higher-priority active ISRs have finished.
-   - When the last ISR executes exception return, the NVIC executes a zero-overhead **tail-chain** directly into PendSV without intermediate unstacking/restacking.
-   - The entire context switch executes cleanly at lowest priority before control returns to thread mode.
+2. Because PendSV is configured to the **lowest implemented interrupt priority** (`0xF0` on STM32F103):
+   - The hardware postpones PendSV while any higher-urgency exception is active.
+   - If PendSV is already pending when another exception completes, Cortex-M may tail-chain directly into PendSV without an intermediate return to Thread mode.
+   - If Thread mode itself requests a yield, PendSV is entered as a normal exception; tail-chaining is not a universal property of every context switch.
 
 ### 2. Detailed PendSV Assembly Walkthrough
 The implementation in `portable/GCC/ARM_CM3/port.c`:
