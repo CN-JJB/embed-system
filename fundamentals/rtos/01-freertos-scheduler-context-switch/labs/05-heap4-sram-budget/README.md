@@ -61,20 +61,18 @@ typedef struct A_BLOCK_LINK
 2. **Allocation Splitting**:
    When `pvPortMalloc(size)` is called, the allocator searches the list for the first free block large enough (`First-Fit`). If the block exceeds the requested size by more than `xHeapStructSize * 2`, it splits the block into two: one allocated, one returned to the free list.
 3. **Contiguous Coalescing on `vPortFree()`**:
-   When a block is freed, `heap_4` does NOT simply prepend it to a free list (like `heap_2`). Instead, it traverses the ordered list and checks whether the freed block is physically adjacent to either its predecessor or successor block. If adjacent, it **coalesces** them into a single larger block. This eliminates memory fragmentation caused by repeated allocation and deallocation of varying-sized buffers.
+   When a block is freed, `heap_4` keeps free blocks ordered by address and coalesces physically adjacent free blocks. This reduces external fragmentation and can recover larger contiguous regions, but it does not make fragmentation impossible while differently sized live allocations remain.
 4. **Allocation Bit Tracking**:
    The most significant bit of `xBlockSize` (`A_BLOCK_ALLOCATED_BIT_MASK = 0x80000000`) is set to 1 when a block is allocated and cleared to 0 when free, preventing double-free corruption.
 
-### 3. Why Standard Libc `malloc` is Strictly Prohibited in Embedded Real-Time Firmware
-Standard C library `malloc()` (from newlib or glibc) has catastrophic disadvantages on resource-constrained microcontrollers:
-1. **Non-Deterministic Execution Time**:
-   Complex bucket search algorithms exhibit unbounded worst-case execution times, violating hard real-time deadlines.
-2. **Memory Leaks and Irreversible Fragmentation**:
-   Standard allocators often lack coalescing tailored to single-bank embedded SRAM, causing sudden allocation failures even when total free memory is large.
-3. **Code Bloat**:
-   Linking libc `malloc` forces the inclusion of `_sbrk_r`, reentrancy structures (`_reent`), thread safety locks, and stdio hooks, bloating flash by 4 to 8 KB.
-4. **Stack Collision Risk**:
-   Standard `_sbrk()` expands the heap upward toward the downward-growing MSP stack. With no hardware memory management unit (MMU) or protection boundary, a heap-stack collision silently overwrites active data frames, resulting in hard-to-trace crashes.
+### 3. Why This Course Excludes Libc `malloc` from the Mandatory Path
+The course chooses one allocator so ownership and RAM evidence remain auditable:
+1. **Timing model**: general-purpose libc allocation is not given a bounded real-time contract by this curriculum.
+2. **Dual-heap risk**: mixing newlib allocation with FreeRTOS `heap_4` creates two independent allocation domains and complicates failure accounting.
+3. **Runtime dependencies**: pulling libc allocation may require additional syscall/reentrancy support depending on the newlib configuration.
+4. **Memory-boundary risk**: any separately growing heap must be proven against the linker/stack memory contract.
+
+This is a course architecture decision, not a claim that every libc allocator has identical algorithms or can never coalesce free blocks.
 
 ## Step-by-Step Procedure
 
