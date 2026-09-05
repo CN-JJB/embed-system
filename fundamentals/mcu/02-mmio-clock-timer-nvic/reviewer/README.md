@@ -1,0 +1,12 @@
+# P2-M02 Reviewer Guidance & Answer Keys
+
+> **Notice**: Instructor solutions and Gate diagnoses. Isolated from student view.
+
+- [`hints.md`](hints.md): Pedagogical Socratic prompts and common misconceptions.
+- [`fault_analysis.md`](fault_analysis.md): Detailed root causes for all 5 M02 fault families.
+- [`challenge_solution.md`](challenge_solution.md): Reference solution explanation for 4-channel software PWM.
+- [`challenge-reference/`](challenge-reference/): Complete reference implementation files for the challenge.
+- [`gate_solution.md`](gate_solution.md): Hypothesis-driven diagnostic walkthrough for the M02 Gate assessment.
+- [`verify_gate_regression.sh`](verify_gate_regression.sh): Automated binary regression test proving Gate fixture failure properties.
+
+
