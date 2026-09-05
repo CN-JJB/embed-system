@@ -1,0 +1,19 @@
+# P2-M03 Source Ledger
+
+This document registers the authoritative specifications, upstream source repositories, and tools establishing the technical baseline for Module P2-M03.
+
+Repository canonical tier classification:
+- **T0**: Specifications, datasheets, architecture references, and standards.
+- **T1**: Upstream source code and pinned headers.
+- **T2**: Official toolchain documentation and manuals.
+
+| Upstream / Project | Organization | Canonical Tier | Exact Revision / Version / Commit | Exact File / Path / Section | License | Why Pedagogically Useful | Verification Status | Verification Date |
+|---|---|---|---|---|---|---|---|---|
+| **ST Reference Manual RM0008** | STMicroelectronics | T0 (Silicon Spec) | DocID 13902 Rev 21 (Feb 2021) | Section 11 (ADC: Table 65 trigger mapping, Sec 11.3.11 $R_{\text{AIN}}$, Sec 11.4 calibration), Section 13 (DMA controller), Section 14 (TIM3 TRGO) | Proprietary (ST Reference Manual) | Authoritative peripheral architecture: fixed ADC1->DMA1 Channel 1 mapping, TIM3 TRGO MMS=010, EXTSEL=100 regular trigger, ADCPRE prescalers, RSTCAL/CAL calibration sequence. | VERIFIED (Manual inspection) | 2026-09-05 |
+| **ST Programming Manual PM0056** | STMicroelectronics | T0 (Core Spec) | DocID 15491 Rev 7 (Dec 2024) | Section 2.1 (Core registers), Section 4.3 (NVIC: ISER, ICER, IP) | Proprietary (ST Programming Manual) | Cortex-M3 NVIC priority byte encoding, exception entry/exit and interrupt prioritization for DMA1 Channel 1. | VERIFIED (Manual inspection) | 2026-09-05 |
+| **ST Datasheet DS5319** | STMicroelectronics | T0 (Silicon Spec) | DocID 13587 Rev 20 (31 Jul 2025) | Section 5.3.6 (Operating conditions), Section 5.3.18 (12-bit ADC electrical characteristics, Table 49 $R_{\text{AIN}}$ vs sample cycles, $f_{\text{ADC}} \le 14$ MHz) | Proprietary (ST Datasheet) | Absolute electrical ceilings: ADCCLK <= 14 MHz, sample time vs maximum external impedance $R_{\text{AIN}}$. | VERIFIED (Manual inspection) | 2026-09-05 |
+| **Armv7-M Architecture Reference Manual** | Arm Limited | T0 (Architecture Spec) | ARM DDI 0403E.e (Errata 2021) | Section A3.5 (Memory barriers), Section B1.5 (Exception model) | Proprietary (Arm Architecture Spec) | Definitive definition of memory barrier (`DSB`) preventing write-buffer flag-clear delays in DMA ISR. | VERIFIED (Manual inspection) | 2026-09-05 |
+| **CMSIS_5** | Arm Limited | T1 (Upstream Source) | Tag `5.9.0` (commit `2b7495b8535bdcb306dac29b9ded4cfb679d7e5c`) | `CMSIS/Core/Include/core_cm3.h`, `cmsis_gcc.h` | Apache-2.0 (`LICENSE.CMSIS_5`) | `NVIC_SetPriority()`, `NVIC_EnableIRQ()`, `__DSB()`, `__WFI()`. | VERIFIED (Header hash check) | 2026-09-05 |
+| **cmsis-device-f1** | STMicroelectronics | T1 (Upstream Source) | Tag `v4.3.5` (commit `8a76309ed1250d817e9c888c4417171d2ba3ba63`) | `Include/stm32f103xb.h` | Apache-2.0 (`LICENSE.cmsis-device-f1`) | Direct CMSIS register structs: `ADC_TypeDef`, `DMA_Channel_TypeDef`, `DMA_TypeDef`, `TIM_TypeDef`, `RCC_TypeDef`. | VERIFIED (Header hash check) | 2026-09-05 |
+| **Canonical Target Toolchain Baseline** | Arm Limited | T2 (Official Tooling) | Arm GNU Toolchain 13.3.rel1 (GCC 13.3.1, Binutils 2.42, GDB 14.2, Newlib 4.4.0) | Official release/toolchain documentation | Multi-component distribution | Canonical Phase 2 reference toolchain baseline. | PARTIALLY VERIFIED (canonical binaries not executed on build host; build host uses Ubuntu 13.2.1 package) | 2026-09-05 |
+| **Host Cross Toolchain Environment** | Ubuntu / Debian | T2 (Execution Host) | `arm-none-eabi-gcc` 13.2.1 20231009 (Ubuntu 15:13.2.rel1-2), GNU ld 2.42, GDB 15.1, Newlib 4.4.0 package | Ubuntu package execution host | Multi-component distribution | Alternate execution environment used for local compilation, disassembly, and static ELF inspection. | VERIFIED (host compile/link/static tests) | 2026-09-05 |

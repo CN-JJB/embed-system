@@ -1,0 +1,19 @@
+# P2-M04 Source Ledger
+
+This document registers the authoritative specifications, upstream source repositories, and tools establishing the technical baseline for Module P2-M04.
+
+Repository canonical tier classification:
+- **T0**: Specifications, datasheets, architecture references, and standards.
+- **T1**: Upstream source code and pinned headers.
+- **T2**: Official toolchain documentation and manuals.
+
+| Upstream / Project | Organization | Canonical Tier | Exact Revision / Version / Commit | Exact File / Path / Section | License | Why Pedagogically Useful | Verification Status | Verification Date |
+|---|---|---|---|---|---|---|---|---|
+| **FreeRTOS-Kernel** | Amazon Web Services / FreeRTOS | T1 (Upstream Source) | Tag `V11.3.0` (commit `9b777ae5c5b8e9e456065a00294d1e5f5f9facf5`) | `tasks.c`, `list.c`, `queue.c`, `portable/GCC/ARM_CM3/port.c`, `portable/MemMang/heap_4.c`, `include/stack_macros.h` | MIT License (`LICENSE.md`) | Canonical open-source RTOS kernel. Pinned source walkthrough: ready/delayed lists, SysTick preemption, and PendSV assembly context switch. | VERIFIED (Deterministic git clone & commit hash match) | 2026-09-05 |
+| **Armv7-M Architecture Reference Manual** | Arm Limited | T0 (Architecture Spec) | ARM DDI 0403E.e (Errata 2021) | Section B1.5 (Exception model, hardware exception frame `{r0-r3, r12, lr, pc, xpsr}`, EXC_RETURN 0xFFFFFFFD), Section B3.4 (NVIC) | Proprietary (Arm Architecture Spec) | Definitive architectural definition of hardware exception entry/exit stacking and unstacking mechanics. | VERIFIED (Manual inspection) | 2026-09-05 |
+| **ST Programming Manual PM0056** | STMicroelectronics | T0 (Core Spec) | DocID 15491 Rev 7 (Dec 2024) | Section 2.1 (Modes, CONTROL register, MSP vs PSP), Section 4.3 (NVIC), Section 4.4.4 (SCB ICSR PendSV trigger) | Proprietary (ST Programming Manual) | Cortex-M3 processor model, dual stack pointer architecture (MSP in Handler mode, PSP in Thread mode), and PendSV priority setup. | VERIFIED (Manual inspection) | 2026-09-05 |
+| **ST Reference Manual RM0008** | STMicroelectronics | T0 (Silicon Spec) | DocID 13902 Rev 21 (Feb 2021) | Section 6 (RCC clock tree, SystemCoreClock coherence) | Proprietary (ST Reference Manual) | Feeding exact SYSCLK (72 MHz or 64 MHz fallback) into SysTick 1 kHz tick generation without drift. | VERIFIED (Manual inspection) | 2026-09-05 |
+| **CMSIS_5** | Arm Limited | T1 (Upstream Source) | Tag `5.9.0` (commit `2b7495b8535bdcb306dac29b9ded4cfb679d7e5c`) | `CMSIS/Core/Include/core_cm3.h` | Apache-2.0 (`LICENSE.CMSIS_5`) | `__set_PSP()`, `__get_PSP()`, `SysTick_Config()`, `NVIC_SetPriority()`. | VERIFIED (Header hash check) | 2026-09-05 |
+| **Course Runtime & Startup (P2-M01/M02)** | Course Pedagogy | T1 (Internal Dependency) | Phase 2 Canonical | `fundamentals/mcu/01-startup-linker-vector/`, `fundamentals/mcu/02-mmio-clock-timer-nvic/` | Course Original Work | Reuses canonical `-nostartfiles` runtime, `Reset_Handler`, and linker script contract. | VERIFIED (Host build & static checks) | 2026-09-05 |
+| **Canonical Target Toolchain Baseline** | Arm Limited | T2 (Official Tooling) | Arm GNU Toolchain 13.3.rel1 (GCC 13.3.1, Binutils 2.42, GDB 14.2, Newlib 4.4.0) | Official release documentation | Multi-component distribution | Canonical Phase 2 reference toolchain baseline. | PARTIALLY VERIFIED (canonical binaries not executed on build host; build host uses Ubuntu 13.2.1 package) | 2026-09-05 |
+| **Host Cross Toolchain Environment** | Ubuntu / Debian | T2 (Execution Host) | `arm-none-eabi-gcc` 13.2.1 20231009 (Ubuntu 15:13.2.rel1-2), GNU ld 2.42, GDB 15.1, Newlib 4.4.0 package | Ubuntu package execution host | Multi-component distribution | Alternate execution environment used for local compilation, disassembly, and static ELF inspection. | VERIFIED (host compile/link/static tests) | 2026-09-05 |

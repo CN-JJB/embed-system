@@ -1,0 +1,13 @@
+stateDiagram-v2
+    [*] --> Ready : xTaskCreate()
+
+    Ready --> Running : taskSELECT_HIGHEST_PRIORITY_TASK() / PendSV Restore
+    Running --> Ready : Preemption by Higher Priority Task / Round-Robin Time Slice
+    Running --> Blocked : vTaskDelay() / vTaskDelayUntil()
+    Blocked --> Ready : Tick Timeout (SysTick_Handler) / Event Signal
+
+    Running --> Suspended : vTaskSuspend()
+    Ready --> Suspended : vTaskSuspend()
+    Blocked --> Suspended : vTaskSuspend()
+
+    Suspended --> Ready : vTaskResume()
