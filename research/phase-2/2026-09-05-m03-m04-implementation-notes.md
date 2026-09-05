@@ -129,7 +129,7 @@ TIM3 Update @ 10 kHz
   - `f5`: Heap exhaustion (`configTOTAL_HEAP_SIZE = 512 B`).
   All learner code and README files stripped of answer leaks; symptoms clearly identified as scenario-provided.
 - **Challenge & Validator**: Redesigned M04 transfer challenge as a learner-owned 3-file integration bundle (`challenge/starter/` containing `scheduler_app.c`, `scheduler_app.h`, `FreeRTOSConfig.h`, validated via `challenge/validate.sh`) validating 14 core M04 contracts (exact FreeRTOS V11.3.0 pin, learner vector remapping macros and binary entries 11/14/15, pinned ARM_CM3 `portMIN_INTERRUPT_PRIORITY=255` SHPR3 behavior, dynamic SystemCoreClock 72/64 MHz tick math, 2-task priority/blocking contracts, `vTaskStartScheduler()`, heap_4, absence of libc dynamic allocators, and PendSV/SVC disassembly). Excludes premature M05/M06 topics. Untouched starter intentionally fails validation due to pending TODO annotations.
-- **Reviewer Suite**: 13 negative mutation bundles in `reviewer/mutations/` (`test_m04_validator_mutations.sh` positive control PASSED, 13/13 negative mutation bundles rejected in the recorded host run).
+- **Reviewer Suite**: 16 negative mutation bundles in `reviewer/mutations/` (`test_m04_validator_mutations.sh` positive control PASSED, 16/16 negative mutation bundles rejected in the recorded host run).
 - **Module Gate**: Pure M04 defect: `vApplicationIdleHook` calling `vTaskDelay` (violates Idle task never-block invariant). Replaced out-of-scope `configMAX_SYSCALL` defect. Verified by `reviewer/verify_gate_regression.sh` with Leader cleanup trap preservation.
 
 ---
@@ -150,10 +150,10 @@ TIM3 Update @ 10 kHz
 | **M04 Memory Bounds** | `01-freertos-scheduler-context-switch/build/firmware.elf` | `arm-none-eabi-size` | Flash: 5204 B, RAM: 11576 B | **VERIFIED** |
 | **M04 FreeRTOS Symbols** | `01-freertos-scheduler-context-switch/build/firmware.elf` | `arm-none-eabi-nm` | vTaskStartScheduler, PendSV_Handler, ucHeap | **VERIFIED** |
 | **M04 Vector Remapping** | `01-freertos-scheduler-context-switch/build/firmware.elf` | `arm-none-eabi-nm` | SVC, PendSV, SysTick != Default_Handler | **VERIFIED** |
-| **M04 Libc Malloc Absence** | `01-freertos-scheduler-context-switch/build/firmware.elf` | `arm-none-eabi-nm` | malloc, _malloc_r absent | **VERIFIED** |
+| **M04 Libc Dynamic Allocator Absence** | `01-freertos-scheduler-context-switch/build/firmware.elf` | `arm-none-eabi-nm` | malloc/calloc/realloc/free families absent | **VERIFIED** |
 | **M04 Automated Harness** | `01-freertos-scheduler-context-switch/scripts/verify_m04.sh` | Bash automated runner | All static checks passed | **VERIFIED** |
 | **M04 Faults f1–f5** | `01-freertos-scheduler-context-switch/faults/f1..f5` | `make clean all` | All 5 compile cleanly with -Werror | **VERIFIED** |
-| **M04 Mutations (13 families)** | `01-freertos-scheduler-context-switch/reviewer/mutations/` | `test_m04_validator_mutations.sh` | Positive control PASSED; 13/13 mutations correctly rejected in the recorded host run | **VERIFIED** |
+| **M04 Mutations (16 families)** | `01-freertos-scheduler-context-switch/reviewer/mutations/` | `test_m04_validator_mutations.sh` | Positive control PASSED; 16/16 mutations correctly rejected in the recorded host run | **VERIFIED** |
 | **M04 Gate Regression** | `01-freertos-scheduler-context-switch/reviewer/verify_gate_regression.sh` | Automated regression test | Idle hook block defect detected, patch verified | **VERIFIED** |
 | **Top-Level MCU Base Check** | `fundamentals/mcu/Makefile` | `make -C fundamentals/mcu check` | M01, M02, M03 base module static checks passed | **VERIFIED** |
 | **Top-Level RTOS Base Check** | `fundamentals/rtos/Makefile` | `make -C fundamentals/rtos check` | M04 base module static checks passed | **VERIFIED** |
