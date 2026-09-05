@@ -5,7 +5,7 @@
 Initial acquisition begins normally, but after the initialization sequence completes and subsequent subroutines execute, unexpected system crashes or memory corruption in unrelated variables is observed.
 
 ## Objective
-Trace the destination memory buffer address and storage duration across the firmware lifecycle. Formulate a hypothesis, collect evidence from symbol and register state, identify the memory corruption mechanism, and provide a minimal fix.
+Trace the DMA destination address across function return and subsequent execution. Formulate 3–5 hypotheses, compare register/symbol/memory evidence, identify the corruption mechanism, and provide a minimal fix.
 
 ## Allowed Tools
 - Disassembly (`arm-none-eabi-objdump -d`)
@@ -15,7 +15,7 @@ Trace the destination memory buffer address and storage duration across the firm
 
 ## Deliverables
 1. Hypothesized root cause backed by memory and symbol evidence.
-2. Technical explanation of the storage duration violation.
+2. Technical explanation of the proven lifetime/ownership or address-validity failure mechanism.
 3. Minimal source diff resolving the defect.
 
 ## Build
