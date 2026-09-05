@@ -78,7 +78,22 @@ if ! grep -q 'tskKERNEL_VERSION_NUMBER\s*"V11.3.0"' "${FREERTOS_TASK_H}"; then
     exit 1
 fi
 
-# 2. Learner FreeRTOSConfig.h maps SVC/PendSV/SysTick handlers
+# 2. Pinned ARM_CM3 port priority contract (portMIN_INTERRUPT_PRIORITY = 255UL written to SHPR3)
+PORT_C="${MODULE_DIR}/../vendor/freertos/portable/GCC/ARM_CM3/port.c"
+if ! grep -qE "portMIN_INTERRUPT_PRIORITY\s*\(\s*255UL\s*\)" "${PORT_C}"; then
+    echo "FAIL: Pinned ARM_CM3 port must define portMIN_INTERRUPT_PRIORITY as 255UL!" >&2
+    exit 1
+fi
+if ! grep -qE "portNVIC_SHPR3_REG\s*\|\=\s*portNVIC_PENDSV_PRI" "${PORT_C}"; then
+    echo "FAIL: Pinned ARM_CM3 port must program PendSV priority into SHPR3!" >&2
+    exit 1
+fi
+if ! grep -qE "portNVIC_SHPR3_REG\s*\|\=\s*portNVIC_SYSTICK_PRI" "${PORT_C}"; then
+    echo "FAIL: Pinned ARM_CM3 port must program SysTick priority into SHPR3!" >&2
+    exit 1
+fi
+
+# 3. Learner FreeRTOSConfig.h maps SVC/PendSV/SysTick handlers
 python3 -c "
 import sys, re
 cfg = open(sys.argv[1]).read()
@@ -93,15 +108,29 @@ if not re.search(r'#define\s+xPortSysTickHandler\s+SysTick_Handler\b', cfg):
     sys.exit(1)
 " "${CLEAN_CFG}"
 
-# 3. Dynamic SystemCoreClock feeds configCPU_CLOCK_HZ and tick rate is 1 kHz
+# 4. Dynamic SystemCoreClock feeds configCPU_CLOCK_HZ, preemption enabled, and tick rate is 1 kHz
 python3 -c "
 import sys, re
 cfg = open(sys.argv[1]).read()
 if not re.search(r'#define\s+configCPU_CLOCK_HZ\s+\(?SystemCoreClock\)?\b', cfg):
     print('FAIL: configCPU_CLOCK_HZ in FreeRTOSConfig.h must dynamically evaluate SystemCoreClock!', file=sys.stderr)
     sys.exit(1)
-if not re.search(r'#define\s+configTICK_RATE_HZ\s+.*?\b1000\b', cfg):
-    print('FAIL: configTICK_RATE_HZ must be configured to 1000 (1 kHz)!', file=sys.stderr)
+if not re.search(r'#define\s+configUSE_PREEMPTION\s+1\b', cfg):
+    print('FAIL: configUSE_PREEMPTION in FreeRTOSConfig.h must be enabled (1)!', file=sys.stderr)
+    sys.exit(1)
+m_tick = re.search(r'#define\s+configTICK_RATE_HZ\s+(.+)', cfg)
+if not m_tick:
+    print('FAIL: configTICK_RATE_HZ must be configured in FreeRTOSConfig.h!', file=sys.stderr)
+    sys.exit(1)
+t_str = m_tick.group(1).split('//')[0].split('/*')[0].strip()
+t_str = re.sub(r'\b(TickType_t|uint32_t|uint16_t|int|UL|U|L)\b', '', t_str)
+t_str = re.sub(r'[()]', ' ', t_str).strip()
+try:
+    tick_val = eval(t_str)
+except Exception:
+    tick_val = 0
+if tick_val != 1000:
+    print(f'FAIL: configTICK_RATE_HZ ({tick_val}) must be strictly configured to 1000 (1 kHz)!', file=sys.stderr)
     sys.exit(1)
 " "${CLEAN_CFG}"
 
@@ -114,15 +143,6 @@ c64 = 64000000 // 1000 - 1
 assert c72 == 71999, f'72MHz tick math error: {c72}'
 assert c64 == 63999, f'64MHz tick math error: {c64}'
 "
-
-# 4. configKERNEL_INTERRUPT_PRIORITY is lowest implemented priority (0xF0 / 255)
-python3 -c "
-import sys, re
-cfg = open(sys.argv[1]).read()
-if not re.search(r'#define\s+configKERNEL_INTERRUPT_PRIORITY[\s\\\n]+.*(configLIBRARY_LOWEST_INTERRUPT_PRIORITY|255|0x[fF]0)', cfg):
-    print('FAIL: configKERNEL_INTERRUPT_PRIORITY must be lowest interrupt priority (0xF0 / 255)!', file=sys.stderr)
-    sys.exit(1)
-" "${CLEAN_CFG}"
 
 # 5. Heap configuration contract in FreeRTOSConfig.h
 python3 -c "
@@ -159,49 +179,122 @@ if grep -qE "\bmalloc\s*\(" "${CLEAN_SRC}"; then
     exit 1
 fi
 
-# 7. Stack size, return code validation, and priority relationship
+# Set up isolated include directory with peripheral headers but WITHOUT module FreeRTOSConfig.h
+mkdir -p "${TEMP_BUILD_DIR}/inc"
+cp "${MODULE_DIR}/include/clock.h" "${TEMP_BUILD_DIR}/inc/"
+cp "${MODULE_DIR}/include/gpio.h" "${TEMP_BUILD_DIR}/inc/"
+cp "${MODULE_DIR}/include/system_stm32f1xx.h" "${TEMP_BUILD_DIR}/inc/"
+
+CC="arm-none-eabi-gcc"
+MCU_FLAGS="-mcpu=cortex-m3 -mthumb -mfloat-abi=soft"
+CFLAGS="${MCU_FLAGS} -O2 -g3 -Wall -Wextra -Werror -ffunction-sections -fdata-sections -DSTM32F103xB -I${SUBMISSION_DIR} -I${TEMP_BUILD_DIR}/inc -I${MODULE_DIR}/../vendor/freertos/include -I${MODULE_DIR}/../vendor/freertos/portable/GCC/ARM_CM3 -I${MODULE_DIR}/../../mcu/vendor/cmsis/include"
+LDFLAGS="${MCU_FLAGS} -T${MODULE_DIR}/linker/stm32f103c8tx_flash.ld -nostartfiles -Wl,-e,Reset_Handler -Wl,--gc-sections --specs=nano.specs --specs=nosys.specs"
+
+# 7. Compile-time assertions for learner header constants:
+# Truly evaluates TASK_STACK_SIZE_WORDS >= 128U and TASK_A_PRIORITY > TASK_B_PRIORITY
+cat << 'EOF' > "${TEMP_BUILD_DIR}/check_constants.c"
+#include "scheduler_app.h"
+
+_Static_assert(TASK_STACK_SIZE_WORDS >= 128U, "TASK_STACK_SIZE_WORDS must be >= 128 words");
+_Static_assert(TASK_A_PRIORITY > TASK_B_PRIORITY, "TASK_A_PRIORITY must be strictly greater than TASK_B_PRIORITY");
+
+int dummy_check(void) { return 0; }
+EOF
+
+if ! ${CC} ${CFLAGS} -c "${TEMP_BUILD_DIR}/check_constants.c" -o "${TEMP_BUILD_DIR}/check_constants.o" 2>"${TEMP_BUILD_DIR}/assert_err.log"; then
+    echo "FAIL: Header contract assertion failed in scheduler_app.h!" >&2
+    cat "${TEMP_BUILD_DIR}/assert_err.log" >&2
+    exit 1
+fi
+
+# 8. Structural & Semantic analysis of scheduler_app.c:
+# - prvTaskA body contains vTaskDelay(pdMS_TO_TICKS(5))
+# - scheduler_app_init_and_start creates prvTaskA and prvTaskB
+# - Both xTaskCreate return codes checked against pdPASS
+# - vTaskStartScheduler called inside scheduler_app_init_and_start after task creation
 python3 -c "
 import sys, re
 src = open(sys.argv[1]).read()
-matches = re.findall(r'xTaskCreate\s*\(\s*[^,]+,\s*[^,]+,\s*([^,]+),', src)
-for m in matches:
-    arg = m.strip()
-    if arg.isdigit() and int(arg) < 128:
-        print(f'FAIL: Task stack size ({arg}) is undersized below 128 words!', file=sys.stderr)
+
+def extract_fn_body(name, text):
+    m = re.search(r'\b' + name + r'\s*\([^)]*\)\s*\{', text)
+    if not m:
+        return None
+    start = m.end()
+    depth = 1
+    for i in range(start, len(text)):
+        if text[i] == '{':
+            depth += 1
+        elif text[i] == '}':
+            depth -= 1
+            if depth == 0:
+                return text[start:i]
+    return None
+
+# 8.1 prvTaskA body validation
+task_a_body = extract_fn_body('prvTaskA', src)
+if task_a_body is None:
+    print('FAIL: prvTaskA() function definition not found in scheduler_app.c!', file=sys.stderr)
+    sys.exit(1)
+if not re.search(r'\bvTaskDelay\s*\(\s*(pdMS_TO_TICKS\s*\(\s*5\s*\)|5)\s*\)', task_a_body):
+    print('FAIL: prvTaskA body must call vTaskDelay(pdMS_TO_TICKS(5)) to transition to Blocked state!', file=sys.stderr)
+    sys.exit(1)
+
+# 8.2 scheduler_app_init_and_start body validation
+fn_body = extract_fn_body('scheduler_app_init_and_start', src)
+if fn_body is None:
+    print('FAIL: scheduler_app_init_and_start() function definition not found!', file=sys.stderr)
+    sys.exit(1)
+
+# 8.3 Required xTaskCreate for prvTaskA inside scheduler_app_init_and_start
+m_a = re.search(r'xTaskCreate\s*\(\s*prvTaskA\s*,\s*\"[^\"]*\"\s*,\s*([^,]+)\s*,\s*([^,]+)\s*,\s*([^,]+)\s*,\s*([^)]+)\)', fn_body)
+if not m_a:
+    print('FAIL: scheduler_app_init_and_start() must explicitly call xTaskCreate() for prvTaskA!', file=sys.stderr)
+    sys.exit(1)
+
+# 8.4 Required xTaskCreate for prvTaskB inside scheduler_app_init_and_start
+m_b = re.search(r'xTaskCreate\s*\(\s*prvTaskB\s*,\s*\"[^\"]*\"\s*,\s*([^,]+)\s*,\s*([^,]+)\s*,\s*([^,]+)\s*,\s*([^)]+)\)', fn_body)
+if not m_b:
+    print('FAIL: scheduler_app_init_and_start() must explicitly call xTaskCreate() for prvTaskB!', file=sys.stderr)
+    sys.exit(1)
+
+# 8.5 Stack argument check (numeric literals if not macro)
+for name, m in [('Task A', m_a), ('Task B', m_b)]:
+    stack_arg = m.group(1).strip()
+    if stack_arg.isdigit() and int(stack_arg) < 128:
+        print(f'FAIL: {name} stack argument ({stack_arg}) is undersized below 128 words!', file=sys.stderr)
         sys.exit(1)
+
+# 8.6 Priority argument relationship in xTaskCreate call
+p_a = m_a.group(3).strip()
+p_b = m_b.group(3).strip()
+if p_a == p_b:
+    print('FAIL: Task A and Task B must have distinct priorities!', file=sys.stderr)
+    sys.exit(1)
+if ('TASK_B_PRIORITY' in p_a and 'TASK_A_PRIORITY' in p_b) or (p_a.isdigit() and p_b.isdigit() and int(p_a) < int(p_b)):
+    print('FAIL: Inverted task priorities: Task A must have higher priority than Task B!', file=sys.stderr)
+    sys.exit(1)
+
+# 8.7 vTaskStartScheduler inside scheduler_app_init_and_start
+pos_sched = fn_body.find('vTaskStartScheduler')
+if pos_sched == -1:
+    print('FAIL: vTaskStartScheduler() must be called inside scheduler_app_init_and_start()!', file=sys.stderr)
+    sys.exit(1)
+
+pos_a = fn_body.find('prvTaskA')
+pos_b = fn_body.find('prvTaskB')
+if pos_a > pos_sched or pos_b > pos_sched:
+    print('FAIL: Both tasks must be created before vTaskStartScheduler() is invoked!', file=sys.stderr)
+    sys.exit(1)
+
+# 8.8 Return code validation for BOTH task creations
+pass_checks = len(re.findall(r'\bpdPASS\b', fn_body))
+if pass_checks < 2:
+    print(f'FAIL: Return codes from both xTaskCreate() calls must be validated against pdPASS (found {pass_checks} checks; expected >= 2)!', file=sys.stderr)
+    sys.exit(1)
 " "${CLEAN_SRC}"
 
-if ! grep -qE "(pdPASS|xResult|status)" "${CLEAN_SRC}"; then
-    echo "FAIL: Return codes from xTaskCreate() must be validated!" >&2
-    exit 1
-fi
-
-python3 -c "
-import sys, re
-src = open(sys.argv[1]).read()
-m_a = re.search(r'xTaskCreate\s*\(\s*prvTaskA[^,]*,\s*\"[^\"]*\",\s*[^,]*,\s*[^,]*,\s*([^,]+),', src)
-m_b = re.search(r'xTaskCreate\s*\(\s*prvTaskB[^,]*,\s*\"[^\"]*\",\s*[^,]*,\s*[^,]*,\s*([^,]+),', src)
-if m_a and m_b:
-    p_a = m_a.group(1).strip()
-    p_b = m_b.group(1).strip()
-    if ('TASK_B_PRIORITY' in p_a and 'TASK_A_PRIORITY' in p_b) or ('1' in p_a and '2' in p_b):
-        print('FAIL: Inverted task priorities: Task A must have higher priority than Task B!')
-        sys.exit(1)
-" "${CLEAN_SRC}"
-
-# 8. Task A must block via periodic vTaskDelay(pdMS_TO_TICKS(5))
-if ! grep -qE "\bvTaskDelay\s*\(\s*(pdMS_TO_TICKS\s*\(\s*5\s*\)|5)\s*\)" "${CLEAN_SRC}"; then
-    echo "FAIL: Task A must transition to Blocked via vTaskDelay(pdMS_TO_TICKS(5))!" >&2
-    exit 1
-fi
-
-# 9. vTaskStartScheduler must be called
-if ! grep -qE "\bvTaskStartScheduler\s*\(\s*\)" "${CLEAN_SRC}"; then
-    echo "FAIL: vTaskStartScheduler() must be called to start scheduling!" >&2
-    exit 1
-fi
-
-# 10. Build verification test harness
+# 9. Build verification test harness
 cat << 'EOF' > "${TEMP_BUILD_DIR}/test_main.c"
 #include "scheduler_app.h"
 #include "clock.h"
@@ -216,18 +309,6 @@ int main(void)
     return 0;
 }
 EOF
-
-# Set up isolated include directory with peripheral headers but WITHOUT module FreeRTOSConfig.h
-# This guarantees FreeRTOS sources strictly include the learner's submitted FreeRTOSConfig.h
-mkdir -p "${TEMP_BUILD_DIR}/inc"
-cp "${MODULE_DIR}/include/clock.h" "${TEMP_BUILD_DIR}/inc/"
-cp "${MODULE_DIR}/include/gpio.h" "${TEMP_BUILD_DIR}/inc/"
-cp "${MODULE_DIR}/include/system_stm32f1xx.h" "${TEMP_BUILD_DIR}/inc/"
-
-CC="arm-none-eabi-gcc"
-MCU_FLAGS="-mcpu=cortex-m3 -mthumb -mfloat-abi=soft"
-CFLAGS="${MCU_FLAGS} -O2 -g3 -Wall -Wextra -Werror -ffunction-sections -fdata-sections -DSTM32F103xB -I${SUBMISSION_DIR} -I${TEMP_BUILD_DIR}/inc -I${MODULE_DIR}/../vendor/freertos/include -I${MODULE_DIR}/../vendor/freertos/portable/GCC/ARM_CM3 -I${MODULE_DIR}/../../mcu/vendor/cmsis/include"
-LDFLAGS="${MCU_FLAGS} -T${MODULE_DIR}/linker/stm32f103c8tx_flash.ld -nostartfiles -Wl,-e,Reset_Handler -Wl,--gc-sections --specs=nano.specs --specs=nosys.specs"
 
 SRCS=(
     "${APP_SRC}"
@@ -250,7 +331,7 @@ if ! ${CC} ${CFLAGS} ${LDFLAGS} "${SRCS[@]}" "${TEMP_BUILD_DIR}/test_main.c" -o 
     exit 1
 fi
 
-# 11. Check memory bounds: Flash <= 64 KB, RAM <= 20 KB
+# 10. Check memory bounds: Flash <= 64 KB, RAM <= 20 KB
 FLASH_BYTES=$(arm-none-eabi-size -B "${ELF}" | awk 'NR==2 {print $1 + $2}')
 RAM_BYTES=$(arm-none-eabi-size -B "${ELF}" | awk 'NR==2 {print $2 + $3}')
 if [ "${FLASH_BYTES}" -gt 65536 ]; then
@@ -262,7 +343,7 @@ if [ "${RAM_BYTES}" -gt 20480 ]; then
     exit 1
 fi
 
-# 12. Vector table entries 11, 14, 15 and handler symbol resolution
+# 11. Vector table entries 11, 14, 15 and handler symbol resolution
 NM_OUT=$(arm-none-eabi-nm "${ELF}")
 DEF_ADDR=$(echo "${NM_OUT}" | grep -w "Default_Handler" | awk '{print $1}')
 SVC_ADDR=$(echo "${NM_OUT}" | grep -w "SVC_Handler" | awk '{print $1}')
@@ -311,7 +392,7 @@ if v_tick != tick_addr:
     sys.exit(1)
 "
 
-# 13. Verify heap_4 exclusivity and learner config's heap size contract
+# 12. Verify heap_4 exclusivity and learner config's heap size contract
 if ! echo "${NM_OUT}" | grep -qw "ucHeap"; then
     echo "FAIL: heap_4 allocator (ucHeap) missing from binary!" >&2
     exit 1
@@ -333,13 +414,13 @@ if [ "$((HEAP_SIZE))" -ne "${EXPECTED_HEAP_SIZE}" ]; then
     exit 1
 fi
 
-# Check absence of libc dynamic allocators
-if echo "${NM_OUT}" | grep -qE "\b(malloc|_malloc_r|calloc|_calloc_r|realloc|_realloc_r)\b"; then
-    echo "FAIL: Prohibited libc dynamic memory allocators linked into binary!" >&2
+# 13. Strict absence of standard libc dynamic memory allocators (malloc, calloc, realloc, free)
+if echo "${NM_OUT}" | grep -qE "\b(malloc|_malloc_r|calloc|_calloc_r|realloc|_realloc_r|free|_free_r)\b"; then
+    echo "FAIL: Prohibited libc dynamic memory allocators (malloc/free) linked into binary!" >&2
     exit 1
 fi
 
-# 14. Disassembly inspection of PendSV and SVC
+# 14. Disassembly inspection of PendSV, SVC, and SHPR3 write in scheduler startup
 DISASM=$(arm-none-eabi-objdump -d "${ELF}")
 PENDSV_ASM=$(echo "${DISASM}" | awk '/<PendSV_Handler>:/ {flag=1} flag && !/<PendSV_Handler>:/ && /^[0-9a-f]+ </ {flag=0} flag {print}')
 if ! echo "${PENDSV_ASM}" | grep -qiE "mrs.*r0,.*psp"; then
@@ -358,6 +439,33 @@ fi
 SVC_ASM=$(echo "${DISASM}" | awk '/<SVC_Handler>:/ {flag=1} flag && !/<SVC_Handler>:/ && /^[0-9a-f]+ </ {flag=0} flag {print}')
 if ! echo "${SVC_ASM}" | grep -qiE "msr.*psp"; then
     echo "FAIL: SVC_Handler does not initialize PSP!" >&2
+    exit 1
+fi
+
+# Upstream pinned ARM_CM3 port priority contract:
+# portMIN_INTERRUPT_PRIORITY is hardcoded to 255UL in port.c.
+# PendSV and SysTick priorities are directly programmed via SHPR3 in xPortStartScheduler.
+PORT_C="${MODULE_DIR}/../vendor/freertos/portable/GCC/ARM_CM3/port.c"
+if ! grep -qE "#define\s+portMIN_INTERRUPT_PRIORITY\s+\(\s*255UL\s*\)" "${PORT_C}"; then
+    echo "FAIL: Upstream pinned port.c must define portMIN_INTERRUPT_PRIORITY as 255UL!" >&2
+    exit 1
+fi
+if ! grep -qE "portNVIC_SHPR3_REG\s*\|=\s*portNVIC_PENDSV_PRI" "${PORT_C}"; then
+    echo "FAIL: Upstream pinned port.c must configure PendSV priority via SHPR3!" >&2
+    exit 1
+fi
+if ! grep -qE "portNVIC_SHPR3_REG\s*\|=\s*portNVIC_SYSTICK_PRI" "${PORT_C}"; then
+    echo "FAIL: Upstream pinned port.c must configure SysTick priority via SHPR3!" >&2
+    exit 1
+fi
+
+SCHED_ASM=$(echo "${DISASM}" | awk '/<xPortStartScheduler>:/ {flag=1} flag && !/<xPortStartScheduler>:/ && /^[0-9a-f]+ </ {flag=0} flag {print}')
+if ! echo "${SCHED_ASM}" | grep -qiE "(16711680|0xff0000)"; then
+    echo "FAIL: Scheduler start path does not configure PendSV minimum priority (255UL << 16)!" >&2
+    exit 1
+fi
+if ! echo "${SCHED_ASM}" | grep -qiE "(4278190080|0xff000000)"; then
+    echo "FAIL: Scheduler start path does not configure SysTick minimum priority (255UL << 24)!" >&2
     exit 1
 fi
 

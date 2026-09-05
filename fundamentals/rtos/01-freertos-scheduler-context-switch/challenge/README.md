@@ -8,7 +8,7 @@ You are responsible for:
 1. Configuring the FreeRTOS kernel (`FreeRTOSConfig.h`):
    - Remapping the Cortex-M port handlers (`vPortSVCHandler`, `xPortPendSVHandler`, `xPortSysTickHandler`) to the hardware interrupt vector symbols (`SVC_Handler`, `PendSV_Handler`, `SysTick_Handler`).
    - Establishing dynamic clock coherence by tying `configCPU_CLOCK_HZ` to `SystemCoreClock` to ensure exact 1 kHz tick reload across 72 MHz HSE and 64 MHz HSI fallback.
-   - Configuring `configKERNEL_INTERRUPT_PRIORITY` to the lowest implemented Cortex-M3 priority (`0xF0`).
+   - Understanding that the pinned ARM_CM3 port automatically assigns PendSV and SysTick to minimum priority (portMIN_INTERRUPT_PRIORITY = 255, latching to 0xF0 on STM32F103) via SHPR3 during scheduler startup.
    - Dimensioning a dedicated 10 KB heap for `heap_4.c` within the 20 KB SRAM limit.
 2. Implementing the dual-task application (`scheduler_app.c`):
    - Initializing the clock tree and GPIO diagnostic pins (PA1 for Task A, PA2 for Task B).
@@ -104,7 +104,7 @@ The automated validator checks the following 14 concrete criteria against your s
 2. **Vector Remapping**: Static analysis checks `vPortSVCHandler`, `xPortPendSVHandler`, and `xPortSysTickHandler` macro definitions.
 3. **Vector Table Entries**: Binary inspection of ELF and `.bin` proves vector table offsets 11, 14, and 15 resolve to the FreeRTOS handlers and do **not** point to `Default_Handler`.
 4. **Clock Coherence**: Proves `configCPU_CLOCK_HZ` dynamically tracks `SystemCoreClock`, and validates SysTick reload values for 72 MHz (71999) and 64 MHz (63999).
-5. **Kernel Priority**: Proves `configKERNEL_INTERRUPT_PRIORITY` is set to the lowest priority (`0xF0` / 255).
+5. **Kernel Priority Architecture**: Verifies that pinned ARM_CM3 `port.c` defines `portMIN_INTERRUPT_PRIORITY = 255UL` and writes SHPR3 during scheduler startup, ensuring PendSV and SysTick execute at lowest implemented priority (`0xF0` / logical 15).
 6. **Heap Budget**: Validates `configSUPPORT_DYNAMIC_ALLOCATION == 1` and `configTOTAL_HEAP_SIZE` is within safe SRAM bounds (>= 2 KB and <= 16 KB).
 7. **Task Stack Size**: Validates task stack depths are >= 128 words.
 8. **Return Code Checking**: Confirms `xTaskCreate()` return codes are checked against `pdPASS`.
@@ -158,9 +158,9 @@ When running on hardware or logic analyzer:
 2. **Clock Drift / Dilated Delays**:
    - *Symptom*: Delays run 12.5% slower after HSE failure.
    - *Cause*: Hardcoded `configCPU_CLOCK_HZ` to `72000000UL` instead of dynamic `(SystemCoreClock)`.
-3. **Immediate Scheduler Crash**:
-   - *Symptom*: HardFault or assertion failure in `vPortValidateInterruptPriority()`.
-   - *Cause*: Configured `configKERNEL_INTERRUPT_PRIORITY` to 0 (highest priority) instead of 0xF0 (lowest).
+3. **Missing Task Creation**:
+   - *Symptom*: Scheduler starts but neither Task A nor Task B executes.
+   - *Cause*: Failed to call `xTaskCreate` for `prvTaskA` or `prvTaskB` with validated return code.
 4. **Task B Starvation**:
    - *Symptom*: PA2 never toggles; Task B never runs.
    - *Cause*: Task A uses a busy-wait loop instead of `vTaskDelay()`, permanently starving lower-priority Task B.

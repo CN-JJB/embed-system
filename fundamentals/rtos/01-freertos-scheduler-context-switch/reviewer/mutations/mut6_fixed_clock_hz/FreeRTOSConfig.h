@@ -71,14 +71,9 @@ void vAssertCalled(const char *pcFile, unsigned long ulLine);
     #define configPRIO_BITS                     4
 #endif
 
-/* Lowest interrupt priority (15 for 4-bit priority) */
-#define configLIBRARY_LOWEST_INTERRUPT_PRIORITY         15
 
 /* Maximum interrupt priority from which FreeRTOS API calls can be made */
 #define configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY    5
-
-#define configKERNEL_INTERRUPT_PRIORITY \
-    (configLIBRARY_LOWEST_INTERRUPT_PRIORITY << (8 - configPRIO_BITS))
 
 #define configMAX_SYSCALL_INTERRUPT_PRIORITY \
     (configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY << (8 - configPRIO_BITS))

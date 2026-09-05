@@ -15,13 +15,12 @@
  * Dynamic Core Clock Coherence:
  * SystemCoreClock is updated by course clock_init() to reflect either
  * 72 MHz HSE primary profile or 64 MHz HSI fallback profile.
- *
- * TODO: Configure configCPU_CLOCK_HZ to dynamically evaluate SystemCoreClock
- * to prevent clock drift across fallback transitions.
+ * configCPU_CLOCK_HZ dynamically tracks SystemCoreClock, ensuring exact
+ * 1 kHz SysTick generation without drift across clock fallback transitions.
  */
 extern uint32_t SystemCoreClock;
-#define configCPU_CLOCK_HZ                      72000000UL /* TODO: Use dynamic (SystemCoreClock) */
-#define configTICK_RATE_HZ                      ((TickType_t)1000)
+#define configCPU_CLOCK_HZ                      (SystemCoreClock)
+#define configTICK_RATE_HZ                      ((TickType_t)100) /* Defect: wrong tick rate 100 Hz instead of 1000 Hz */
 #define configMAX_PRIORITIES                    (5)
 #define configMINIMAL_STACK_SIZE                ((uint16_t)128)
 #define configMAX_TASK_NAME_LEN                 (16)
@@ -37,10 +36,7 @@ extern uint32_t SystemCoreClock;
 #define configSUPPORT_DYNAMIC_ALLOCATION        1
 #define configAPPLICATION_ALLOCATED_HEAP        0
 
-/*
- * TODO: Configure configTOTAL_HEAP_SIZE for FreeRTOS heap_4.
- * Must fit safely within 20 KB SRAM while accommodating dual tasks and idle task.
- */
+/* 10 KB heap for FreeRTOS (out of 20 KB SRAM total), leaving room for globals and stacks */
 #define configTOTAL_HEAP_SIZE                   ((size_t)(10 * 1024))
 
 /* =============================================================================
@@ -75,29 +71,22 @@ void vAssertCalled(const char *pcFile, unsigned long ulLine);
     #define configPRIO_BITS                     4
 #endif
 
+
 /* Maximum interrupt priority from which FreeRTOS API calls can be made */
 #define configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY    5
+
 
 #define configMAX_SYSCALL_INTERRUPT_PRIORITY \
     (configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY << (8 - configPRIO_BITS))
 
-/* Note: PendSV and SysTick interrupt priorities are directly managed by
- * the pinned ARM_CM3 port.c via portMIN_INTERRUPT_PRIORITY (255UL) written
- * to SHPR3, giving logical priority 15 (0xF0) on STM32F103.
- * configKERNEL_INTERRUPT_PRIORITY is not used by this port. */
-
 /* =============================================================================
  * Exception Handler Mapping to Vector Table
  * =============================================================================
- *
- * TODO: Map standard FreeRTOS Cortex-M port handlers to course startup vector symbols:
- *   vPortSVCHandler     -> SVC_Handler
- *   xPortPendSVHandler  -> PendSV_Handler
- *   xPortSysTickHandler -> SysTick_Handler
+ * Maps standard FreeRTOS Cortex-M port handlers to course startup vector symbols.
  */
-#define vPortSVCHandler                         vPortSVCHandler   /* TODO: Map to SVC_Handler */
-#define xPortPendSVHandler                      xPortPendSVHandler/* TODO: Map to PendSV_Handler */
-#define xPortSysTickHandler                     xPortSysTickHandler/* TODO: Map to SysTick_Handler */
+#define vPortSVCHandler                         SVC_Handler
+#define xPortPendSVHandler                      PendSV_Handler
+#define xPortSysTickHandler                     SysTick_Handler
 
 /* =============================================================================
  * FreeRTOS API Function Inclusions

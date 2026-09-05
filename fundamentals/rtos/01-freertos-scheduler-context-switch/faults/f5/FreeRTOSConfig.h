@@ -42,11 +42,7 @@ void vAssertCalled(const char *pcFile, unsigned long ulLine);
     #define configPRIO_BITS                     4
 #endif
 
-#define configLIBRARY_LOWEST_INTERRUPT_PRIORITY         15
 #define configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY    5
-
-#define configKERNEL_INTERRUPT_PRIORITY \
-    (configLIBRARY_LOWEST_INTERRUPT_PRIORITY << (8 - configPRIO_BITS))
 
 #define configMAX_SYSCALL_INTERRUPT_PRIORITY \
     (configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY << (8 - configPRIO_BITS))

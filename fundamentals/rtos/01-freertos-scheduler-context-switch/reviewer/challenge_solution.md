@@ -18,7 +18,7 @@ The learner integration is packaged as a **learner-owned 3-file integration bund
   - `xPortPendSVHandler -> PendSV_Handler`
   - `xPortSysTickHandler -> SysTick_Handler`
 - Vector table entries 11 (SVCall), 14 (PendSV), and 15 (SysTick) resolve to FreeRTOS port implementations rather than `Default_Handler`.
-- `configKERNEL_INTERRUPT_PRIORITY` is explicitly configured to the lowest Cortex-M3 interrupt priority (`0xF0` / 255).
+- Upstream pinned ARM_CM3 port contract: `port.c` internally hardcodes `portMIN_INTERRUPT_PRIORITY = 255UL` and configures PendSV and SysTick via SHPR3 directly in `xPortStartScheduler()`. On STM32F103 (4-bit implemented priority), writing 255 sets the implemented upper 4 bits to `0xF0` (logical 15, lowest preemption urgency).
 
 ### 3. Dual-Task Priority & State Transitions
 - Task A: Priority 2 (`tskIDLE_PRIORITY + 2`), stack $\ge 128\text{ words}$. Toggles PA1 and yields CPU to lower-priority tasks by transitioning to `Blocked` state via `vTaskDelay(pdMS_TO_TICKS(5))`.
@@ -37,14 +37,17 @@ The learner integration is packaged as a **learner-owned 3-file integration bund
 The student validator (`challenge/validate.sh`) tests 14 distinct static, architectural, binary, and compilation contracts against the learner bundle.
 The automated regression harness (`reviewer/test_m04_validator_mutations.sh`) proves validator rigor:
 1. **Positive Control**: `reviewer/challenge-reference/` bundle -> **MUST PASS**.
-2. **Negative Mutations** (10 mutation bundle families) -> **ALL MUST BE REJECTED**:
+2. **Negative Mutations** (13 mutation bundle families) -> **ALL MUST BE REJECTED**:
    - `mut1_broken_vectors`: learner config omits port handler remapping;
    - `mut2_inverted_priority`: Task A has lower priority than Task B;
    - `mut3_task_never_delays`: Task A never blocks, starving Task B;
    - `mut4_scheduler_not_started`: `vTaskStartScheduler()` omitted;
    - `mut5_libc_malloc_used`: calls prohibited standard libc `malloc()`;
    - `mut6_fixed_clock_hz`: hardcoded 72 MHz static clock instead of dynamic `SystemCoreClock`;
-   - `mut7_wrong_kernel_priority`: kernel interrupt priority set to 0 instead of lowest priority (`0xF0`);
+   - `mut7_wrong_tick_rate`: tick rate set to 100 Hz instead of 1000 Hz;
    - `mut8_invalid_heap_contract`: `configTOTAL_HEAP_SIZE` set to 512 B (insufficient for dual tasks + idle task);
    - `mut9_unchecked_task_create`: return code of `xTaskCreate` ignored;
-   - `mut10_todo_unimplemented`: uncompleted TODO annotations remaining in bundle.
+   - `mut10_todo_unimplemented`: uncompleted TODO annotations remaining in bundle;
+   - `mut_no_task_creation`: defines tasks and decoy pdPASS but omits `xTaskCreate` calls;
+   - `mut_undersized_stack_contract`: sets `TASK_STACK_SIZE_WORDS` to 64 words in header;
+   - `mut_decoy_delay`: places `vTaskDelay()` in an unused helper while actual `prvTaskA` never blocks.

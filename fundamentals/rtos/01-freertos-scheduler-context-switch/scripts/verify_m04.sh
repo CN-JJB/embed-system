@@ -91,8 +91,8 @@ fi
 echo "[PASS] Vector table exception handlers correctly linked to FreeRTOS port implementations"
 
 # 6. Verify heap_4 exclusivity and absence of libc dynamic allocators
-if echo "${NM_OUTPUT}" | grep -qE "\b(malloc|_malloc_r|calloc|_calloc_r|realloc|_realloc_r)\b"; then
-    echo "ERROR: Standard C runtime dynamic memory allocator (malloc/calloc/realloc) linked into binary!" >&2
+if echo "${NM_OUTPUT}" | grep -qE "\b(malloc|_malloc_r|calloc|_calloc_r|realloc|_realloc_r|free|_free_r)\b"; then
+    echo "ERROR: Standard C runtime dynamic memory allocator (malloc/calloc/realloc/free) linked into binary!" >&2
     exit 1
 fi
 HEAP_SIZE=$(arm-none-eabi-nm -S "${ELF}" | grep -w "ucHeap" | awk '{print "0x"$2}')

@@ -39,11 +39,25 @@ In `FreeRTOSConfig.h`, we map the upstream names directly to the startup vector 
 ```
 This forces the linker to resolve vector table entries 11, 14, and 15 to the implementations compiled from `port.c`.
 
-### 2. Cortex-M3 Interrupt Priority Architecture
+### 2. Cortex-M3 Interrupt Priority Architecture and Pinned Port Behavior
 STM32F103 implements 4 bits of interrupt priority (`__NVIC_PRIO_BITS = 4`), supporting 16 priority levels ($0$ to $15$, where $0$ is highest priority and $15$ is lowest).
 
 In the Cortex-M3 priority register byte (`IPR` or `SHPR`), the implemented 4 bits occupy the **upper 4 bits** (bits [7:4]), while bits [3:0] read as zero.
-- `configKERNEL_INTERRUPT_PRIORITY`: Set to lowest priority $15 \ll 4 = \texttt{0xF0}$. PendSV and SysTick run at this priority so they never delay hardware peripheral interrupts.
+
+In the pinned FreeRTOS V11.3.0 `ARM_CM3/port.c`:
+- The port internally defines:
+  ```c
+  #define portMIN_INTERRUPT_PRIORITY  ( 255UL )
+  #define portNVIC_PENDSV_PRI         ( ( ( uint32_t ) portMIN_INTERRUPT_PRIORITY ) << 16UL )
+  #define portNVIC_SYSTICK_PRI        ( ( ( uint32_t ) portMIN_INTERRUPT_PRIORITY ) << 24UL )
+  ```
+- During `xPortStartScheduler()`, the port writes these values directly to System Handler Priority Register 3 (`SHPR3`):
+  ```c
+  portNVIC_SHPR3_REG |= portNVIC_PENDSV_PRI;
+  portNVIC_SHPR3_REG |= portNVIC_SYSTICK_PRI;
+  ```
+- Because STM32F103 implements only the upper 4 bits of each priority byte, writing `255` (`0xFF`) sets the priority field to `0xF0` (logical priority 15, minimum urgency / lowest preemption priority).
+- Therefore, PendSV and SysTick automatically execute at minimum priority so they never delay hardware peripheral interrupts. This behavior is established directly by the pinned port implementation; `configKERNEL_INTERRUPT_PRIORITY` is not used by this port.
 - `configMAX_SYSCALL_INTERRUPT_PRIORITY`: This module keeps the port configuration technically valid at $5 \ll 4 = \texttt{0x50}$. Detailed ISR API eligibility and syscall-priority auditing are deferred to P2-M05. BASEPRI at this threshold does not mask priorities 0 to 4; that is not the same as making those interrupts globally non-maskable.
 
 ## Step-by-Step Procedure

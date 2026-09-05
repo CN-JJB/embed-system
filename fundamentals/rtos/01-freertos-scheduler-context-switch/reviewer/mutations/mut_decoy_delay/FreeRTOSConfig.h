@@ -71,16 +71,16 @@ void vAssertCalled(const char *pcFile, unsigned long ulLine);
     #define configPRIO_BITS                     4
 #endif
 
-/* Lowest interrupt priority (15 for 4-bit priority) */
-#define configLIBRARY_LOWEST_INTERRUPT_PRIORITY         15
-
 /* Maximum interrupt priority from which FreeRTOS API calls can be made */
 #define configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY    5
 
-#define configKERNEL_INTERRUPT_PRIORITY         0 /* Defect: wrong priority 0 instead of 0xF0 */
-
 #define configMAX_SYSCALL_INTERRUPT_PRIORITY \
     (configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY << (8 - configPRIO_BITS))
+
+/* Note: PendSV and SysTick interrupt priorities are directly managed by
+ * the pinned ARM_CM3 port.c via portMIN_INTERRUPT_PRIORITY (255UL) written
+ * to SHPR3, giving logical priority 15 (0xF0) on STM32F103.
+ * configKERNEL_INTERRUPT_PRIORITY is not used by this port. */
 
 /* =============================================================================
  * Exception Handler Mapping to Vector Table
