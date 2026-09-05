@@ -28,4 +28,4 @@
 - FreeRTOS sources retain official MIT license headers (`LICENSE.md` under `fundamentals/rtos/vendor/freertos/`).
 - CMSIS device headers retain Apache-2.0 notices under `fundamentals/mcu/vendor/cmsis/include/`.
 - No proprietary HAL, STM32Cube, or closed-source RTOS wrappers are utilized.
-- All code compiles under strict `-Wall -Wextra -Werror` with Arm GNU Toolchain 13.3.rel1 / Ubuntu GCC 13.2.1 cross-compiler.
+- Canonical baseline: **Arm GNU Toolchain 13.3.rel1** (GCC 13.3.1 / Binutils 2.42 / GDB 14.2 / Newlib 4.4.0). Actual host verification for this implementation used Ubuntu/WSL `arm-none-eabi-gcc` **13.2.1** with Binutils **2.42**; canonical 13.3.rel1 execution remains separate from those host results.
