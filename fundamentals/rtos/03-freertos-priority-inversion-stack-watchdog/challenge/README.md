@@ -14,8 +14,8 @@ Your submission must satisfy:
    - Direct CMSIS register access; no vendor HAL.
 3. **Priority Inversion & Inheritance Harness (`inversion_app.c`, `inversion_app.h`)**:
    - 3-task deterministic model: Task High (Prio 3), Task Medium (Prio 2), Task Low (Prio 1).
-   - Run A: Binary semaphore control showing bounded priority inversion (~25 ms delay on High).
-   - Run B: Mutex control showing priority inheritance (~5 ms delay on High).
+   - Run A: Binary semaphore control showing bounded priority inversion (**DESIGN TARGET / UNVERIFIED**: ~25 ms High wait on target).
+   - Run B: Mutex control showing priority inheritance (**DESIGN TARGET / UNVERIFIED**: ~5 ms High wait on target).
    - Zero `vTaskDelay()` calls while holding the shared lock during workload execution.
    - Stack watermark conversion from words to bytes (`words * sizeof(StackType_t)`).
 
