@@ -42,10 +42,16 @@ int gate_adc_init(void)
     for (volatile uint32_t i = 0; i < 1000; i++) __NOP();
 
     ADC1->CR2 |= ADC_CR2_RSTCAL;
-    while (ADC1->CR2 & ADC_CR2_RSTCAL);
+    uint32_t timeout = 100000U;
+    while (ADC1->CR2 & ADC_CR2_RSTCAL) {
+        if (--timeout == 0U) return -1;
+    }
 
     ADC1->CR2 |= ADC_CR2_CAL;
-    while (ADC1->CR2 & ADC_CR2_CAL);
+    timeout = 100000U;
+    while (ADC1->CR2 & ADC_CR2_CAL) {
+        if (--timeout == 0U) return -2;
+    }
 
     ADC1->CR2 &= ~ADC_CR2_EXTSEL;
     ADC1->CR2 |= ADC_CR2_EXTSEL_2 | ADC_CR2_EXTTRIG | ADC_CR2_DMA;
@@ -60,12 +66,6 @@ void gate_tim3_init(void)
     TIM3->CR2 &= ~TIM_CR2_MMS;
     TIM3->CR2 |= TIM_CR2_MMS_1;    /* MMS = 0b010 (Update) */
 
-    /*
-     * SEEDED GATE DEFECT: TIM_CR1_UDIS (Update Disable) is set in CR1!
-     * RM0008 Section 14.4.1: When UDIS=1, Update Events (UEV) are disabled.
-     * The counter increments and wraps, but never generates an update event,
-     * suppressing TRGO pulses.
-     */
     TIM3->CR1 = TIM_CR1_CEN | TIM_CR1_UDIS;
 }
 
@@ -90,7 +90,11 @@ void DMA1_Channel1_IRQHandler(void)
 int main(void)
 {
     gate_dma_init();
-    gate_adc_init();
+    if (gate_adc_init() != 0) {
+        while (1) {
+            __NOP();
+        }
+    }
     gate_tim3_init();
 
     while (1) {
