@@ -35,13 +35,12 @@ The Arm Cortex-M3 processor features two physical stack pointers:
 
 If an exception is taken while a task is running in Thread mode on PSP, hardware stacks the 8-word exception frame (`R0-R3, R12, LR, PC, xPSR`) onto that task's PSP. Handler mode then executes using MSP. The FreeRTOS PendSV path additionally saves/restores `R4-R11` on the task's PSP.
 
-### 2.2 The PendSV Tail-Chaining Context Switch
-Context switches must never execute at high interrupt priority, as doing so would block hardware interrupts and introduce unbounded jitter.
-FreeRTOS solves this using **PendSV**:
-1. When a task delays, yields, or is preempted, the kernel sets `SCB->ICSR |= SCB_ICSR_PENDSVSET_Msk`.
-2. PendSV is programmed to the **lowest possible interrupt priority** (`0xF0`).
-3. The Cortex-M NVIC defers executing PendSV until all higher-priority ISRs have completed.
-4. When the last ISR returns, the NVIC immediately **tail-chains** into `PendSV_Handler` without intermediate unstacking:
+### 2.2 The PendSV Context Switch
+FreeRTOS uses **PendSV** so context switching runs at the lowest implemented exception urgency:
+1. When a task delays, yields, or a higher-priority task becomes ready, the kernel can pend PendSV.
+2. The pinned ARM_CM3 port programs PendSV and SysTick to the lowest hardware priority from `port.c`.
+3. The Cortex-M NVIC defers PendSV while higher-urgency exceptions are active.
+4. If PendSV is already pending when another exception completes, Cortex-M may **tail-chain** directly into `PendSV_Handler`. A yield requested from Thread mode enters PendSV as a normal exception rather than by ISR tail-chaining:
    - Saves `R4-R11` to the outgoing task's PSP.
    - Saves `PSP` to `pxCurrentTCB->pxTopOfStack`.
    - Saves `&pxCurrentTCB` and handler exception LR (`EXC_RETURN`) onto MSP (`stmdb sp!, {r3, r14}`).
@@ -60,8 +59,8 @@ In this module, `configCPU_CLOCK_HZ` dynamically tracks `SystemCoreClock`, guara
 ### 2.4 SRAM Memory Budgeting & `heap_4` Exclusivity
 The STM32F103C8 provides exactly 20 KB of SRAM (`0x20000000` to `0x20005000`):
 - Course binary statically provisions **10 KB (`configTOTAL_HEAP_SIZE`)** for `heap_4.c`.
-- `heap_4` implements 8-byte alignment, first-fit searching, and adjacent block coalescing on `vPortFree()`, eliminating heap fragmentation.
-- Standard C library `malloc()` is strictly prohibited due to non-reentrancy, unbounded worst-case latency, flash bloat, and heap-stack collision risks.
+- `heap_4` implements alignment, first-fit searching, and adjacent free-block coalescing; this reduces external fragmentation but does not make fragmentation impossible.
+- The mandatory course path excludes libc `malloc()` so there is one auditable allocator and RAM-failure contract. This is a course architecture decision, not a universal claim about every libc allocator implementation.
 
 ---
 
@@ -119,7 +118,7 @@ fundamentals/rtos/01-freertos-scheduler-context-switch/
 │   ├── gate_solution.md              # Module gate root-cause diagnosis and patch
 │   └── hints.md                      # Progressive Socratic hints
 ├── gate/
-│   └── gate_fault_firmware/          # Candidate challenge: unshifted BASEPRI defect
+│   └── gate_fault_firmware/          # Unfamiliar scheduler-lifecycle Gate: Idle-hook blocking invariant
 └── diagrams/
     ├── context_switch_frame.mmd      # Cortex-M3 stack frame memory layout
     └── scheduler_state_machine.mmd   # Task lifecycle and scheduling state machine
