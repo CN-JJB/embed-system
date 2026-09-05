@@ -145,8 +145,7 @@ PA4 emits a narrow pulse every 12.8 ms, phase-shifted by 6.4 ms relative to PA3.
 To be measured on target hardware using logic analyzer / oscilloscope.
 
 [Interpretation]
-The 78.125 Hz milestone frequency proves that TIM3 prescaler (PSC=71) and auto-reload (ARR=99)
-generate 10,000 updates/sec, and DMA1 Channel 1 circular double-buffering correctly groups 64 samples per half.
+The 78.125 Hz milestone frequency supports the configured TIM3 update-rate and DMA half-buffer contract on that run; register/memory evidence is still required to attribute the timing to the intended trigger and DMA configuration.
 
 [Non-Proof]
 This observation DOES NOT prove that all input analog signals are noise-free,
