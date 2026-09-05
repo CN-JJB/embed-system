@@ -184,13 +184,21 @@ for ch in src[isr_idx:]:
         isr_body_chars.append(ch)
 isr_body = ''.join(isr_body_chars)
 
-# Flag acknowledgment: reject invalid writes of 1 (RC_W0 violation)
+# Flag acknowledgment: reject invalid writes/AND of 1 (RC_W0 violation)
 if re.search(r'TIM2\s*->\s*SR\s*=\s*(TIM_SR_UIF|1)\b', isr_body):
     sys.stderr.write('FAIL: TIM2->SR must NOT write 1 to clear UIF! On STM32F1, SR bits are rc_w0 (write 0 to clear)!\n')
     sys.exit(1)
 
-if not re.search(r'(TIM2\s*->\s*SR\s*=\s*.*~.*TIM_SR_UIF|TIM2\s*->\s*SR\s*=\s*0\b|TIM2\s*->\s*SR\s*&=)', isr_body):
-    sys.stderr.write('FAIL: TIM2_IRQHandler must acknowledge interrupt by clearing TIM2->SR UIF flag!\n')
+if re.search(r'TIM2\s*->\s*SR\s*&=\s*(TIM_SR_UIF|1)\b', isr_body):
+    sys.stderr.write('FAIL: TIM2->SR &= TIM_SR_UIF does NOT clear UIF! On STM32F1, SR bits are rc_w0 (clearing requires writing 0 to UIF)!\n')
+    sys.exit(1)
+
+uif_clear_patterns = [
+    r'TIM2\s*->\s*SR\s*(=|&=)\s*(?:\(uint16_t\)\s*)?\(?\s*~\s*\(?\s*TIM_SR_UIF\s*\)?\)?',
+    r'TIM2\s*->\s*SR\s*=\s*0\b',
+]
+if not any(re.search(pat, isr_body) for pat in uif_clear_patterns):
+    sys.stderr.write('FAIL: TIM2_IRQHandler must acknowledge interrupt by clearing TIM2->SR UIF flag with rc_w0 semantics (e.g. TIM2->SR = (uint16_t)~TIM_SR_UIF or TIM2->SR &= ~TIM_SR_UIF)!\n')
     sys.exit(1)
 
 # Prohibit task API in ISR
@@ -198,9 +206,9 @@ if re.search(r'\bxQueueSend\s*\(', isr_body):
     sys.stderr.write('FAIL: Prohibited task API xQueueSend() called from ISR! Must use xQueueSendFromISR()!\n')
     sys.exit(1)
 
-# xHigherPriorityTaskWoken initialization
-woken_match = re.search(r'BaseType_t\s+xHigherPriorityTaskWoken\s*=\s*(pdFALSE|0)\b', isr_body)
-if not woken_match:
+# xHigherPriorityTaskWoken initialization: must be initialized before send
+init_matches = list(re.finditer(r'(?:BaseType_t\s+)?xHigherPriorityTaskWoken\s*=\s*(?:pdFALSE|0)\b', isr_body))
+if not init_matches:
     sys.stderr.write('FAIL: TIM2_IRQHandler must initialize xHigherPriorityTaskWoken to pdFALSE per ISR invocation!\n')
     sys.exit(1)
 
@@ -210,13 +218,34 @@ if not send_match:
     sys.stderr.write('FAIL: TIM2_IRQHandler must call xQueueSendFromISR with &xHigherPriorityTaskWoken!\n')
     sys.exit(1)
 
-if isr_body.find('xHigherPriorityTaskWoken') > isr_body.find('xQueueSendFromISR'):
-    sys.stderr.write('FAIL: xHigherPriorityTaskWoken must be declared and initialized before xQueueSendFromISR()!\n')
+pre_send_inits = [m for m in init_matches if m.start() < send_match.start()]
+if not pre_send_inits:
+    sys.stderr.write('FAIL: xHigherPriorityTaskWoken must be initialized to pdFALSE before calling xQueueSendFromISR()!\n')
     sys.exit(1)
 
-# Queue full drop handling inside TIM2_IRQHandler
-if not re.search(r'g_isr_dropped_count\s*(\+\+|\+=)', isr_body):
-    sys.stderr.write('FAIL: TIM2_IRQHandler must handle queue full condition by tracking g_isr_dropped_count inside ISR!\n')
+# Drop accounting must be causally bound to xQueueSendFromISR failure path
+pre_text = isr_body[:send_match.start()]
+m_assign = re.search(r'([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*$', pre_text.rstrip())
+ret_var = m_assign.group(1) if m_assign else None
+
+if re.search(r'if\s*\([^)]*==\s*pdPASS[^)]*\)\s*\{[^}]*g_isr_dropped_count\s*(\+\+|\+=)', isr_body):
+    sys.stderr.write('FAIL: g_isr_dropped_count incremented in pdPASS success branch!\n')
+    sys.exit(1)
+
+bound_failure = False
+if ret_var:
+    p_else = rf'if\s*\(\s*{ret_var}\s*==\s*pdPASS\s*\)\s*\{{[^}}]*\}}\s*else\s*\{{[^}}]*g_isr_dropped_count\s*(\+\+|\+=)'
+    p_fail = rf'if\s*\(\s*(?:{ret_var}\s*!=\s*pdPASS|{ret_var}\s*==\s*(?:pdFAIL|errQUEUE_FULL)|!\s*{ret_var})\s*\)\s*\{{[^}}]*g_isr_dropped_count\s*(\+\+|\+=)'
+    if re.search(p_else, isr_body) or re.search(p_fail, isr_body):
+        bound_failure = True
+
+p_dir_else = r'if\s*\(\s*xQueueSendFromISR\s*\([^)]+\)\s*==\s*pdPASS\s*\)\s*\{[^}]*\}\s*else\s*\{[^}]*g_isr_dropped_count\s*(\+\+|\+=)'
+p_dir_fail = r'if\s*\(\s*(?:xQueueSendFromISR\s*\([^)]+\)\s*!=\s*pdPASS|xQueueSendFromISR\s*\([^)]+\)\s*==\s*(?:pdFAIL|errQUEUE_FULL)|!\s*xQueueSendFromISR\s*\([^)]+\))\s*\)\s*\{[^}]*g_isr_dropped_count\s*(\+\+|\+=)'
+if re.search(p_dir_else, isr_body) or re.search(p_dir_fail, isr_body):
+    bound_failure = True
+
+if not bound_failure:
+    sys.stderr.write('FAIL: TIM2_IRQHandler must bind g_isr_dropped_count increment to xQueueSendFromISR() failure path!\n')
     sys.exit(1)
 
 # portYIELD_FROM_ISR inside TIM2_IRQHandler
