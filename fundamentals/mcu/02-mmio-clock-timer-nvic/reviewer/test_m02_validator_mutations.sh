@@ -43,7 +43,13 @@ run_negative_test "no_uif_clear" "${MUTATIONS_DIR}/mut_no_uif_clear"
 # 6. Negative mutation: Broken step wrap (wraps at 50 instead of 100)
 run_negative_test "broken_wrap" "${MUTATIONS_DIR}/mut_broken_wrap"
 
-# 7. Positive verification: Reference implementation
+# 7. Negative mutation: PSC wrong (0 instead of 71)
+run_negative_test "psc_wrong" "${MUTATIONS_DIR}/mut_psc_wrong"
+
+# 8. Negative mutation: Duty cycle ignored during step generation
+run_negative_test "duty_ignored" "${MUTATIONS_DIR}/mut_duty_ignored"
+
+# 9. Positive verification: Reference implementation
 echo -n "Testing positive reference [challenge-reference]... "
 if ! bash "${VALIDATE}" "${REF_DIR}" >/dev/null 2>&1; then
     echo "FAILED (Reference rejected by validator)!" >&2

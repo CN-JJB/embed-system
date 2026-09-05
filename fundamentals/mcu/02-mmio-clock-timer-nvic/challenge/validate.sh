@@ -59,7 +59,7 @@ if ! "${HOST_BIN}" >"${TEST_BUILD_DIR}/host_run.log" 2>&1; then
     cat "${TEST_BUILD_DIR}/host_run.log" >&2
     exit 1
 fi
-echo "[PASS] Host-side logic verified (channels 0..3, duty 0..100%, 100-step wrap, no ODR write)"
+echo "[PASS] Host-side MMIO and logic verified (PSC=71, ARR=99, clocks/NVIC, 4 channels, duty 0..100%, per-step mask, zero ODR, ISR UIF clear)"
 
 # 4. Reviewer-Controlled Cross-Compilation for ARM Target
 TEST_ELF="${TEST_BUILD_DIR}/firmware_test.elf"
