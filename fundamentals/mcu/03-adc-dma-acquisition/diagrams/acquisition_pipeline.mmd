@@ -1,0 +1,31 @@
+graph TD
+    subgraph Timer Trigger Engine
+        SYSCLK[SYSCLK 72 MHz] --> APB1_DIV[APB1 Prescaler /2]
+        APB1_DIV --> PCLK1[PCLK1 36 MHz]
+        PCLK1 --> TIM_X2[Timer Clock Doubler x2]
+        TIM_X2 --> TIM3_CLK[TIM3 Clock 72 MHz]
+        TIM3_CLK --> TIM3_PSC[TIM3 Prescaler: PSC=71 -> 1 MHz Counter]
+        TIM3_PSC --> TIM3_ARR[Auto-Reload: ARR=99 -> 10 kHz Update]
+        TIM3_ARR --> TIM3_CR2[TIM3 CR2: MMS=010 Update]
+        TIM3_CR2 --> TIM3_TRGO((TIM3 TRGO Net))
+    end
+
+    subgraph ADC Acquisition Engine
+        SYSCLK --> APB2_DIV[APB2 Prescaler /1 -> 72 MHz]
+        APB2_DIV --> ADCPRE[RCC CFGR: ADCPRE=/6]
+        ADCPRE --> ADCCLK[ADCCLK 12 MHz <= 14 MHz Limit]
+        PA0[PA0 / ADC1_IN0 Analog Input] --> ADC1_SAR[ADC1 SAR Converter]
+        ADCCLK --> ADC1_SAR
+        TIM3_TRGO --> EXTSEL[ADC1 CR2: EXTSEL=100 & EXTTRIG=1]
+        EXTSEL --> ADC1_SAR
+        ADC1_SAR --> ADC_DR[ADC1 Data Register: DR 16-bit]
+        ADC1_SAR --> ADC_DMA_REQ[ADC1 DMA Request Generator]
+    end
+
+    subgraph DMA AHB Bus Master Engine
+        ADC_DMA_REQ --> DMA1_CH1[DMA1 Channel 1 Controller]
+        ADC_DR -.->|AHB Bus Read| DMA1_CH1
+        DMA1_CH1 -->|AHB Bus Write| SRAM_BUF[Persistent SRAM Circular Buffer: 128 x uint16_t]
+        SRAM_BUF -->|Sample 63 Full| HT_IRQ[Half-Transfer Milestone: HTIF1 -> Pulse PA3]
+        SRAM_BUF -->|Sample 127 Full| TC_IRQ[Transfer-Complete Milestone: TCIF1 -> Pulse PA4]
+    end

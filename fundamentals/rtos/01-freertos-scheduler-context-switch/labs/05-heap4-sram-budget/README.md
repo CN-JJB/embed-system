@@ -1,0 +1,109 @@
+# Lab 05: `heap_4` Memory Management, SRAM Budgeting, and Memory Protection
+
+## Objective
+Analyze FreeRTOS `heap_4.c` memory allocation, examine the 20 KB STM32F103 SRAM budget, understand block coalescing and alignment, and evaluate why standard C library `malloc` is strictly prohibited in hard real-time systems.
+
+## Prerequisites
+- P2-M01: Linker script sections (`.data`, `.bss`, `.heap`, `.stack`) and memory map.
+- Lab 01: FreeRTOS configuration and dynamic allocation settings.
+
+## Environment
+- Target: STM32F103C8T6 (Arm Cortex-M3, 64 KB Flash, 20 KB SRAM).
+- Toolchain: Arm GNU Toolchain 13.3.rel1 / Ubuntu GCC 13.2.1 cross-compiler.
+
+## Estimated Time
+- 60 minutes (MUST load).
+
+## AI Mode
+- **AI-Hint**: Socratic guidance permitted on memory layout, fragmentation metrics, and pointer arithmetic. Direct code generation prohibited.
+
+## Architectural Principles
+
+### 1. STM32F103 SRAM Memory Budget (20 KB = 20,480 Bytes)
+The physical SRAM spans `0x20000000` to `0x20005000`. In our course architecture, SRAM is budgeted deterministically:
+
+```text
+0x20005000 +---------------------------------------------------+ <-- RAM End (_estack)
+           | Main Stack Pointer (MSP) Stack Frame               | (Default 1 KB for ISRs)
+           | (Grows downward)                                   |
+0x20004C00 +---------------------------------------------------+
+           | Free / Unallocated Space                           | (~8.9 KB safety margin)
+0x20002878 +---------------------------------------------------+
+           | FreeRTOS heap_4 Array (ucHeap: 10 KB = 10,240 B)   | <-- .bss (FreeRTOS Heap)
+           | - Task 1 TCB (~84 B) + Stack (512 B)               |
+           | - Task 2 TCB (~84 B) + Stack (512 B)               |
+           | - Idle Task TCB + Stack (512 B)                    |
+           | - Remaining unallocated heap blocks (~8.5 KB)      |
+0x20000078 +---------------------------------------------------+
+           | System .bss (Variables initialized to zero)        |
+0x20000008 +---------------------------------------------------+
+           | System .data (Variables initialized from Flash)    |
+0x20000000 +---------------------------------------------------+ <-- RAM Start
+```
+
+Under this layout:
+- Flash footprint: $\approx 5.2\text{ KB} \ll 64\text{ KB}$ ($8.1\%$ utilized).
+- RAM footprint: $\approx 11.5\text{ KB} \ll 20\text{ KB}$ ($56.5\%$ utilized, including entire 10 KB OS heap and global state).
+
+### 2. `heap_4.c` First-Fit with Block Coalescing
+`heap_4.c` maintains a singly linked list of free blocks ordered by increasing memory address. Each block begins with an internal header:
+```c
+typedef struct A_BLOCK_LINK
+{
+    struct A_BLOCK_LINK *pxNextFreeBlock; /* Pointer to next free block */
+    size_t xBlockSize;                    /* Size of block including header */
+} BlockLink_t;
+```
+
+#### Key Mechanics:
+1. **8-Byte Alignment**:
+   All allocations are aligned to 8-byte boundaries (`portBYTE_ALIGNMENT = 8`), required by Cortex-M3 stack frames and 64-bit data access.
+2. **Allocation Splitting**:
+   When `pvPortMalloc(size)` is called, the allocator searches the list for the first free block large enough (`First-Fit`). If the block exceeds the requested size by more than `xHeapStructSize * 2`, it splits the block into two: one allocated, one returned to the free list.
+3. **Contiguous Coalescing on `vPortFree()`**:
+   When a block is freed, `heap_4` keeps free blocks ordered by address and coalesces physically adjacent free blocks. This reduces external fragmentation and can recover larger contiguous regions, but it does not make fragmentation impossible while differently sized live allocations remain.
+4. **Allocation Bit Tracking**:
+   The most significant bit of `xBlockSize` (`A_BLOCK_ALLOCATED_BIT_MASK = 0x80000000`) is set to 1 when a block is allocated and cleared to 0 when free, preventing double-free corruption.
+
+### 3. Why This Course Excludes Libc `malloc` from the Mandatory Path
+The course chooses one allocator so ownership and RAM evidence remain auditable:
+1. **Timing model**: general-purpose libc allocation is not given a bounded real-time contract by this curriculum.
+2. **Dual-heap risk**: mixing newlib allocation with FreeRTOS `heap_4` creates two independent allocation domains and complicates failure accounting.
+3. **Runtime dependencies**: pulling libc allocation may require additional syscall/reentrancy support depending on the newlib configuration.
+4. **Memory-boundary risk**: any separately growing heap must be proven against the linker/stack memory contract.
+
+This is a course architecture decision, not a claim that every libc allocator has identical algorithms or can never coalesce free blocks.
+
+## Step-by-Step Procedure
+
+1. **Verify Static Symbol Sizes in ELF**:
+   ```bash
+   arm-none-eabi-nm -S build/firmware.elf | grep -w "ucHeap"
+   # Output: 20000078 00002800 b ucHeap
+   # 0x2800 == 10,240 bytes (10 KB)
+   ```
+2. **Verify Absence of Libc Allocators**:
+   ```bash
+   arm-none-eabi-nm build/firmware.elf | grep -E "\b(malloc|_malloc_r|free|_free_r)\b"
+   # Must return 0 lines (exit code 1)
+   ```
+3. **Examine `vApplicationMallocFailedHook()` in `runtime_glue.c`**:
+   Verify that `runtime_glue.c` disables interrupts and enters a deterministic trap loop on allocation failure:
+   ```c
+   void vApplicationMallocFailedHook(void)
+   {
+       __disable_irq();
+       while (1) {
+           __NOP();
+       }
+   }
+   ```
+
+## Expected Observations & Verification
+- `ucHeap` statically allocated at 10,240 bytes in `.bss`.
+- Standard libc `malloc` completely absent from final binary.
+- FreeRTOS tasks dynamically allocated from internal heap pool with deterministic alignment.
+
+## Actual Verification Status
+- **Static Heap and Symbol Size Verification**: **VERIFIED** on host cross-compiler.
+- **Physical SRAM High-Water Mark Dynamic Profiling**: **UNVERIFIED** (Headless build environment; no physical probe attached).
