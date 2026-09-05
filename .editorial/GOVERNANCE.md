@@ -12,37 +12,73 @@ The repository serves five roles at once:
 4. debugging knowledge base;
 5. career-alignment system.
 
+## Operational Entry Point
+
+Root `AGENTS.md` is mandatory before any agent work.
+
+It defines the current operational workflow, role boundaries, evidence rules, and Executor PR handoff contract.
+
 ## Roles
 
-### Leader / Editor-in-Chief / Reviewer
+### Leader / Editor-in-Chief / Technical Reviewer
 
 The project Leader owns:
 
 - curriculum architecture;
-- task briefs and research prompts;
+- task decomposition;
+- GitHub Issue specifications;
 - technical review;
 - teaching review;
-- source review;
-- version review;
+- source/version review;
+- assessment-validity review;
 - job-market alignment;
-- minor editorial fixes;
-- rejection and rework prompts for major issues.
+- S0/S1 direct fixes;
+- S2/S3 rework disposition;
+- canonical inclusion;
+- final merge.
 
-No AI researcher or draft writer has final editorial authority.
+No Executor, researcher, draft writer, or lab designer has final editorial authority.
+
+### Executor / Implementation Agent
+
+The Executor is the operational role for an AI or contributor assigned to implement/research/draft/validate a Leader-authored Issue.
+
+The Executor owns:
+
+- reading `AGENTS.md`, the assigned Issue, and linked canonical documents before work;
+- staying inside assigned scope;
+- implementing the requested code/content/lab/research;
+- running appropriate verification;
+- preserving source/version/evidence integrity;
+- creating or updating the assigned PR;
+- maintaining the mandatory **Executor Handoff Report** in that PR;
+- performing Leader-requested S2/S3 rework on the same PR.
+
+The Executor must not:
+
+- self-approve;
+- self-promote to Leader;
+- merge its own PR;
+- claim canonical status;
+- fabricate execution evidence;
+- silently expand scope.
 
 ### Learner / Owner / Dispatcher
 
 The repository owner:
 
 - performs the learning tasks;
-- runs experiments;
-- records evidence;
-- dispatches Leader-authored prompts to research/writing AIs;
-- submits or merges reviewed work.
+- runs real experiments;
+- records genuine target evidence;
+- dispatches short Leader-authored prompts that point Executors to full GitHub Issues.
+
+The Learner/Dispatcher does not replace Leader technical review.
 
 ### Researcher / Draft Writer / Lab Designer
 
-External AIs may:
+These are Executor specializations, not independent editorial authorities.
+
+They may:
 
 - collect sources;
 - map a topic;
@@ -51,26 +87,48 @@ External AIs may:
 - design labs;
 - prepare code candidates.
 
-They must not fabricate execution results, citations, logs, measurements, waveforms, or source claims.
+They must follow the same Executor evidence and PR handoff rules.
+
+## Canonical Workflow
+
+```text
+Leader Issue
+→ Executor branch/work
+→ Executor PR + Handoff Report
+→ Leader Review
+→ S0/S1 Leader direct fix OR S2/S3 Executor rework
+→ Leader canonical decision / merge
+```
+
+Full task and rework specifications belong in GitHub Issues/review threads.
+
+The short prompt given to an Executor should normally tell it to claim/read the Issue, execute it, update the assigned PR, and wait for Leader Review.
 
 ## Review Severity
 
-- **S0 Cosmetic** — spelling, formatting, naming, minor style. Leader fixes directly.
-- **S1 Minor** — unclear wording, small omissions, citation placement, local code style. Leader may fix directly.
-- **S2 Major** — wrong teaching order, weak evidence, unverifiable lab, version mismatch, missing primary sources. Return for rework.
-- **S3 Critical** — false technical claims, unsafe instructions, fabricated evidence, plagiarism, non-running core code presented as verified. Reject and re-author.
+- **S0 Cosmetic** — spelling, formatting, naming, link, minor style. Leader fixes directly.
+- **S1 Minor** — local wording/source inconsistency/small code or evidence contract. Leader fixes directly.
+- **S2 Major** — wrong teaching order, weak evidence, invalid assessment, unverifiable lab, mechanism/version/scope contract problem. Executor rework required.
+- **S3 Critical** — false core technical claim, unsafe guidance, fabricated evidence, fake citation, plagiarism, fundamentally broken core implementation presented as valid. Reject/re-author.
 
-## Merge Principle
+## Merge Authority
 
-A chapter is not considered ready because it reads well. It must pass:
+The Executor never merges.
+
+The Leader decides canonical inclusion and performs or authorizes the final merge after review.
+
+A contribution is not ready merely because it reads well or passes a local build. It must pass:
 
 - technical correctness;
+- observable evidence integrity;
+- mental-model quality;
 - teaching coherence;
-- source quality;
+- assessment validity;
+- source/version integrity;
 - reproducibility;
-- version traceability;
-- career relevance;
-- originality and licensing review.
+- licensing/originality;
+- scope discipline;
+- career relevance.
 
 ## Living Book Principle
 
