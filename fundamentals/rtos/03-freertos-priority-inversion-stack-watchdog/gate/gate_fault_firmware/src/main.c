@@ -17,7 +17,7 @@ volatile uint32_t g_reported_watermark_bytes = 0;
 
 static void prvFilterWorkload(void)
 {
-    /* Simulate intensive filter computation (~20 ms) */
+    /* Simulate intensive filter computation (DESIGN TARGET / UNVERIFIED: ~20 ms) */
     volatile uint32_t acc = 0x12345678U;
     for (uint32_t i = 0; i < 60000U; i++) {
         acc = (acc ^ (i + 1U)) * 17U;
@@ -70,7 +70,7 @@ static void prvTelemetryTask(void *pvParameters)
         /* Step 3: Signal medium-priority filter task */
         xTaskNotifyGive(s_filter_task_handle);
 
-        /* Step 4: Execute telemetry buffer formatting (~5 ms) */
+        /* Step 4: Execute telemetry buffer formatting (DESIGN TARGET / UNVERIFIED: ~5 ms) */
         volatile uint32_t acc = 0x5555AAAAU;
         for (uint32_t i = 0; i < 15000U; i++) {
             acc = (acc ^ (i + 1U)) * 31U;
