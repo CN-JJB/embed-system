@@ -168,7 +168,7 @@ Modules P2-M03 and P2-M04 establish the two foundational pillars of real-time em
 1. **Autonomous Hardware Data Acquisition (P2-M03)**:
    Teaches how peripheral timers, ADCs, and DMA channels move analog data into memory autonomously without CPU intervention.
 2. **Deterministic Task Preemption and Context Switching (P2-M04)**:
-   Teaches how the CPU multiplexes execution threads, tracks timebases, and guarantees deterministic task response times.
+   Teaches how the CPU multiplexes execution threads, tracks the kernel timebase, and reasons about task response under explicit priority, blocking, and interrupt assumptions.
 
 In the upcoming **P2-M05**, these two pillars converge:
 The DMA Half-Transfer and Transfer-Complete interrupt service routines engineered in M03 will post buffers into FreeRTOS Queues using `xQueueSendFromISR()`, notifying worker tasks unblocked via FreeRTOS synchronization primitives.
