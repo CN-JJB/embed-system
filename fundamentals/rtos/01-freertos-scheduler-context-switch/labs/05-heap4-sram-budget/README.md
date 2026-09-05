@@ -90,13 +90,13 @@ Standard C library `malloc()` (from newlib or glibc) has catastrophic disadvanta
    # Must return 0 lines (exit code 1)
    ```
 3. **Examine `vApplicationMallocFailedHook()` in `runtime_glue.c`**:
-   Verify that `runtime_glue.c` traps allocation failures with deterministic software breakpoint / assert logging:
+   Verify that `runtime_glue.c` disables interrupts and enters a deterministic trap loop on allocation failure:
    ```c
    void vApplicationMallocFailedHook(void)
    {
-       taskDISABLE_INTERRUPTS();
-       for (;;) {
-           __asm volatile ("bkpt #0");
+       __disable_irq();
+       while (1) {
+           __NOP();
        }
    }
    ```
