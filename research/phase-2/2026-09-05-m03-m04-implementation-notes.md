@@ -154,8 +154,8 @@ TIM3 Update @ 10 kHz
 | **M04 Faults f1–f5** | `01-freertos-scheduler-context-switch/faults/f1..f5` | `make clean all` | All 5 compile cleanly with -Werror | **VERIFIED** |
 | **M04 Mutations 1–8** | `01-freertos-scheduler-context-switch/reviewer/mutations/` | `test_m04_validator_mutations.sh` | 8/8 correctly rejected | **VERIFIED** |
 | **M04 Gate Regression** | `01-freertos-scheduler-context-switch/reviewer/verify_gate_regression.sh` | Automated regression test | Defect detected, patch verified | **VERIFIED** |
-| **Top-Level MCU Check** | `fundamentals/mcu/Makefile` | `make -C fundamentals/mcu check` | M01, M02, M03 passed end-to-end | **VERIFIED** |
-| **Top-Level RTOS Check** | `fundamentals/rtos/Makefile` | `make -C fundamentals/rtos check` | M04 passed end-to-end | **VERIFIED** |
+| **Top-Level MCU Base Check** | `fundamentals/mcu/Makefile` | `make -C fundamentals/mcu check` | M01, M02, M03 base module static checks passed | **VERIFIED** |
+| **Top-Level RTOS Base Check** | `fundamentals/rtos/Makefile` | `make -C fundamentals/rtos check` | M04 base module static checks passed | **VERIFIED** |
 | **Live Hardware Signals** | STM32F103 Pins PA0, PA1, PA2, PA3, PA4, PC13 | Oscilloscope / Logic Analyzer | No physical hardware connected | **UNVERIFIED** |
 | **Live GDB Step Debugging** | Cortex-M3 Core Registers (R0-R15, xPSR, PSP) | OpenOCD / ST-Link | Headless build container | **UNVERIFIED** |
 
