@@ -6,13 +6,13 @@ The qualification gate firmware exhibits three subtle faults in concurrency, mem
 
 ### Fault 1: Binary Semaphore Used for Mutual Exclusion on Communication Buffer
 - **Location**: `gate/gate_fault_firmware/src/main.c`
-- **Symptom**: `Task_Sensor` (Priority 3) experiences preemption latency (design target ~25 ms / 25 ticks) whenever `Task_Filter` (Priority 2) executes.
+- **Symptom**: `Task_Sensor` (Priority 3) experiences preemption latency (**DESIGN TARGET / UNVERIFIED**: ~25 ms / ~25 ticks) whenever `Task_Filter` (Priority 2) executes.
 - **Root Cause**: `s_shared_buffer_sem = xSemaphoreCreateBinary()` creates a binary semaphore without ownership tracking or priority inheritance. When `Task_Telemetry` (Priority 1) holds the lock, `Task_Sensor` blocks, and `Task_Filter` preempts `Task_Telemetry`.
 - **Fix**: Change instantiation to `s_shared_buffer_sem = xSemaphoreCreateMutex()` and remove initial give.
 
 ### Fault 2: Watermark Unit Hazard (Words vs Bytes)
 - **Location**: `gate/gate_fault_firmware/src/main.c` (`prvTelemetryTask`)
-- **Symptom**: Telemetry reports remaining stack headroom as 48 bytes instead of the true value of 192 bytes.
+- **Symptom**: Telemetry reports scenario-reported stack headroom as 48 bytes instead of the expected 192 bytes derived from the supplied word count.
 - **Root Cause**: `uxTaskGetStackHighWaterMark()` returns remaining headroom in **words** (`StackType_t`). On 32-bit Cortex-M3, this must be multiplied by 4 (`sizeof(StackType_t)`).
 - **Fix**: Multiply result: `g_reported_watermark_bytes = (uint32_t)(wm_words * sizeof(StackType_t));`
 
@@ -36,8 +36,8 @@ The qualification gate firmware exhibits three subtle faults in concurrency, mem
    continue
    ```
 2. Break at mutex acquisition and inspect `g_sensor_wait_ticks`:
-   - Expected under binary semaphore: `g_sensor_wait_ticks` registers ~25 ticks (design target).
-   - Expected under mutex with inheritance: `g_sensor_wait_ticks` registers ~5 ticks (design target).
+   - Expected under binary semaphore: `g_sensor_wait_ticks` is expected to be near ~25 ticks (**DESIGN TARGET / UNVERIFIED**).
+   - Expected under mutex with inheritance: `g_sensor_wait_ticks` is expected to be near ~5 ticks (**DESIGN TARGET / UNVERIFIED**).
 3. Print watermark value:
    ```gdb
    print g_reported_watermark_bytes
