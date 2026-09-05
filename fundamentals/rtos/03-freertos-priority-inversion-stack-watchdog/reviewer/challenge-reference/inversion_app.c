@@ -31,7 +31,7 @@ uint32_t __attribute__((noinline)) dwt_get_cycles(void)
 
 void __attribute__((noinline)) inversion_execute_low_workload(void)
 {
-    /* Deterministic CPU-runnable critical workload (design target ~5 ms / ~360,000 cycles under 72 MHz)
+    /* Deterministic CPU-runnable critical workload (DESIGN TARGET / UNVERIFIED: ~5 ms / ~360,000 cycles under 72 MHz)
      * Strictly NO vTaskDelay() while holding the measured shared resource!
      */
     volatile uint32_t val = 0x5555AAAAU;
@@ -45,7 +45,7 @@ void __attribute__((noinline)) inversion_execute_low_workload(void)
 
 static void prvMediumWorkload(void)
 {
-    /* Finite CPU-runnable interference workload (design target ~20 ms / ~1,440,000 cycles under 72 MHz) */
+    /* Finite CPU-runnable interference workload (DESIGN TARGET / UNVERIFIED: ~20 ms / ~1,440,000 cycles under 72 MHz) */
     volatile uint32_t val = 0x12345678U;
     for (uint32_t i = 0; i < 60000U; i++) {
         val = (val ^ (i + 1U)) * 17U;
@@ -126,9 +126,9 @@ static void prvTaskLow(void *pvParameters)
          * Step 4: Low now releases Medium */
         xTaskNotifyGive(g_task_medium_handle);
 
-        /* Step 5: Low executes CPU critical workload (design target ~5 ms).
+        /* Step 5: Low executes CPU critical workload (DESIGN TARGET / UNVERIFIED: ~5 ms).
          * Under binary semaphore, Medium (priority 2) preempts Low (priority 1).
-         * Low cannot finish until Medium finishes (design target ~20 ms).
+         * Low cannot finish until Medium finishes (DESIGN TARGET / UNVERIFIED: ~20 ms).
          */
         inversion_execute_low_workload();
 
@@ -158,7 +158,7 @@ static void prvTaskLow(void *pvParameters)
          * Step 4: Low releases Medium */
         xTaskNotifyGive(g_task_medium_handle);
 
-        /* Step 5: Low executes identical CPU critical workload (design target ~5 ms).
+        /* Step 5: Low executes identical CPU critical workload (DESIGN TARGET / UNVERIFIED: ~5 ms).
          * Because Low inherited priority 3, Medium (priority 2) cannot preempt Low!
          * Low finishes work promptly.
          */
