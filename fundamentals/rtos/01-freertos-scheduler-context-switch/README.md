@@ -30,10 +30,10 @@ You will disassemble the PendSV assembly handler instruction-by-instruction, exa
 
 ### 2.1 The Dual Stack Pointer Architecture (MSP vs PSP)
 The Arm Cortex-M3 processor features two physical stack pointers:
-- **MSP (Main Stack Pointer)**: Used by privileged exception handlers, interrupt service routines (ISRs), and the reset startup routine. Configured at RAM ceiling `0x20005000` (`_estack`).
-- **PSP (Process Stack Pointer)**: Used exclusively by FreeRTOS tasks executing in Thread mode.
+- **MSP (Main Stack Pointer)**: Used after reset and by Handler mode. In the standard FreeRTOS ARM_CM3 port, exception handler code executes on MSP.
+- **PSP (Process Stack Pointer)**: Used by FreeRTOS tasks in Thread mode after scheduler startup.
 
-When an interrupt fires, the Cortex-M hardware automatically switches to MSP and pushes the 8-word hardware context (`xPSR`, `PC`, `LR`, `R12`, `R3-R0`) onto the active task's PSP stack. The OS context switcher then only needs to push and pop `R4-R11`, drastically minimizing context switch overhead.
+If an exception is taken while a task is running in Thread mode on PSP, hardware stacks the 8-word exception frame (`R0-R3, R12, LR, PC, xPSR`) onto that task's PSP. Handler mode then executes using MSP. The FreeRTOS PendSV path additionally saves/restores `R4-R11` on the task's PSP.
 
 ### 2.2 The PendSV Tail-Chaining Context Switch
 Context switches must never execute at high interrupt priority, as doing so would block hardware interrupts and introduce unbounded jitter.
