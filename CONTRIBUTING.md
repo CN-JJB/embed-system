@@ -1,22 +1,55 @@
 # Contributing to embed-system
 
-This repository uses an editorial workflow rather than accepting tutorial text as automatically publishable.
+This repository uses a role-separated editorial workflow. Tutorial text, code, labs, assessments, and research are not automatically publishable because they build or pass local tests.
 
-## Workflow
+## Mandatory First Read
 
-1. Leader defines the learning goal and Task Brief.
-2. Researcher prepares a Research Package.
-3. Draft/lab/code is prepared.
-4. Contribution is submitted for review.
-5. Leader returns one of:
-   - APPROVE
-   - APPROVE WITH MINOR FIXES
-   - MAJOR REVISION
-   - REJECT
-6. Minor issues may be corrected directly by the Leader.
-7. Major issues receive a rework brief/prompt.
+Before any AI agent or contributor starts work, read:
 
-## Read Before Contributing
+1. **`AGENTS.md`** — mandatory Leader / Executor workflow and PR handoff contract.
+2. the assigned GitHub Issue;
+3. every canonical design/roadmap document linked by that Issue;
+4. the relevant `.editorial/` policies.
+
+The root `AGENTS.md` is the operational entrypoint for all agent work.
+
+## Canonical Workflow
+
+```text
+Leader creates full GitHub Issue
+→ Executor implements/researches on assigned branch
+→ Executor opens/updates its PR
+→ Executor writes a complete Handoff Report in that PR
+→ Leader reviews
+→ S0/S1: Leader may fix directly
+→ S2/S3: Executor reworks the same PR
+→ Leader decides canonical inclusion and merge
+```
+
+The Executor **never merges its own PR**.
+
+## Executor Completion Requirement
+
+Before reporting work as complete, the Executor must update its own PR with the mandatory **Executor Handoff Report** defined in `AGENTS.md`.
+
+The report must explain, at minimum:
+
+- what was implemented;
+- what changed and why;
+- meaningful problems encountered;
+- hypotheses/evidence/root cause/fix/regression for those problems;
+- exact commands/tests actually run and actual results;
+- VERIFIED / PARTIALLY VERIFIED / UNVERIFIED boundaries;
+- toolchain/source/version identity;
+- known limitations and residual risks;
+- branch, remote HEAD, PR, Issue closing contract;
+- what the Leader should inspect especially carefully.
+
+“Implemented, tests pass, waiting for review” is not a sufficient handoff.
+
+After Leader rework, the Executor must update the same PR with a current rework handoff describing the latest revision.
+
+## Editorial Policies
 
 See:
 
@@ -43,4 +76,5 @@ Content should be:
 - observable;
 - debuggable;
 - version-aware;
+- assessment-valid;
 - useful to the target engineering path.
