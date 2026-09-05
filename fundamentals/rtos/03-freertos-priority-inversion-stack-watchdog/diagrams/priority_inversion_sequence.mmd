@@ -1,0 +1,31 @@
+sequenceDiagram
+    autonumber
+    participant L as Task Low (Prio 1)
+    participant M as Task Medium (Prio 2)
+    participant H as Task High (Prio 3)
+    participant S as Binary Semaphore (Shared Resource)
+
+    Note over L,S: Run A: Unbounded / Bounded Priority Inversion
+    L->>S: xSemaphoreTake(xSem, portMAX_DELAY) [Acquires Resource]
+    L->>L: Begins critical workload (PA1 High)
+    Note over H: Event triggers Task High
+    H-->>L: Preempts Low (Prio 3 > Prio 1)
+    H->>H: Starts execution (PA3 High)
+    H->>S: xSemaphoreTake(xSem, portMAX_DELAY)
+    Note over H,S: Resource is held by Low! High enters BLOCKED state
+    S-->>H: Blocked
+    Note over L: CPU returns to Task Low
+    L->>L: Resumes critical workload (PA1 High)
+    Note over M: Task Medium becomes Ready (Prio 2)
+    M-->>L: Preempts Low (Prio 2 > Prio 1)
+    Note over M: Task Medium DOES NOT need resource S
+    M->>M: Executes 20 ms interference workload (PA2 High)
+    Note over H: Task High remains BLOCKED, starved by Medium!
+    M->>M: Finishes computation (PA2 Low)
+    Note over L: CPU returns to Task Low
+    L->>L: Completes remaining critical workload
+    L->>S: xSemaphoreGive(xSem) [Releases Resource]
+    L->>L: (PA1 Low)
+    S-->>H: Unblocks Task High
+    H->>S: Takes Resource
+    H->>H: Executes critical section and completes (PA3 Low)
