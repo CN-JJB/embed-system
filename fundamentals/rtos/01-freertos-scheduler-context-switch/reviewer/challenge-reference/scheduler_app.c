@@ -95,9 +95,9 @@ int scheduler_app_init_and_start(clock_profile_t profile)
         return -3;
     }
 
-    /* 5. Start the FreeRTOS Scheduler */
+    /* 5. Start the FreeRTOS Scheduler. A successful scheduler start does not return. */
     vTaskStartScheduler();
 
-    /* Unreachable unless heap was exhausted */
-    return 0;
+    /* Returning here means scheduler startup failed, commonly while creating kernel tasks. */
+    return -4;
 }
