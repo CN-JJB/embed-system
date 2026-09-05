@@ -70,7 +70,7 @@ STM32F103 implements 4 bits of interrupt priority (`__NVIC_PRIO_BITS = 4`):
   ```
 - **Priority Partitioning**:
   - **Logical Priorities 5 to 15 (Encoded `0x50` to `0xF0`)**: Within the kernel syscall boundary. These ISRs can safely invoke FreeRTOS `...FromISR()` APIs. When the kernel enters a critical section, it writes `0x50` to `BASEPRI`, masking these interrupts.
-  - **Logical Priorities 0 to 4 (Encoded `0x00` to `0x40`)**: Higher urgency than `configMAX_SYSCALL_INTERRUPT_PRIORITY`. They are **never masked by FreeRTOS critical sections** and have zero jitter from kernel locking. Consequently, they **must never call any FreeRTOS API**.
+  - **Logical Priorities 0 to 4 (Encoded `0x00` to `0x40`)**: Higher urgency than `configMAX_SYSCALL_INTERRUPT_PRIORITY`. They are **not masked by the FreeRTOS BASEPRI critical-section threshold** and therefore must not call FreeRTOS APIs. This does not imply zero interrupt latency or zero jitter from all other architectural/software causes.
 - **Priority Grouping Contract**:
   `NVIC_SetPriorityGrouping(0)` must be established so that all 4 implemented bits act as preemption priority bits. The kernel assertion `vPortValidateInterruptPriority()` in `portable/GCC/ARM_CM3/port.c` explicitly checks both the current interrupt priority byte against `ucMaxSysCallPriority` and the AIRCR priority group setting.
 
@@ -80,7 +80,7 @@ STM32F103 implements 4 bits of interrupt priority (`__NVIC_PRIO_BITS = 4`):
   ```c
   configASSERT((portNVIC_INT_CTRL_REG & portVECTACTIVE_MASK) == 0);
   ```
-  Calling a task-context API from Handler mode halts deterministically in `vAssertCalled()` when assertions are enabled. Without assertions, it causes erratic kernel state corruption. It does **not** guarantee a deterministic HardFault.
+  Calling a task-context API from Handler mode is unsupported. On exercised paths where `vPortEnterCritical()` observes the first task-context critical nesting level, the pinned port's `VECTACTIVE` assertion can catch the misuse. Do **not** rely on one universal assertion site or deterministic failure mode; without a caught assertion, the misuse can corrupt kernel state or otherwise misbehave. It does **not** guarantee a deterministic HardFault.
 - **ISR APIs (`xQueueSendFromISR`, `xQueueReceiveFromISR`)**:
   Execute in Handler mode, never block (`xTicksToWait` does not exist), and communicate task wakeups via `*pxHigherPriorityTaskWoken`.
 
