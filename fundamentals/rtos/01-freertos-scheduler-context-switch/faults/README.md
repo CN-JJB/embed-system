@@ -6,13 +6,13 @@ Learner fault directories use **neutral identifiers** (`f1` through `f5`) to pre
 
 ## Fault Directory Index
 
-| Fixture ID | Scenario-Reported Symptom | System Context | Investigation Domain |
-|---|---|---|---|
-| **`f1`** | Target core hangs in `Default_Handler` immediately upon calling `vTaskStartScheduler()` | Scheduler initialization | Vector table & exception entry |
-| **`f2`** | Periodic delays and timer intervals run approximately 12.5% slower than requested | Internal HSI clock fallback | System timebase generation |
-| **`f3`** | Target enters `HardFault_Handler` shortly after worker task begins executing local calculations | Multi-task runtime | Stack framing & boundary sizing |
-| **`f4`** | Target immediately traps into a Fault handler with `INVSTATE` upon first task launch | Scheduler dispatch | Architecture execution state |
-| **`f5`** | Target traps into `vApplicationMallocFailedHook` during task creation before scheduler starts | System startup | Dynamic memory allocation |
+| Fixture ID | Scenario-Reported Symptom | System Context |
+|---|---|---|
+| **`f1`** | Target core hangs in `Default_Handler` immediately upon calling `vTaskStartScheduler()` | Scheduler initialization |
+| **`f2`** | Periodic delays and timer intervals run approximately 12.5% slower than requested | Internal HSI clock fallback |
+| **`f3`** | Target enters `HardFault_Handler` shortly after worker task begins executing local calculations | Multi-task runtime |
+| **`f4`** | Target immediately traps into a Fault handler with `INVSTATE` upon first task launch | Scheduler dispatch |
+| **`f5`** | Target traps into `vApplicationMallocFailedHook` during task creation before scheduler starts | System startup |
 
 ---
 
