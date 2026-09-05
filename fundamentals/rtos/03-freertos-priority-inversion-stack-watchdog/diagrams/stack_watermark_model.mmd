@@ -1,0 +1,22 @@
+graph TD
+    subgraph Allocated Stack Frame for Task (Full Descending Stack)
+        TOP["pxEndOfStack (High Memory Address)"]
+        TCB_SP["pxTopOfStack (Current SP on Context Switch)"]
+        ACTIVE["Actively Used Stack Area<br/>(Local variables, nested call frames, saved registers {r4-r11, r0-r3, lr, pc, xpsr})"]
+        UNUSED["Unused Stack Headroom (Retains initial 0xA5 pattern)"]
+        CHECK2["Last 16 Bytes Canary (Checked by Method 2: configCHECK_FOR_STACK_OVERFLOW=2)"]
+        BOT["pxStack (Lowest Valid Address / Stack Limit)"]
+    end
+
+    TOP --- ACTIVE
+    ACTIVE --- TCB_SP
+    TCB_SP --- UNUSED
+    UNUSED --- CHECK2
+    CHECK2 --- BOT
+
+    subgraph Watermark Measurement
+        WM["uxTaskGetStackHighWaterMark()"]
+        WM -->|"Scans upward from pxStack checking for 0xA5"| SCAN["Counts contiguous 0xA5 bytes"]
+        SCAN -->|"Divides byte count by 4"| RET["Returns Headroom in WORDS (StackType_t)"]
+        RET -->|"Multiply by 4 in user application!"| BYTES["True Remaining Headroom in BYTES"]
+    end
