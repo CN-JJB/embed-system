@@ -5,7 +5,7 @@
 The acquisition timer is observed to be running, but `g_adc_buffer` remains completely unpopulated (all zeroes). Neither Half-Transfer nor Transfer-Complete interrupts ever trigger.
 
 ## Objective
-Investigate peripheral trigger routing and acquisition sequencing. Collect register evidence to determine why hardware conversions are not being triggered, and provide a minimal fix.
+Investigate the acquisition path from timer activity through ADC conversion and DMA transfer. Form 3–5 hypotheses, collect register evidence to isolate where progress stops, and provide a minimal fix.
 
 ## Allowed Tools
 - Disassembly (`arm-none-eabi-objdump -d`)
@@ -15,7 +15,7 @@ Investigate peripheral trigger routing and acquisition sequencing. Collect regis
 
 ## Deliverables
 1. Hypothesized root cause backed by register inspection evidence.
-2. Peripheral register bit proof confirming the missing trigger connection.
+2. Peripheral register evidence that isolates the failing stage without assuming the root cause in advance.
 3. Minimal source diff resolving the defect.
 
 ## Build
