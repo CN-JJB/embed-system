@@ -23,7 +23,7 @@ Integrate the upstream FreeRTOS V11.3.0 kernel into a bare-metal CMSIS Cortex-M3
 
 ### 1. Vector Table Exception Handler Remapping
 The ARM Cortex-M3 architecture defines 16 system exceptions at the bottom of the vector table. FreeRTOS requires three core system exceptions to manage execution and real-time preemption:
-- **Vector 11 (offset `0x2C`)**: `SVCall` (`SVC_Handler`) - Executed via the `svc` instruction during `vTaskStartScheduler()` to perform the initial unstacking of the first task context and switch CPU from privileged MSP to unprivileged/privileged PSP mode.
+- **Vector 11 (offset `0x2C`)**: `SVCall` (`SVC_Handler`) - Executed via the `svc` instruction during `vTaskStartScheduler()` to restore the first task context and return to privileged Thread mode using PSP in the standard non-MPU ARM_CM3 port.
 - **Vector 14 (offset `0x38`)**: `PendSV` (`PendSV_Handler`) - Triggered asynchronously or cooperatively via `SCB->ICSR |= SCB_ICSR_PENDSVSET_Msk` to execute task context switching at the lowest interrupt priority.
 - **Vector 15 (offset `0x3C`)**: `SysTick` (`SysTick_Handler`) - Periodic core timer interrupt advancing the kernel tick counter (`xTickCount`) and unblocking delayed tasks.
 
@@ -44,7 +44,7 @@ STM32F103 implements 4 bits of interrupt priority (`__NVIC_PRIO_BITS = 4`), supp
 
 In the Cortex-M3 priority register byte (`IPR` or `SHPR`), the implemented 4 bits occupy the **upper 4 bits** (bits [7:4]), while bits [3:0] read as zero.
 - `configKERNEL_INTERRUPT_PRIORITY`: Set to lowest priority $15 \ll 4 = \texttt{0xF0}$. PendSV and SysTick run at this priority so they never delay hardware peripheral interrupts.
-- `configMAX_SYSCALL_INTERRUPT_PRIORITY`: Set to priority $5 \ll 4 = \texttt{0x50}$. Any interrupt running at priority 5 to 15 can safely invoke `FromISR` FreeRTOS APIs. Interrupts with priority 0 to 4 are non-maskable by FreeRTOS critical sections (`basepri`), achieving near-zero latency for mission-critical hardware tasks.
+- `configMAX_SYSCALL_INTERRUPT_PRIORITY`: This module keeps the port configuration technically valid at $5 \ll 4 = \texttt{0x50}$. Detailed ISR API eligibility and syscall-priority auditing are deferred to P2-M05. BASEPRI at this threshold does not mask priorities 0 to 4; that is not the same as making those interrupts globally non-maskable.
 
 ## Step-by-Step Procedure
 
