@@ -36,8 +36,9 @@ done
 CLEAN_INV="$(mktemp)"
 CLEAN_IWDG="$(mktemp)"
 CLEAN_CFG="$(mktemp)"
+CLEAN_HDR="$(mktemp)"
 TEMP_BUILD_DIR="$(mktemp -d)"
-trap 'rm -rf "${CLEAN_INV}" "${CLEAN_IWDG}" "${CLEAN_CFG}" "${TEMP_BUILD_DIR}"' EXIT
+trap 'rm -rf "${CLEAN_INV}" "${CLEAN_IWDG}" "${CLEAN_CFG}" "${CLEAN_HDR}" "${TEMP_BUILD_DIR}"' EXIT
 
 # Strip comments for AST/regex matching
 python3 -c "
@@ -50,7 +51,8 @@ def strip_c(path, out_path):
 strip_c(sys.argv[1], sys.argv[2])
 strip_c(sys.argv[3], sys.argv[4])
 strip_c(sys.argv[5], sys.argv[6])
-" "${INV_SRC}" "${CLEAN_INV}" "${IWDG_SRC}" "${CLEAN_IWDG}" "${APP_CFG}" "${CLEAN_CFG}"
+strip_c(sys.argv[7], sys.argv[8])
+" "${INV_SRC}" "${CLEAN_INV}" "${IWDG_SRC}" "${CLEAN_IWDG}" "${APP_CFG}" "${CLEAN_CFG}" "${INV_HDR}" "${CLEAN_HDR}"
 
 # Check 0: Zero placeholder / TODO comments remaining in submission
 for f in "${INV_SRC}" "${IWDG_SRC}" "${APP_CFG}"; do
@@ -123,20 +125,51 @@ if not re.search(r'0xAAAA', src, re.I) or not re.search(r'0xCCCC', src, re.I):
     sys.stderr.write('FAIL: iwdg.c must use keys 0xAAAA (reload) and 0xCCCC (start)!\n')
     sys.exit(1)
 
-# Bounded wait loops for PVU and RVU
-pvu_match = re.search(r'while\s*\(\s*.*IWDG_SR_PVU.*\)', src)
-if not pvu_match:
+# Independent bounded wait loops for PVU and RVU
+def extract_while_body(s, flag_str):
+    pos = s.find(flag_str)
+    if pos == -1:
+        return None
+    while_pos = s.rfind('while', 0, pos)
+    if while_pos == -1:
+        return None
+    brace_open = s.find('{', pos)
+    if brace_open == -1:
+        return None
+    brace_level = 0
+    body = []
+    for ch in s[brace_open:]:
+        if ch == '{':
+            brace_level += 1
+            if brace_level == 1:
+                continue
+        elif ch == '}':
+            brace_level -= 1
+            if brace_level == 0:
+                break
+        body.append(ch)
+    return ''.join(body)
+
+pvu_body = extract_while_body(src, 'IWDG_SR_PVU')
+if pvu_body is None:
     sys.stderr.write('FAIL: iwdg.c must check IWDG_SR_PVU status before writing PR!\n')
     sys.exit(1)
-
-rvu_match = re.search(r'while\s*\(\s*.*IWDG_SR_RVU.*\)', src)
-if not rvu_match:
-    sys.stderr.write('FAIL: iwdg.c must check IWDG_SR_RVU status before writing RLR!\n')
+if not re.search(r'timeout\s*--|--\s*timeout', pvu_body):
+    sys.stderr.write('FAIL: iwdg.c PVU loop must enforce bounded timeout decrement!\n')
+    sys.exit(1)
+if not re.search(r'return\s+(false|pdFALSE|0\b)|break\b', pvu_body):
+    sys.stderr.write('FAIL: iwdg.c PVU loop must handle timeout expiration by returning false!\n')
     sys.exit(1)
 
-# Bounded timeout check inside while loops
-if not re.search(r'timeout\s*--|--\s*timeout', src):
-    sys.stderr.write('FAIL: iwdg.c must enforce bounded timeout loop counter when polling status flags!\n')
+rvu_body = extract_while_body(src, 'IWDG_SR_RVU')
+if rvu_body is None:
+    sys.stderr.write('FAIL: iwdg.c must check IWDG_SR_RVU status before writing RLR!\n')
+    sys.exit(1)
+if not re.search(r'timeout\s*--|--\s*timeout', rvu_body):
+    sys.stderr.write('FAIL: iwdg.c RVU loop must enforce bounded timeout decrement!\n')
+    sys.exit(1)
+if not re.search(r'return\s+(false|pdFALSE|0\b)|break\b', rvu_body):
+    sys.stderr.write('FAIL: iwdg.c RVU loop must handle timeout expiration by returning false!\n')
     sys.exit(1)
 
 # Reset cause check and clear via RCC->CSR
@@ -153,18 +186,132 @@ if re.search(r'\b(malloc|calloc|realloc|free)\s*\(', src):
     sys.exit(1)
 " "${CLEAN_IWDG}"
 
-# 4. Source contracts in inversion_app.c
+# 4. Source contracts in inversion_app.c and inversion_app.h
 python3 -c "
 import sys, re
 src = open(sys.argv[1]).read()
+hdr = open(sys.argv[2]).read()
 
-# Verify Run A uses binary semaphore and Run B uses mutex
-if not re.search(r'xSemaphoreCreateBinary\s*\(', src):
-    sys.stderr.write('FAIL: inversion_app.c must instantiate a binary semaphore for Run A!\n')
+# Verify task priorities in header
+if not re.search(r'#define\s+TASK_HIGH_PRIORITY\s+3\b', hdr):
+    sys.stderr.write('FAIL: inversion_app.h must define TASK_HIGH_PRIORITY as 3!\n')
+    sys.exit(1)
+if not re.search(r'#define\s+TASK_MEDIUM_PRIORITY\s+2\b', hdr):
+    sys.stderr.write('FAIL: inversion_app.h must define TASK_MEDIUM_PRIORITY as 2!\n')
+    sys.exit(1)
+if not re.search(r'#define\s+TASK_LOW_PRIORITY\s+1\b', hdr):
+    sys.stderr.write('FAIL: inversion_app.h must define TASK_LOW_PRIORITY as 1!\n')
     sys.exit(1)
 
-if not re.search(r'xSemaphoreCreateMutex\s*\(', src):
-    sys.stderr.write('FAIL: inversion_app.c must instantiate a mutex for Run B (priority inheritance)!\n')
+# Verify task creation priorities in inversion_app_init
+init_idx = src.find('inversion_app_init')
+if init_idx == -1:
+    sys.stderr.write('FAIL: inversion_app.c missing inversion_app_init()!\n')
+    sys.exit(1)
+
+creates = list(re.finditer(r'xTaskCreate\s*\(([^;]+)\);', src[init_idx:], re.S))
+if len(creates) < 3:
+    sys.stderr.write('FAIL: inversion_app_init() must create 3 tasks (Low, Medium, High)!\n')
+    sys.exit(1)
+
+for c in creates:
+    args = [a.strip() for a in c.group(1).split(',')]
+    if len(args) < 5:
+        continue
+    fn_name = args[0]
+    prio_str = args[4]
+    if 'prvTaskLow' in fn_name or '\"Low\"' in args[1]:
+        if prio_str not in ('1', 'TASK_LOW_PRIORITY'):
+            sys.stderr.write(f'FAIL: Task Low priority must be 1 (got {prio_str})!\n')
+            sys.exit(1)
+    elif 'prvTaskMedium' in fn_name or '\"Medium\"' in args[1]:
+        if prio_str not in ('2', 'TASK_MEDIUM_PRIORITY'):
+            sys.stderr.write(f'FAIL: Task Medium priority must be 2 (got {prio_str})!\n')
+            sys.exit(1)
+    elif 'prvTaskHigh' in fn_name or '\"High\"' in args[1]:
+        if prio_str not in ('3', 'TASK_HIGH_PRIORITY'):
+            sys.stderr.write(f'FAIL: Task High priority must be 3 (got {prio_str})!\n')
+            sys.exit(1)
+
+# Verify deterministic sequencing in prvTaskLow
+low_idx = src.find('prvTaskLow')
+if low_idx == -1:
+    sys.stderr.write('FAIL: inversion_app.c missing prvTaskLow()!\n')
+    sys.exit(1)
+
+brace = 0
+in_body = False
+body = []
+for ch in src[low_idx:]:
+    if ch == '{':
+        brace += 1
+        in_body = True
+    elif ch == '}':
+        brace -= 1
+        if in_body and brace == 0:
+            break
+    if in_body:
+        body.append(ch)
+low_str = ''.join(body)
+
+# Run A sequencing
+idx_cb = low_str.find('xSemaphoreCreateBinary')
+if idx_cb == -1:
+    sys.stderr.write('FAIL: Run A must instantiate binary semaphore via xSemaphoreCreateBinary()!\n')
+    sys.exit(1)
+idx_take_a = low_str.find('xSemaphoreTake', idx_cb)
+if idx_take_a == -1:
+    sys.stderr.write('FAIL: Run A must acquire binary semaphore via xSemaphoreTake()!\n')
+    sys.exit(1)
+idx_give_init = low_str.find('xSemaphoreGive', idx_cb)
+if idx_give_init == -1 or idx_give_init > idx_take_a:
+    sys.stderr.write('FAIL: Run A must initialize binary semaphore token via xSemaphoreGive() before xSemaphoreTake()!\n')
+    sys.exit(1)
+
+idx_notif_high_a = low_str.find('g_task_high_handle', idx_take_a)
+idx_notif_med_a = low_str.find('g_task_medium_handle', idx_take_a)
+if idx_notif_high_a == -1 or idx_notif_med_a == -1:
+    sys.stderr.write('FAIL: Run A must notify both High and Medium tasks!\n')
+    sys.exit(1)
+if idx_notif_high_a > idx_notif_med_a:
+    sys.stderr.write('FAIL: Run A must notify Task High before Task Medium!\n')
+    sys.exit(1)
+
+idx_work_a = low_str.find('inversion_execute_low_workload', idx_notif_med_a)
+if idx_work_a == -1:
+    sys.stderr.write('FAIL: Run A must execute workload after notifying High and Medium!\n')
+    sys.exit(1)
+idx_give_rel_a = low_str.find('xSemaphoreGive', idx_work_a)
+if idx_give_rel_a == -1:
+    sys.stderr.write('FAIL: Run A must release binary semaphore after executing workload!\n')
+    sys.exit(1)
+
+# Run B sequencing
+idx_cm = low_str.find('xSemaphoreCreateMutex', idx_give_rel_a)
+if idx_cm == -1:
+    sys.stderr.write('FAIL: Run B must instantiate mutex via xSemaphoreCreateMutex()!\n')
+    sys.exit(1)
+idx_take_b = low_str.find('xSemaphoreTake', idx_cm)
+if idx_take_b == -1:
+    sys.stderr.write('FAIL: Run B must acquire mutex via xSemaphoreTake()!\n')
+    sys.exit(1)
+
+idx_notif_high_b = low_str.find('g_task_high_handle', idx_take_b)
+idx_notif_med_b = low_str.find('g_task_medium_handle', idx_take_b)
+if idx_notif_high_b == -1 or idx_notif_med_b == -1:
+    sys.stderr.write('FAIL: Run B must notify both High and Medium tasks!\n')
+    sys.exit(1)
+if idx_notif_high_b > idx_notif_med_b:
+    sys.stderr.write('FAIL: Run B must notify Task High before Task Medium!\n')
+    sys.exit(1)
+
+idx_work_b = low_str.find('inversion_execute_low_workload', idx_notif_med_b)
+if idx_work_b == -1:
+    sys.stderr.write('FAIL: Run B must execute workload after notifying High and Medium!\n')
+    sys.exit(1)
+idx_give_rel_b = low_str.find('xSemaphoreGive', idx_work_b)
+if idx_give_rel_b == -1:
+    sys.stderr.write('FAIL: Run B must release mutex after executing workload!\n')
     sys.exit(1)
 
 # Watermark byte conversion: must multiply words by 4 or sizeof(StackType_t)
@@ -197,11 +344,43 @@ if low_fn_idx != -1:
         sys.stderr.write('FAIL: inversion_execute_low_workload() must execute pure CPU work without vTaskDelay()!\n')
         sys.exit(1)
 
+# Learner-owned vApplicationStackOverflowHook
+if not re.search(r'\bvoid\s+vApplicationStackOverflowHook\s*\(', src):
+    sys.stderr.write('FAIL: inversion_app.c must define learner-owned vApplicationStackOverflowHook()!\n')
+    sys.exit(1)
+
+hook_idx = src.find('vApplicationStackOverflowHook')
+brace = 0
+in_body = False
+hook_body = []
+for ch in src[hook_idx:]:
+    if ch == '{':
+        brace += 1
+        in_body = True
+    elif ch == '}':
+        brace -= 1
+        if in_body and brace == 0:
+            break
+    if in_body:
+        hook_body.append(ch)
+hook_str = ''.join(hook_body)
+if '__disable_irq' not in hook_str:
+    sys.stderr.write('FAIL: vApplicationStackOverflowHook() must call __disable_irq()!\n')
+    sys.exit(1)
+
+# DWT cycle counting functions
+if not re.search(r'\bdwt_init\s*\(\s*(void)?\s*\)', src):
+    sys.stderr.write('FAIL: inversion_app.c must implement dwt_init()!\n')
+    sys.exit(1)
+if not re.search(r'\bdwt_get_cycles\s*\(\s*(void)?\s*\)', src):
+    sys.stderr.write('FAIL: inversion_app.c must implement dwt_get_cycles()!\n')
+    sys.exit(1)
+
 # Prohibit libc malloc in application source
 if re.search(r'\b(malloc|calloc|realloc|free)\s*\(', src):
     sys.stderr.write('FAIL: Prohibited call to standard libc dynamic allocator in inversion_app.c!\n')
     sys.exit(1)
-" "${CLEAN_INV}"
+" "${CLEAN_INV}" "${CLEAN_HDR}"
 
 # 5. Strict Compilation and Link against FreeRTOS V11.3.0
 TEST_MAIN="${TEMP_BUILD_DIR}/test_main.c"
@@ -213,10 +392,16 @@ cat << 'EOF' > "${TEST_MAIN}"
 #include "FreeRTOS.h"
 #include "task.h"
 
+_Static_assert(TASK_HIGH_PRIORITY == 3, "TASK_HIGH_PRIORITY must be 3");
+_Static_assert(TASK_MEDIUM_PRIORITY == 2, "TASK_MEDIUM_PRIORITY must be 2");
+_Static_assert(TASK_LOW_PRIORITY == 1, "TASK_LOW_PRIORITY must be 1");
+
 int main(void)
 {
     clock_init(CLOCK_PROFILE_72MHZ_HSE);
     gpio_init();
+    dwt_init();
+    (void)dwt_get_cycles();
     iwdg_check_and_clear_reset_cause();
     iwdg_init(4, 1250);
     inversion_app_init();
@@ -256,7 +441,7 @@ arm-none-eabi-gcc \
 # 6. Verify ELF symbols
 NM_OUT=$(arm-none-eabi-nm "${TEST_ELF}")
 
-for sym in "xTaskPriorityInherit" "xTaskPriorityDisinherit" "uxTaskGetStackHighWaterMark" "vApplicationStackOverflowHook" "iwdg_init" "iwdg_refresh"; do
+for sym in "xTaskPriorityInherit" "xTaskPriorityDisinherit" "uxTaskGetStackHighWaterMark" "vApplicationStackOverflowHook" "iwdg_init" "iwdg_refresh" "dwt_init" "dwt_get_cycles"; do
     if ! echo "${NM_OUT}" | grep -qE "\b${sym}\b"; then
         echo "FAIL: Required symbol '${sym}' not found in linked ELF!" >&2
         exit 1
@@ -275,6 +460,12 @@ arm-none-eabi-objdump -d "${TEST_ELF}" > "${DISASM_FILE}"
 # Check direct MMIO to IWDG peripheral (0x40003000)
 if ! grep -qE "(40003000|0x40003000)" "${DISASM_FILE}"; then
     echo "FAIL: Disassembly does not contain direct memory-mapped access to IWDG (0x40003000)!" >&2
+    exit 1
+fi
+
+# Check direct access to Cortex-M3 DWT Cycle Counter (0xE0001004 / 0xE0001000)
+if ! grep -qiE "(e0001004|e0001000)" "${DISASM_FILE}"; then
+    echo "FAIL: Disassembly does not contain direct access to Cortex-M3 DWT CYCCNT (0xE0001004/0xE0001000)!" >&2
     exit 1
 fi
 

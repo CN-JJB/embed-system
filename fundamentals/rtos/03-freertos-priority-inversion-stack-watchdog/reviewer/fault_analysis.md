@@ -3,7 +3,7 @@
 ## Fixture `f1`: Binary Semaphore Used for Mutual Exclusion
 
 ### Scenario-Reported Symptom & Behavior
-Task High (Priority 3) suffers massive latency spikes (>25 ms) when Task Medium (Priority 2) executes, even though Task High is supposed to have highest priority. A logic analyzer confirms that Task Medium preempts Task Low while Task Low holds the shared resource lock.
+Task High (Priority 3) suffers massive latency spikes (>25 ms design target) when Task Medium (Priority 2) executes, even though Task High is supposed to have highest priority. (Physical logic analyzer trace: DESIGN TARGET / UNVERIFIED).
 
 ### Hypothesis Tree
 1. **H1**: Task Medium was assigned Priority 4 instead of Priority 2.
@@ -30,7 +30,7 @@ Replace `xSemaphoreCreateBinary()` with `xSemaphoreCreateMutex()` and remove the
 ## Fixture `f2`: Medium Task Starvation / Watchdog Reset Loop
 
 ### Scenario-Reported Symptom & Behavior
-Target reboots every ~1.0 second in an endless loop. Inspecting `RCC->CSR` in GDB shows `RCC_CSR_IWDGRSTF` set on every boot.
+Target reboots repeatedly (design target ~1.0 second reset cycle). Expected observation in GDB: `RCC->CSR` has `RCC_CSR_IWDGRSTF` set on boot. (Target run unverified).
 
 ### Hypothesis Tree
 1. **H1**: Watchdog reload value is too small.

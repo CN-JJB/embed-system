@@ -13,7 +13,8 @@ You have been handed a pre-production firmware build for an environmental sensor
 4. Power-on reset telemetry frequently misdiagnoses normal boots as prior watchdog resets.
 
 ## Gate Exam Tasks
-1. Identify the root cause of priority inversion on the shared buffer and restore priority inheritance.
-2. Correct the stack watermark calculation in `Task_Telemetry`.
-3. Harden `iwdg_init()` with bounded status register polling.
-4. Ensure hardware reset flags are cleared upon boot.
+1. Analyze the acquisition latency spikes reported for `Task_Sensor` under concurrent CPU load and eliminate the unbounded blocking delay.
+2. Reconcile the discrepancy between measured stack usage and reported telemetry headroom in `Task_Telemetry`.
+3. Audit peripheral register access in `iwdg.c` to prevent indefinite hardware hangs during clock domain synchronization.
+4. Verify reset cause determination logic across consecutive system boot cycles.
+5. Confirm that the patched firmware passes all checks in `reviewer/verify_gate_regression.sh`.

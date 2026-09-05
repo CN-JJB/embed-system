@@ -14,7 +14,8 @@ bool iwdg_init(uint8_t prescaler, uint16_t reload)
 
     /* 2. Wait for prescaler update flag (PVU) with bounded loop */
     uint32_t timeout = IWDG_STATUS_TIMEOUT;
-    while ((IWDG->SR & IWDG_SR_PVU) != 0) { __NOP(); }
+    while ((IWDG->SR & IWDG_SR_PVU) != 0) {
+        __NOP();
     }
 
     /* 3. Configure prescaler */

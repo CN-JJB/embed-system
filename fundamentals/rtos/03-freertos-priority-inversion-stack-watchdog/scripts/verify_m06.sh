@@ -61,6 +61,8 @@ REQUIRED_SYMBOLS=(
     "iwdg_refresh"
     "iwdg_check_and_clear_reset_cause"
     "vTaskStartScheduler"
+    "dwt_init"
+    "dwt_get_cycles"
 )
 
 NM_OUT=$(arm-none-eabi-nm "${ELF}")
@@ -108,6 +110,13 @@ if ! grep -qiE "(40003000|0x40003000)" "${DISASM_FILE}"; then
     exit 1
 fi
 echo "[PASS] Disassembly confirms direct register access to IWDG peripheral (0x40003000)"
+
+# Confirm direct access to Cortex-M3 DWT Cycle Counter (0xE0001004 / 0xE0001000)
+if ! grep -qiE "(e0001004|e0001000)" "${DISASM_FILE}"; then
+    echo "ERROR: Disassembly does not access Cortex-M3 DWT CYCCNT at 0xE0001004/0xE0001000!" >&2
+    exit 1
+fi
+echo "[PASS] Disassembly confirms direct access to Cortex-M3 DWT Cycle Counter (0xE0001004/0xE0001000)"
 
 # Confirm inversion_execute_low_workload strictly contains no vTaskDelay call
 LOW_WORK_DISASM=$(awk '/<inversion_execute_low_workload>:/ {flag=1} flag && !/<inversion_execute_low_workload>:/ && /^[0-9a-f]+ </ {flag=0} flag {print}' "${DISASM_FILE}")

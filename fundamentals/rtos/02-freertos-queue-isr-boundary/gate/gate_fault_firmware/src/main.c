@@ -19,9 +19,7 @@ static void prvTelemetryDispatchTask(void *pvParameters)
     uint32_t packet = 0;
 
     for (;;) {
-        /* Defect 2: Non-blocking poll (timeout 0) causes 100% CPU starvation
-         * instead of blocking indefinitely with portMAX_DELAY.
-         */
+        /* Receive packet from telemetry queue */
         if (xQueueReceive(s_telemetry_queue, &packet, 0) == pdPASS) {
             gpio_toggle_pa2();
             g_telemetry_received++;
@@ -47,7 +45,7 @@ void TIM2_IRQHandler(void)
             g_telemetry_sent++;
         }
 
-        /* Defect 3: Missing portYIELD_FROM_ISR(xHigherPriorityTaskWoken) */
+        /* Complete ISR execution */
         (void)xHigherPriorityTaskWoken;
     }
 }
@@ -70,9 +68,7 @@ int main(void)
     /* Peripheral TIM2 Bring-up */
     RCC->APB1ENR |= RCC_APB1ENR_TIM2EN;
 
-    /* Defect 1: Priority set to logical 3 (encoded 0x30).
-     * Violates configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY (5, encoded 0x50)!
-     */
+    /* Configure TIM2 interrupt priority */
     NVIC_SetPriority(TIM2_IRQn, 3);
     NVIC_EnableIRQ(TIM2_IRQn);
 

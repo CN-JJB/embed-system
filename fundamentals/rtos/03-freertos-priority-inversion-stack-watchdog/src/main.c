@@ -37,10 +37,13 @@ int main(void)
     /* 5. Initialize IWDG with ~2 second nominal timeout (prescaler 4 = /64, reload 1250) */
     iwdg_init(4, 1250);
 
-    /* 6. Initialize deterministic priority inversion experiment tasks */
+    /* 6. Initialize Cortex-M3 DWT Cycle Counter */
+    dwt_init();
+
+    /* 7. Initialize deterministic priority inversion experiment tasks */
     inversion_app_init();
 
-    /* 7. Start FreeRTOS preemptive scheduler */
+    /* 8. Start FreeRTOS preemptive scheduler */
     vTaskStartScheduler();
 
     while (1) {

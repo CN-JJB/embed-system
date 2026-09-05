@@ -40,9 +40,10 @@ if [ ! -f "${APP_CFG}" ]; then
 fi
 
 CLEAN_SRC="$(mktemp)"
+CLEAN_HDR="$(mktemp)"
 CLEAN_CFG="$(mktemp)"
 TEMP_BUILD_DIR="$(mktemp -d)"
-trap 'rm -rf "${CLEAN_SRC}" "${CLEAN_CFG}" "${TEMP_BUILD_DIR}"' EXIT
+trap 'rm -rf "${CLEAN_SRC}" "${CLEAN_HDR}" "${CLEAN_CFG}" "${TEMP_BUILD_DIR}"' EXIT
 
 # Strip comments for AST/regex matching
 python3 -c "
@@ -54,11 +55,16 @@ def strip_c(path, out_path):
     open(out_path, 'w').write(s)
 strip_c(sys.argv[1], sys.argv[2])
 strip_c(sys.argv[3], sys.argv[4])
-" "${APP_SRC}" "${CLEAN_SRC}" "${APP_CFG}" "${CLEAN_CFG}"
+strip_c(sys.argv[5], sys.argv[6])
+" "${APP_SRC}" "${CLEAN_SRC}" "${APP_HDR}" "${CLEAN_HDR}" "${APP_CFG}" "${CLEAN_CFG}"
 
 # Check 0: Zero placeholder / TODO comments remaining in submission
 if grep -qiE "\bTODO\b" "${APP_SRC}"; then
     echo "FAIL: Unimplemented TODO items remain in queue_app.c!" >&2
+    exit 1
+fi
+if grep -qiE "\bTODO\b" "${APP_HDR}"; then
+    echo "FAIL: Unimplemented TODO items remain in queue_app.h!" >&2
     exit 1
 fi
 if grep -qiE "\bTODO\b" "${APP_CFG}"; then
@@ -104,10 +110,22 @@ if not re.search(r'#define\s+xPortSysTickHandler\s+SysTick_Handler\b', cfg):
     sys.exit(1)
 " "${CLEAN_CFG}"
 
-# 3. Source contracts in queue_app.c
+# 3. Source contracts in queue_app.h and queue_app.c
 python3 -c "
 import sys, re
 src = open(sys.argv[1]).read()
+hdr = open(sys.argv[2]).read()
+
+# Header macro checks
+m_len = re.search(r'#define\s+QUEUE_APP_LENGTH\s+(\d+)', hdr)
+if not m_len or int(m_len.group(1)) != 10:
+    sys.stderr.write('FAIL: queue_app.h must define QUEUE_APP_LENGTH as exactly 10!\n')
+    sys.exit(1)
+
+m_size = re.search(r'#define\s+QUEUE_APP_ITEM_SIZE\s+(sizeof\s*\(\s*uint32_t\s*\)|4)', hdr)
+if not m_size:
+    sys.stderr.write('FAIL: queue_app.h must define QUEUE_APP_ITEM_SIZE as sizeof(uint32_t) or 4!\n')
+    sys.exit(1)
 
 # Priority Grouping
 if not re.search(r'NVIC_SetPriorityGrouping\s*\(\s*0\s*\)', src):
@@ -124,7 +142,7 @@ if prio_val < 5 or prio_val > 15:
     sys.stderr.write(f'FAIL: Invalid TIM2 priority {prio_val}! Must be within [5..15] to respect syscall boundary!\n')
     sys.exit(1)
 
-# Queue creation size: 10 items, 4 bytes
+# Queue creation size
 if not re.search(r'xQueueCreate\s*\(\s*(QUEUE_APP_LENGTH|10)\s*,\s*(QUEUE_APP_ITEM_SIZE|sizeof\s*\(\s*uint32_t\s*\)|4)\s*\)', src):
     sys.stderr.write('FAIL: xQueueCreate must specify length 10 and item size sizeof(uint32_t)!\n')
     sys.exit(1)
@@ -145,16 +163,34 @@ if re.search(r'\b(malloc|calloc|realloc|free)\s*\(', src):
     sys.stderr.write('FAIL: Prohibited call to standard libc dynamic allocator (malloc/calloc/realloc/free) detected in queue_app.c!\n')
     sys.exit(1)
 
-# TIM2_IRQHandler contracts
+# TIM2_IRQHandler contracts with brace tracking
 isr_idx = src.find('TIM2_IRQHandler')
 if isr_idx == -1:
     sys.stderr.write('FAIL: TIM2_IRQHandler definition missing in queue_app.c!\n')
     sys.exit(1)
-isr_body = src[isr_idx:]
 
-# Flag acknowledgment
-if not re.search(r'TIM2\s*->\s*SR\s*=', isr_body):
-    sys.stderr.write('FAIL: TIM2_IRQHandler must acknowledge interrupt by clearing TIM2->SR flag!\n')
+brace_level = 0
+in_body = False
+isr_body_chars = []
+for ch in src[isr_idx:]:
+    if ch == '{':
+        brace_level += 1
+        in_body = True
+    elif ch == '}':
+        brace_level -= 1
+        if in_body and brace_level == 0:
+            break
+    if in_body:
+        isr_body_chars.append(ch)
+isr_body = ''.join(isr_body_chars)
+
+# Flag acknowledgment: reject invalid writes of 1 (RC_W0 violation)
+if re.search(r'TIM2\s*->\s*SR\s*=\s*(TIM_SR_UIF|1)\b', isr_body):
+    sys.stderr.write('FAIL: TIM2->SR must NOT write 1 to clear UIF! On STM32F1, SR bits are rc_w0 (write 0 to clear)!\n')
+    sys.exit(1)
+
+if not re.search(r'(TIM2\s*->\s*SR\s*=\s*.*~.*TIM_SR_UIF|TIM2\s*->\s*SR\s*=\s*0\b|TIM2\s*->\s*SR\s*&=)', isr_body):
+    sys.stderr.write('FAIL: TIM2_IRQHandler must acknowledge interrupt by clearing TIM2->SR UIF flag!\n')
     sys.exit(1)
 
 # Prohibit task API in ISR
@@ -162,21 +198,32 @@ if re.search(r'\bxQueueSend\s*\(', isr_body):
     sys.stderr.write('FAIL: Prohibited task API xQueueSend() called from ISR! Must use xQueueSendFromISR()!\n')
     sys.exit(1)
 
-# Must call xQueueSendFromISR
-if not re.search(r'xQueueSendFromISR\s*\([^,]+,[^,]+,\s*&([a-zA-Z0-9_]+)\s*\)', isr_body):
+# xHigherPriorityTaskWoken initialization
+woken_match = re.search(r'BaseType_t\s+xHigherPriorityTaskWoken\s*=\s*(pdFALSE|0)\b', isr_body)
+if not woken_match:
+    sys.stderr.write('FAIL: TIM2_IRQHandler must initialize xHigherPriorityTaskWoken to pdFALSE per ISR invocation!\n')
+    sys.exit(1)
+
+# Must call xQueueSendFromISR with &xHigherPriorityTaskWoken
+send_match = re.search(r'xQueueSendFromISR\s*\([^,]+,[^,]+,\s*&xHigherPriorityTaskWoken\s*\)', isr_body)
+if not send_match:
     sys.stderr.write('FAIL: TIM2_IRQHandler must call xQueueSendFromISR with &xHigherPriorityTaskWoken!\n')
     sys.exit(1)
 
-# Queue full drop handling
-if not re.search(r'g_isr_dropped_count\s*(\+\+|\+=)', isr_body) and not re.search(r'errQUEUE_FULL', isr_body):
-    sys.stderr.write('FAIL: TIM2_IRQHandler must handle queue full condition by tracking g_isr_dropped_count!\n')
+if isr_body.find('xHigherPriorityTaskWoken') > isr_body.find('xQueueSendFromISR'):
+    sys.stderr.write('FAIL: xHigherPriorityTaskWoken must be declared and initialized before xQueueSendFromISR()!\n')
     sys.exit(1)
 
-# portYIELD_FROM_ISR
-if not re.search(r'portYIELD_FROM_ISR\s*\(', isr_body):
-    sys.stderr.write('FAIL: TIM2_IRQHandler must invoke portYIELD_FROM_ISR() to request deferred context switch!\n')
+# Queue full drop handling inside TIM2_IRQHandler
+if not re.search(r'g_isr_dropped_count\s*(\+\+|\+=)', isr_body):
+    sys.stderr.write('FAIL: TIM2_IRQHandler must handle queue full condition by tracking g_isr_dropped_count inside ISR!\n')
     sys.exit(1)
-" "${CLEAN_SRC}"
+
+# portYIELD_FROM_ISR inside TIM2_IRQHandler
+if not re.search(r'portYIELD_FROM_ISR\s*\(\s*xHigherPriorityTaskWoken\s*\)', isr_body):
+    sys.stderr.write('FAIL: TIM2_IRQHandler must invoke portYIELD_FROM_ISR(xHigherPriorityTaskWoken) inside ISR!\n')
+    sys.exit(1)
+" "${CLEAN_SRC}" "${CLEAN_HDR}"
 
 # 4. Strict Compilation and Link against FreeRTOS V11.3.0
 TEST_MAIN="${TEMP_BUILD_DIR}/test_main.c"
@@ -186,6 +233,9 @@ cat << 'EOF' > "${TEST_MAIN}"
 #include "queue_app.h"
 #include "FreeRTOS.h"
 #include "task.h"
+
+_Static_assert(QUEUE_APP_LENGTH == 10, "QUEUE_APP_LENGTH must be exactly 10");
+_Static_assert(QUEUE_APP_ITEM_SIZE == sizeof(uint32_t), "QUEUE_APP_ITEM_SIZE must be exactly sizeof(uint32_t)");
 
 int main(void)
 {
@@ -247,8 +297,9 @@ if echo "${NM_OUT}" | grep -qE "\b(malloc|calloc|realloc|free)$"; then
 fi
 
 # 6. Disassembly verification: TIM2_IRQHandler and portYIELD_FROM_ISR
-DISASM=$(arm-none-eabi-objdump -d "${TEST_ELF}")
-TIM2_DISASM=$(echo "${DISASM}" | awk '/<TIM2_IRQHandler>:/ {flag=1} flag && !/<TIM2_IRQHandler>:/ && /^[0-9a-f]+ </ {flag=0} flag {print}')
+DISASM_FILE="${TEMP_BUILD_DIR}/disasm.txt"
+arm-none-eabi-objdump -d "${TEST_ELF}" > "${DISASM_FILE}"
+TIM2_DISASM=$(awk '/<TIM2_IRQHandler>:/ {flag=1} flag && !/<TIM2_IRQHandler>:/ && /^[0-9a-f]+ </ {flag=0} flag {print}' "${DISASM_FILE}")
 
 if ! echo "${TIM2_DISASM}" | grep -qE "b[l]?(\.w)?.*<xQueueGenericSendFromISR>"; then
     echo "FAIL: TIM2_IRQHandler disassembly does not call xQueueGenericSendFromISR!" >&2

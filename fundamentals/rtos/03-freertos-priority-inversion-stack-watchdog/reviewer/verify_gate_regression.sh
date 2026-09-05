@@ -65,7 +65,7 @@ s2 = s2.replace('while ((IWDG->SR & IWDG_SR_PVU) != 0) {\n        __NOP();\n    
                 'uint32_t to = 100000U;\n    while ((IWDG->SR & IWDG_SR_PVU) != 0) { if (--to == 0) return false; }')
 s2 = s2.replace('while ((IWDG->SR & IWDG_SR_RVU) != 0) {\n        __NOP();\n    }',
                 'to = 100000U;\n    while ((IWDG->SR & IWDG_SR_RVU) != 0) { if (--to == 0) return false; }')
-s2 = s2.replace('/* GATE DEFECT: Omits clearing reset flags via RCC->CSR |= RCC_CSR_RMVF */',
+s2 = s2.replace('/* Reset flag retention policy */',
                 'RCC->CSR |= RCC_CSR_RMVF;')
 open(path2, 'w').write(s2)
 "

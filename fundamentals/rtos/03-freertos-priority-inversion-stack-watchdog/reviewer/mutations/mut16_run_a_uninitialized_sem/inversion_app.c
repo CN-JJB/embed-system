@@ -17,14 +17,14 @@ volatile uint32_t g_low_workload_iterations = 0;
 
 static volatile uint8_t s_current_experiment_run = 0; /* 0 = Run A (Sem), 1 = Run B (Mutex) */
 
-void __attribute__((noinline)) dwt_init(void)
+void dwt_init(void)
 {
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
     DWT->CYCCNT = 0U;
     DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
 }
 
-uint32_t __attribute__((noinline)) dwt_get_cycles(void)
+uint32_t dwt_get_cycles(void)
 {
     return DWT->CYCCNT;
 }
@@ -108,15 +108,14 @@ static void prvTaskLow(void *pvParameters)
          * ------------------------------------------------------------- */
         s_current_experiment_run = 0;
 
-        /* Create binary semaphore and deliberately initialize token */
+        /* Create binary semaphore but forget to initialize token with xSemaphoreGive */
         if (g_shared_resource != NULL) {
             vSemaphoreDelete(g_shared_resource);
         }
         g_shared_resource = xSemaphoreCreateBinary();
         configASSERT(g_shared_resource != NULL);
-        xSemaphoreGive(g_shared_resource);
 
-        /* Step 1: Low acquires lock */
+        /* Step 1: Low acquires lock (will block immediately because token count is 0) */
         xSemaphoreTake(g_shared_resource, portMAX_DELAY);
 
         /* Step 2: Low releases High */

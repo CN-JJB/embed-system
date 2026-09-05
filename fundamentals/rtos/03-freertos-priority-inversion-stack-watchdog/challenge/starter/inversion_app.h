@@ -16,9 +16,25 @@ extern TaskHandle_t g_task_low_handle;
 
 extern SemaphoreHandle_t g_shared_resource;
 
+/* Primary measurement via Cortex-M3 DWT Cycle Counter */
+extern volatile uint32_t g_high_wait_cycles_run_a;
+extern volatile uint32_t g_high_wait_cycles_run_b;
+
+/* Coarse supplementary RTOS tick counters */
 extern volatile uint32_t g_high_wait_ticks_run_a;
 extern volatile uint32_t g_high_wait_ticks_run_b;
+
 extern volatile uint32_t g_low_workload_iterations;
+
+/**
+ * @brief Initialize Cortex-M3 DWT Cycle Counter as primary timing source.
+ */
+void dwt_init(void);
+
+/**
+ * @brief Read current DWT cycle counter value.
+ */
+uint32_t dwt_get_cycles(void);
 
 /**
  * @brief Initialize tasks and synchronization primitives for the priority inversion experiment.

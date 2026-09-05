@@ -81,10 +81,9 @@ static void prvTelemetryTask(void *pvParameters)
         /* Step 5: Release buffer */
         xSemaphoreGive(s_shared_buffer_sem);
 
-        /* GATE DEFECT: Watermark unit confusion (words vs bytes) */
-        /* FreeRTOS returns watermark in words (StackType_t), not bytes! */
+        /* Sample stack high-water mark for telemetry health payload */
         UBaseType_t wm_words = uxTaskGetStackHighWaterMark(s_telemetry_task_handle);
-        g_reported_watermark_bytes = (uint32_t)wm_words; /* BUG: Missing * sizeof(StackType_t) */
+        g_reported_watermark_bytes = (uint32_t)wm_words;
 
         /* Refresh watchdog */
         iwdg_refresh();
@@ -116,7 +115,7 @@ int main(void)
     /* 2. Configure watchdog */
     iwdg_init(4, 1250);
 
-    /* GATE DEFECT: Using binary semaphore for mutual exclusion instead of mutex */
+    /* Allocate synchronization primitive for shared buffer */
     s_shared_buffer_sem = xSemaphoreCreateBinary();
     xSemaphoreGive(s_shared_buffer_sem);
 

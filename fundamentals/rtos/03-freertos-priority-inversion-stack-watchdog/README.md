@@ -142,7 +142,7 @@ fundamentals/rtos/03-freertos-priority-inversion-stack-watchdog/
 | :--- | :--- | :--- |
 | **Compilation & Toolchain** | `arm-none-eabi-gcc 13.2.1` `-Wall -Wextra -Werror` | **VERIFIED** (Zero warnings, clean link) |
 | **Binary Memory Bounds** | `arm-none-eabi-size` footprint audit | **VERIFIED** (Flash: 9.1 KB / 64 KB, RAM: 11.6 KB / 20 KB) |
-| **Symbol Table Audit** | `arm-none-eabi-nm` inspection | **VERIFIED** (`xTaskPriorityInherit`, `uxTaskGetStackHighWaterMark`, `vApplicationStackOverflowHook`, `iwdg_init`) |
+| **Symbol Table Audit** | `arm-none-eabi-nm` inspection | **VERIFIED** (`xTaskPriorityInherit`, `uxTaskGetStackHighWaterMark`, `vApplicationStackOverflowHook`, `iwdg_init`, `dwt_init`, `dwt_get_cycles`) |
 | **Exclusivity of Heap** | Disassembly inspection | **VERIFIED** (`ucHeap` in heap_4; libc `malloc`/`free` absent) |
 | **Direct Peripheral Access** | Disassembly of `iwdg.c` | **VERIFIED** (Direct MMIO to `0x40003000`, zero vendor HAL) |
 | **Deterministic CPU Loop** | Disassembly of `inversion_app.c` | **VERIFIED** (Pure integer ALU loop, zero `vTaskDelay` in critical section) |

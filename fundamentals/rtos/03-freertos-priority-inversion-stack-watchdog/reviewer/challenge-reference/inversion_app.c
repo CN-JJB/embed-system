@@ -9,15 +9,29 @@ TaskHandle_t g_task_low_handle = NULL;
 
 SemaphoreHandle_t g_shared_resource = NULL;
 
+volatile uint32_t g_high_wait_cycles_run_a = 0;
+volatile uint32_t g_high_wait_cycles_run_b = 0;
 volatile uint32_t g_high_wait_ticks_run_a = 0;
 volatile uint32_t g_high_wait_ticks_run_b = 0;
 volatile uint32_t g_low_workload_iterations = 0;
 
 static volatile uint8_t s_current_experiment_run = 0; /* 0 = Run A (Sem), 1 = Run B (Mutex) */
 
+void __attribute__((noinline)) dwt_init(void)
+{
+    CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
+    DWT->CYCCNT = 0U;
+    DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
+}
+
+uint32_t __attribute__((noinline)) dwt_get_cycles(void)
+{
+    return DWT->CYCCNT;
+}
+
 void __attribute__((noinline)) inversion_execute_low_workload(void)
 {
-    /* Deterministic CPU-runnable critical workload (~5 ms under 72 MHz)
+    /* Deterministic CPU-runnable critical workload (design target ~5 ms / ~360,000 cycles under 72 MHz)
      * Strictly NO vTaskDelay() while holding the measured shared resource!
      */
     volatile uint32_t val = 0x5555AAAAU;
@@ -31,7 +45,7 @@ void __attribute__((noinline)) inversion_execute_low_workload(void)
 
 static void prvMediumWorkload(void)
 {
-    /* Finite CPU-runnable interference workload (~20 ms under 72 MHz) */
+    /* Finite CPU-runnable interference workload (design target ~20 ms / ~1,440,000 cycles under 72 MHz) */
     volatile uint32_t val = 0x12345678U;
     for (uint32_t i = 0; i < 60000U; i++) {
         val = (val ^ (i + 1U)) * 17U;
@@ -48,15 +62,20 @@ static void prvTaskHigh(void *pvParameters)
         /* Wait for deterministic signal from Task_Low */
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
 
+        /* Primary measurement via DWT Cycle Counter */
+        uint32_t start_cycles = dwt_get_cycles();
         TickType_t xStartTick = xTaskGetTickCount();
 
         /* Attempt to acquire shared resource (blocks because Task_Low holds it) */
         if (xSemaphoreTake(g_shared_resource, portMAX_DELAY) == pdPASS) {
+            uint32_t duration_cycles = dwt_get_cycles() - start_cycles;
             TickType_t xDuration = xTaskGetTickCount() - xStartTick;
 
             if (s_current_experiment_run == 0) {
+                g_high_wait_cycles_run_a = duration_cycles;
                 g_high_wait_ticks_run_a = (uint32_t)xDuration;
             } else {
+                g_high_wait_cycles_run_b = duration_cycles;
                 g_high_wait_ticks_run_b = (uint32_t)xDuration;
             }
 
@@ -89,7 +108,7 @@ static void prvTaskLow(void *pvParameters)
          * ------------------------------------------------------------- */
         s_current_experiment_run = 0;
 
-        /* Create binary semaphore and initialize token */
+        /* Create binary semaphore and deliberately initialize token */
         if (g_shared_resource != NULL) {
             vSemaphoreDelete(g_shared_resource);
         }
@@ -107,9 +126,9 @@ static void prvTaskLow(void *pvParameters)
          * Step 4: Low now releases Medium */
         xTaskNotifyGive(g_task_medium_handle);
 
-        /* Step 5: Low executes CPU critical workload (~5 ms).
+        /* Step 5: Low executes CPU critical workload (design target ~5 ms).
          * Under binary semaphore, Medium (priority 2) preempts Low (priority 1).
-         * Low cannot finish until Medium finishes (~20 ms).
+         * Low cannot finish until Medium finishes (design target ~20 ms).
          */
         inversion_execute_low_workload();
 
@@ -139,7 +158,7 @@ static void prvTaskLow(void *pvParameters)
          * Step 4: Low releases Medium */
         xTaskNotifyGive(g_task_medium_handle);
 
-        /* Step 5: Low executes identical CPU critical workload (~5 ms).
+        /* Step 5: Low executes identical CPU critical workload (design target ~5 ms).
          * Because Low inherited priority 3, Medium (priority 2) cannot preempt Low!
          * Low finishes work promptly.
          */
@@ -170,8 +189,25 @@ uint32_t inversion_get_watermark_bytes(TaskHandle_t xTask)
     return (uint32_t)(words * sizeof(StackType_t));
 }
 
+void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName)
+{
+    (void)xTask;
+    (void)pcTaskName;
+
+    /* Freeze execution on stack overflow */
+    __disable_irq();
+    gpio_set_pa1();
+    gpio_set_pa2();
+    for (;;) {
+        __NOP();
+    }
+}
+
 void inversion_app_init(void)
 {
+    /* Initialize DWT cycle counter as primary experiment timing source */
+    dwt_init();
+
     /* Create Task_Low (Priority 1) */
     BaseType_t xRet = xTaskCreate(
         prvTaskLow,

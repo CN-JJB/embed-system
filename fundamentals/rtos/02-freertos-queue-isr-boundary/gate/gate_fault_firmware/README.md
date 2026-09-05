@@ -11,11 +11,11 @@ During acceptance testing, two severe operational failures are observed:
 Under headless execution or target bring-up, the system traps inside `vPortValidateInterruptPriority()`. Inspecting the task scheduling reveals that the consumer task spins continuously rather than blocking on the queue.
 
 ## Candidate Mission
-1. Analyze the NVIC interrupt priority assignment against the FreeRTOS syscall boundary.
-2. Inspect the consumer task queue-receive interaction and blocking semantics.
-3. Formulate hypotheses explaining why kernel validation assertions reject the interrupt and why CPU starvation occurs.
-4. Apply a minimal, zero-regression patch to restore robust interrupt handoff and priority-preemptive scheduling.
-5. Verify that the patched firmware passes `reviewer/verify_gate_regression.sh`.
+1. Reproduce the acceptance test failures using static ELF analysis, register mapping, and GDB simulation.
+2. Diagnose the root cause of the kernel trap during hardware timer initialization.
+3. Diagnose the mechanism causing dispatch jitter and CPU exhaustion during queue handoff.
+4. Apply a minimal, robust patch to resolve all defects while preserving the specified packet rate.
+5. Confirm that the patched firmware passes all checks in `reviewer/verify_gate_regression.sh`.
 
 ## Build
 ```bash

@@ -23,6 +23,7 @@ The challenge requires a fully integrated, deterministic priority inversion harn
   - Clear flags: `RCC->CSR |= RCC_CSR_RMVF`.
 
 ### 3. `inversion_app.c`
-- Run A: Creates `xSemaphoreCreateBinary()`. Low acquires lock, releases High, releases Medium. Medium preempts Low; High suffers 25 ms delay.
-- Run B: Creates `xSemaphoreCreateMutex()`. Low acquires lock, releases High, releases Medium. When High blocks, Low inherits Priority 3; Medium cannot preempt Low. High suffers only 5 ms delay.
+- Run A: Creates `xSemaphoreCreateBinary()`. Low acquires lock, releases High, releases Medium. Medium preempts Low; High suffers ~25 ms delay (design target).
+- Run B: Creates `xSemaphoreCreateMutex()`. Low acquires lock, releases High, releases Medium. When High blocks, Low inherits Priority 3; Medium cannot preempt Low. High suffers only ~5 ms delay (design target).
+- Measurement: Primary high-resolution duration captured via Cortex-M3 DWT Cycle Counter (`dwt_init()`, `dwt_get_cycles()`); supplementary coarse duration via RTOS ticks. (Physical execution: DESIGN TARGET / UNVERIFIED).
 - Watermark conversion: `uxTaskGetStackHighWaterMark(xTask) * sizeof(StackType_t)`.

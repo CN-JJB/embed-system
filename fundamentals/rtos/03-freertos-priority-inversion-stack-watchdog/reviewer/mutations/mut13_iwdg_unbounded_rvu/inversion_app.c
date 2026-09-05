@@ -17,14 +17,14 @@ volatile uint32_t g_low_workload_iterations = 0;
 
 static volatile uint8_t s_current_experiment_run = 0; /* 0 = Run A (Sem), 1 = Run B (Mutex) */
 
-void __attribute__((noinline)) dwt_init(void)
+void dwt_init(void)
 {
     CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
     DWT->CYCCNT = 0U;
     DWT->CTRL |= DWT_CTRL_CYCCNTENA_Msk;
 }
 
-uint32_t __attribute__((noinline)) dwt_get_cycles(void)
+uint32_t dwt_get_cycles(void)
 {
     return DWT->CYCCNT;
 }
