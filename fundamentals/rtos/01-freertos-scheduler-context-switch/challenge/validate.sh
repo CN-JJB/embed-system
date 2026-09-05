@@ -258,40 +258,64 @@ if not m_b:
     print('FAIL: scheduler_app_init_and_start() must explicitly call xTaskCreate() for prvTaskB!', file=sys.stderr)
     sys.exit(1)
 
-# 8.5 Stack argument check (numeric literals if not macro)
+# 8.5 Stack argument call-site binding to validated header macro contract
 for name, m in [('Task A', m_a), ('Task B', m_b)]:
-    stack_arg = m.group(1).strip()
-    if stack_arg.isdigit() and int(stack_arg) < 128:
-        print(f'FAIL: {name} stack argument ({stack_arg}) is undersized below 128 words!', file=sys.stderr)
+    stack_arg = m.group(1).strip().strip('()')
+    if stack_arg != 'TASK_STACK_SIZE_WORDS':
+        print('FAIL: ' + name + ' xTaskCreate() stack argument (' + m.group(1).strip() + ') must be bound to validated header contract TASK_STACK_SIZE_WORDS!', file=sys.stderr)
         sys.exit(1)
 
-# 8.6 Priority argument relationship in xTaskCreate call
-p_a = m_a.group(3).strip()
-p_b = m_b.group(3).strip()
-if p_a == p_b:
-    print('FAIL: Task A and Task B must have distinct priorities!', file=sys.stderr)
-    sys.exit(1)
-if ('TASK_B_PRIORITY' in p_a and 'TASK_A_PRIORITY' in p_b) or (p_a.isdigit() and p_b.isdigit() and int(p_a) < int(p_b)):
-    print('FAIL: Inverted task priorities: Task A must have higher priority than Task B!', file=sys.stderr)
+# 8.6 Priority argument call-site binding to validated header macro contracts
+p_a = m_a.group(3).strip().strip('()')
+if p_a != 'TASK_A_PRIORITY':
+    print('FAIL: Task A xTaskCreate() priority argument (' + m_a.group(3).strip() + ') must be bound to validated header contract TASK_A_PRIORITY!', file=sys.stderr)
     sys.exit(1)
 
-# 8.7 vTaskStartScheduler inside scheduler_app_init_and_start
+p_b = m_b.group(3).strip().strip('()')
+if p_b != 'TASK_B_PRIORITY':
+    print('FAIL: Task B xTaskCreate() priority argument (' + m_b.group(3).strip() + ') must be bound to validated header contract TASK_B_PRIORITY!', file=sys.stderr)
+    sys.exit(1)
+
+# 8.7 Execution sequencing: Task A creation -> Task B creation -> vTaskStartScheduler
 pos_sched = fn_body.find('vTaskStartScheduler')
 if pos_sched == -1:
     print('FAIL: vTaskStartScheduler() must be called inside scheduler_app_init_and_start()!', file=sys.stderr)
     sys.exit(1)
 
-pos_a = fn_body.find('prvTaskA')
-pos_b = fn_body.find('prvTaskB')
-if pos_a > pos_sched or pos_b > pos_sched:
-    print('FAIL: Both tasks must be created before vTaskStartScheduler() is invoked!', file=sys.stderr)
+pos_a = m_a.start()
+pos_b = m_b.start()
+if not (pos_a < pos_b < pos_sched):
+    print('FAIL: Both tasks must be created and return-checked in sequence before vTaskStartScheduler() is invoked!', file=sys.stderr)
     sys.exit(1)
 
-# 8.8 Return code validation for BOTH task creations
-pass_checks = len(re.findall(r'\bpdPASS\b', fn_body))
-if pass_checks < 2:
-    print(f'FAIL: Return codes from both xTaskCreate() calls must be validated against pdPASS (found {pass_checks} checks; expected >= 2)!', file=sys.stderr)
+# 8.8 Return code validation for BOTH task creations:
+# Each xTaskCreate() call must have its return value captured and checked against pdPASS.
+def verify_return_check(task_name, m_call, next_pos):
+    call_start = m_call.start()
+    call_end = m_call.end()
+    prefix = fn_body[:call_start].rstrip()
+    seg_after = fn_body[call_end:next_pos]
+
+    # Pattern 1: [BaseType_t] var = xTaskCreate(...); ... if (var != pdPASS)
+    m_var = re.search(r'(?:(?:BaseType_t|int|auto)\s+)?(\b\w+\b)\s*=\s*$', prefix)
+    if m_var:
+        var_name = m_var.group(1)
+        chk = re.search(r'\b' + var_name + r'\s*(!=|==)\s*pdPASS\b|\bpdPASS\s*(!=|==)\s*' + var_name + r'\b', seg_after)
+        if not chk:
+            print('FAIL: Return value of ' + task_name + ' xTaskCreate() captured in ' + var_name + ', but ' + var_name + ' is not checked against pdPASS before proceeding!', file=sys.stderr)
+            sys.exit(1)
+        return
+
+    # Pattern 2: if (xTaskCreate(...) != pdPASS) or if ((var = xTaskCreate(...)) != pdPASS)
+    if re.search(r'if\s*\(\s*$', prefix) or re.search(r'if\s*\(\s*\(\s*(?:(?:BaseType_t|int|auto)\s+)?\w+\s*=\s*$', prefix):
+        if re.search(r'^\s*\)?\s*(!=|==)\s*pdPASS\b', seg_after):
+            return
+
+    print('FAIL: ' + task_name + ' xTaskCreate() return value must be captured and checked against pdPASS before proceeding!', file=sys.stderr)
     sys.exit(1)
+
+verify_return_check('Task A', m_a, pos_b)
+verify_return_check('Task B', m_b, pos_sched)
 " "${CLEAN_SRC}"
 
 # 9. Build verification test harness

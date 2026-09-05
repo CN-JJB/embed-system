@@ -37,7 +37,7 @@ The learner integration is packaged as a **learner-owned 3-file integration bund
 The student validator (`challenge/validate.sh`) tests 14 distinct static, architectural, binary, and compilation contracts against the learner bundle.
 The automated regression harness (`reviewer/test_m04_validator_mutations.sh`) proves validator rigor:
 1. **Positive Control**: `reviewer/challenge-reference/` bundle -> **MUST PASS**.
-2. **Negative Mutations** (13 mutation bundle families) -> **ALL MUST BE REJECTED**:
+2. **Negative Mutations** (16 mutation bundle families) -> **ALL MUST BE REJECTED**:
    - `mut1_broken_vectors`: learner config omits port handler remapping;
    - `mut2_inverted_priority`: Task A has lower priority than Task B;
    - `mut3_task_never_delays`: Task A never blocks, starving Task B;
@@ -50,4 +50,7 @@ The automated regression harness (`reviewer/test_m04_validator_mutations.sh`) pr
    - `mut10_todo_unimplemented`: uncompleted TODO annotations remaining in bundle;
    - `mut_no_task_creation`: defines tasks and decoy pdPASS but omits `xTaskCreate` calls;
    - `mut_undersized_stack_contract`: sets `TASK_STACK_SIZE_WORDS` to 64 words in header;
-   - `mut_decoy_delay`: places `vTaskDelay()` in an unused helper while actual `prvTaskA` never blocks.
+   - `mut_decoy_delay`: places `vTaskDelay()` in an unused helper while actual `prvTaskA` never blocks;
+   - `mut_stack_callsite_bypass`: header defines 128 words but call-site uses separate 64-word macro;
+   - `mut_priority_callsite_bypass`: header defines valid priorities but call-site passes `(TASK_A_PRIORITY + 1)`;
+   - `mut_decoy_pdpass`: creates tasks without checking return codes, adding dead `pdPASS` decoy tokens.
