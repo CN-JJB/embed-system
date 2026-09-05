@@ -33,7 +33,7 @@ BaseType_t xTaskCreate(TaskFunction_t pxTaskCode,
 Under `configSUPPORT_DYNAMIC_ALLOCATION == 1`:
 1. It calls `pvPortMalloc()` to allocate the task stack:
    $$\text{Bytes allocated} = \text{usStackDepth} \times \text{sizeof(StackType\_t)} = \text{usStackDepth} \times 4\text{ bytes}$$
-2. It calls `pvPortMalloc()` to allocate the Task Control Block (`TCB_t`, $\approx 84$ bytes).
+2. It calls `pvPortMalloc()` to allocate the Task Control Block (`TCB_t`); its exact size is configuration- and version-dependent and must be taken from the built image/source configuration rather than memorized as a fixed byte count.
 3. It initializes the TCB fields: task name, priority, state list item, event list item, and stack bounds.
 4. It calls `pxPortInitialiseStack()` to build a synthetic exception frame on the allocated stack so the task can be entered via normal exception exit return (`bx lr`).
 
@@ -100,7 +100,7 @@ This sets bit 24 to `1`, guaranteeing Thumb execution.
 - **Preemption**: When a higher-priority task transitions from `Blocked` to `Ready` (e.g. timeout expires in SysTick), FreeRTOS sets `xYieldPending = pdTRUE` and requests PendSV. The currently running lower-priority task is preempted immediately at the SysTick boundary without waiting for its time slice to end.
 - **Round-Robin Time-Slicing**: When multiple tasks share the same priority level, each SysTick interrupt calls `taskSELECT_HIGHEST_PRIORITY_TASK()`, which advances the ready list pointer:
   $$\text{listGET\_OWNER\_OF\_NEXT\_ENTRY()}$$
-  Each task executes for exactly one kernel tick ($1\text{ ms}$) in turn.
+  Equal-priority ready tasks are rotated at tick boundaries when time slicing applies; a task may still run for less than one tick if it blocks/yields or be delayed by higher-priority work.
 
 ## Step-by-Step Procedure
 
