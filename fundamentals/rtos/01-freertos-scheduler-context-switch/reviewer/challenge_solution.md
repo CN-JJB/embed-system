@@ -6,7 +6,7 @@ The redesigned P2-M04 transfer challenge evaluates the core competency of microc
 The learner integration is packaged as a **learner-owned 3-file integration bundle**:
 - `scheduler_app.h`: Task parameters and function contract prototypes;
 - `scheduler_app.c`: Clock tree initialization, dual-task creation with return code checking, non-busy `vTaskDelay()` blocking, and scheduler startup;
-- `FreeRTOSConfig.h`: Complete kernel configuration owned by the learner, including exception vector remappings, dynamic `SystemCoreClock` coherence, lowest interrupt priority assignment, and `heap_4` dimensioning.
+- `FreeRTOSConfig.h`: Complete learner-owned kernel configuration for exception vector remappings, dynamic `SystemCoreClock` coherence, tick/preemption settings, and `heap_4` dimensioning. PendSV/SysTick minimum priority is supplied by the pinned ARM_CM3 port itself, not by a learner config macro.
 
 ### 1. Clock Integration & Dynamic Coherence
 - Initializes system clock with requested profile (72 MHz HSE primary), falling back to 64 MHz HSI if HSE fails.
