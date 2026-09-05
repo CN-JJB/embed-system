@@ -101,14 +101,17 @@ fundamentals/rtos/01-freertos-scheduler-context-switch/
 │   ├── f4/                           # Missing Thumb bit in xPSR (UsageFault INVSTATE)
 │   └── f5/                           # Heap exhaustion during kernel task creation
 ├── challenge/
-│   ├── app_tasks.h                   # Challenge interface specification
-│   ├── app_tasks.c                   # Student starter implementation
-│   ├── validate.sh                   # Automated challenge grading script
-│   └── verify_challenge.sh           # Challenge test runner
+│   ├── README.md                     # Learner-facing AI-Free challenge specification
+│   ├── starter/                      # Learner starter integration bundle
+│   │   ├── scheduler_app.c           # Skeleton application implementation
+│   │   ├── scheduler_app.h           # Task interface specification
+│   │   └── FreeRTOSConfig.h          # Learner-owned FreeRTOS configuration with TODOs
+│   ├── validate.sh                   # Automated challenge bundle grading script
+│   └── verify_challenge.sh           # Learner convenience test runner
 ├── reviewer/
 │   ├── README.md                     # Reviewer-side isolated documentation index
-│   ├── challenge-reference/          # Golden reference implementation
-│   ├── mutations/                    # 8 negative mutations evaluating validate.sh
+│   ├── challenge-reference/          # Golden reference implementation bundle
+│   ├── mutations/                    # 10 negative mutation bundles evaluating validate.sh
 │   ├── test_m04_validator_mutations.sh # Automated mutation regression test runner
 │   ├── verify_gate_regression.sh     # Module gate automated verification harness
 │   ├── challenge_solution.md         # Challenge design and reference breakdown
@@ -138,7 +141,7 @@ bash fundamentals/rtos/01-freertos-scheduler-context-switch/scripts/verify_m04.s
 
 ### Run Reviewer Test Suites:
 ```bash
-# Verify challenge validator against 8 negative mutations:
+# Verify challenge validator against 10 negative mutations:
 bash fundamentals/rtos/01-freertos-scheduler-context-switch/reviewer/test_m04_validator_mutations.sh
 
 # Verify module gate regression test:
