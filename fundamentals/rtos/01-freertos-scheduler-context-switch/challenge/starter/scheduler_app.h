@@ -29,7 +29,7 @@
  *    - Call vTaskStartScheduler().
  *
  * @param profile Requested primary clock profile.
- * @return 0 on success, negative error code if task creation or clock init fails.
+ * @return Does not return after successful scheduler start; returns a negative error code if clock/task/scheduler startup fails.
  */
 int scheduler_app_init_and_start(clock_profile_t profile);
 
