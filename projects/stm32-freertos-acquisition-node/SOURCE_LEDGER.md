@@ -9,7 +9,7 @@ This document tracks all primary hardware manuals, processor architecture specif
 ### 1. STMicroelectronics RM0008 Reference Manual
 - **Organization**: STMicroelectronics
 - **Document**: RM0008 Reference Manual: STM32F101xx, STM32F102xx, STM32F103xx, STM32F105xx and STM32F107xx advanced Arm-based 32-bit MCUs
-- **Revision**: Rev 21 (April 2021)
+- **Revision**: Rev 21 (February 2021)
 - **Source Tier**: Tier 1 (Silicon Vendor Primary Documentation)
 - **License**: Proprietary / STMicroelectronics Copyright
 - **Pedagogical Scope & Invariants**:
@@ -24,7 +24,7 @@ This document tracks all primary hardware manuals, processor architecture specif
 ### 2. STMicroelectronics DS5319 Datasheet
 - **Organization**: STMicroelectronics
 - **Document**: DS5319: STM32F103x8, STM32F103xB Medium-density performance line Arm-based 32-bit MCU
-- **Revision**: Rev 20 (September 2020)
+- **Revision**: Rev 20 (31 July 2025)
 - **Source Tier**: Tier 1 (Silicon Electrical Specification)
 - **License**: Proprietary / STMicroelectronics Copyright
 - **Pedagogical Scope & Invariants**:
@@ -35,7 +35,7 @@ This document tracks all primary hardware manuals, processor architecture specif
 ### 3. STMicroelectronics PM0056 Programming Manual
 - **Organization**: STMicroelectronics
 - **Document**: PM0056: STM32F10xxx/20xxx/21xxx/L1xxxx Cortex-M3 programming manual
-- **Revision**: Rev 7 (April 2021)
+- **Revision**: Rev 7 (December 2024)
 - **Source Tier**: Tier 1 (Core Programming Reference)
 - **License**: Proprietary / STMicroelectronics Copyright
 - **Pedagogical Scope & Invariants**:
