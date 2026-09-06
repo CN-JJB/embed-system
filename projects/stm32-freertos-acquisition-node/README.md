@@ -85,7 +85,7 @@ To demonstrate priority inheritance without disrupting steady-state acquisition,
 5. Medium preempts Low (Priority 2 > 1) and runs finite CPU interference (~20 ms).
 6. Low resumes and completes bounded CPU critical workload (~5 ms, strictly NO `vTaskDelay`).
 7. Low releases `g_diag_sem`. High unblocks and stores cycle delta in `g_diag_high_wait_cycles_run_a`.
-- **Observed Wait Duration**: $\approx 25\text{ ms}$ (Bounded priority inversion).
+- **Design Target / UNVERIFIED**: $\approx 25\text{ ms}$ bounded wait in the finite binary-semaphore comparison.
 
 ### Run B — Mutex (Priority Inheritance Active)
 1. Low acquires mutex `g_diag_mutex`.
@@ -95,7 +95,7 @@ To demonstrate priority inheritance without disrupting steady-state acquisition,
 5. Low releases Medium. Medium awakens at Priority 2, but **cannot preempt inherited Priority 3 Low**!
 6. Low executes identical critical workload promptly (~5 ms).
 7. Low releases mutex, disinherits to Priority 1. High unblocks and stores cycle delta in `g_diag_high_wait_cycles_run_b`.
-- **Observed Wait Duration**: $\approx 5\text{ ms}$ / $\le 6\text{ ms}$ (Preemption avoided).
+- **Design Target / UNVERIFIED**: $\approx 5\text{ ms}$ / $\le 6\text{ ms}$ in the mutex comparison.
 
 ---
 
