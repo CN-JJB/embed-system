@@ -92,7 +92,7 @@ Logic analyzer captures on PA1 (DMA / Process marker) show sporadic, severe timi
   - *Verification*: Tracing `prvTaskProcess` shows an `xSemaphoreTake(g_diag_resource, portMAX_DELAY)` call inside the main `xQueueReceive` loop.
 
 ### 3. Root Cause
-An application mutual exclusion lock was inserted directly into the time-critical acquisition fast path. Real-time acquisition pipelines must remain completely lock-free and asynchronous, relying solely on message passing queues with copy semantics.
+An application mutual exclusion lock was inserted directly into the time-critical acquisition fast path. For this project, the normal acquisition path must remain free of application-level mutex/semaphore dependencies and use value-copied queues for task handoff; FreeRTOS queue internals still perform kernel synchronization.
 
 ### 4. Canonical Fix
 Ensure the sample-processing loop in `prvTaskProcess()` contains zero mutex or semaphore calls. The diagnostic synchronization object `g_diag_resource` is strictly reserved for the isolated diagnostic branch triggered prior to starting acquisition.
