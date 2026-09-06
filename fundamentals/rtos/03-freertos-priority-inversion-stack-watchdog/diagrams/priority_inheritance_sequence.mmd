@@ -1,0 +1,30 @@
+sequenceDiagram
+    autonumber
+    participant L as Task Low (Prio 1)
+    participant M as Task Medium (Prio 2)
+    participant H as Task High (Prio 3)
+    participant Mutex as FreeRTOS Mutex (pxMutexHolder)
+
+    Note over L,Mutex: Run B: Priority Inheritance Active
+    L->>Mutex: xSemaphoreTake(xMutex, portMAX_DELAY)
+    Note over Mutex: Mutex records pxMutexHolder = Task Low
+    L->>L: Begins critical workload (PA1 High)
+    Note over H: Event triggers Task High
+    H-->>L: Preempts Low (Prio 3 > Prio 1)
+    H->>H: Starts execution (PA3 High)
+    H->>Mutex: xSemaphoreTake(xMutex, portMAX_DELAY)
+    Note over Mutex: Mutex held by Task Low. Kernel invokes xTaskPriorityInherit(Low)
+    Note over L: Task Low temporarily BOOSTED to Priority 3!
+    Mutex-->>H: High enters BLOCKED state
+    Note over L: Task Low resumes execution AT PRIORITY 3
+    Note over M: Task Medium becomes Ready (Prio 2)
+    Note over M,L: Medium (Prio 2) CANNOT preempt Low (current Prio 3)!
+    L->>L: Completes ~5 ms critical workload without interruption
+    L->>Mutex: xSemaphoreGive(xMutex)
+    Note over Mutex,L: Kernel invokes xTaskPriorityDisinherit(Low) -> Low drops to Prio 1
+    L->>L: (PA1 Low)
+    Mutex-->>H: High unblocks immediately and takes mutex!
+    H->>H: Completes ~1 ms critical section
+    H->>Mutex: xSemaphoreGive(xMutex)
+    H->>H: (PA3 Low)
+    Note over M: High and Low finished; Task Medium finally runs (PA2 High)

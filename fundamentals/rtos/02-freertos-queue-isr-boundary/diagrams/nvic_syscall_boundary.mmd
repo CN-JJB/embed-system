@@ -1,0 +1,25 @@
+graph LR
+    subgraph Highest_Urgency["Highest Urgency Exceptions (Unmasked by FreeRTOS)"]
+        prio0["Logical 0 (0x00) - Reset, NMI, HardFault"]
+        prio1["Logical 1 (0x01)"]
+        prio2["Logical 2 (0x02) - Time-critical motor/DSP ISRs"]
+        prio3["Logical 3 (0x03)"]
+        prio4["Logical 4 (0x04)"]
+        warning["MUST NEVER CALL ANY FreeRTOS API! Zero Kernel Jitter."]
+    end
+
+    subgraph Boundary["configMAX_SYSCALL_INTERRUPT_PRIORITY = 0x50 (Logical 5)"]
+        basepri["BASEPRI Mask Threshold (0x50)"]
+    end
+
+    subgraph Maskable_ISRs["Syscall-Safe ISR Domain (Maskable by BASEPRI)"]
+        prio5["Logical 5 (0x50) - Highest Syscall Priority"]
+        prio6["Logical 6 (0x60) - TIM2 ISR in P2-M05 Coursework"]
+        prio7["Logical 7 (0x70)"]
+        prioDots["..."]
+        prio14["Logical 14 (0x0E)"]
+        prio15["Logical 15 (0xF0) - SysTick & PendSV (Lowest Urgency)"]
+        safe["MAY SAFELY CALL ...FromISR() APIs"]
+    end
+
+    Highest_Urgency --- Boundary --- Maskable_ISRs

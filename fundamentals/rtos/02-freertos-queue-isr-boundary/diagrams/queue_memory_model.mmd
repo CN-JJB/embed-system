@@ -1,0 +1,28 @@
+graph TD
+    subgraph Queue_Structure["Queue_t Memory Structure"]
+        pcHead["pcHead: Start of storage buffer"]
+        pcTail["pcTail: End of storage buffer"]
+        pcWriteTo["pcWriteTo: Next write pointer"]
+        pcReadFrom["pcReadFrom: Last read pointer"]
+        uxMessagesWaiting["uxMessagesWaiting: Current item count"]
+        uxLength["uxLength: Maximum items (e.g. 10)"]
+        uxItemSize["uxItemSize: Item size (e.g. 4 bytes)"]
+        cRxLock["cRxLock / cTxLock: Queue locks"]
+    end
+
+    subgraph Storage_Buffer["Contiguous Storage Buffer (pcHead to pcTail)"]
+        item0["Item 0: uint32_t (4 bytes)"]
+        item1["Item 1: uint32_t (4 bytes)"]
+        item2["Item 2: uint32_t (4 bytes)"]
+        itemDots["..."]
+        item9["Item 9: uint32_t (4 bytes)"]
+    end
+
+    subgraph Wait_Lists["Kernel Event Wait Lists"]
+        xTasksWaitingToSend["xTasksWaitingToSend: Tasks blocked on xQueueSend"]
+        xTasksWaitingToReceive["xTasksWaitingToReceive: Tasks blocked on xQueueReceive"]
+    end
+
+    pcHead --> item0
+    pcTail --> item9
+    xTasksWaitingToReceive -.->|Unblocked by xTaskRemoveFromEventList| ReadyList["pxReadyTasksLists / xPendingReadyList"]

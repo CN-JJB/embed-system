@@ -1,0 +1,31 @@
+sequenceDiagram
+    autonumber
+    participant HW as TIM2 Hardware
+    participant ISR as TIM2_IRQHandler
+    participant Kernel as FreeRTOS Queue / EventList
+    participant SCB as NVIC SCB->ICSR
+    participant PendSV as PendSV_Handler
+    participant Task as Task_Consumer (Prio 3)
+
+    Note over Task: Blocked on xQueueReceive(..., portMAX_DELAY)
+    HW->>ISR: TIM2 Update Event (UIF set, Vector 44)
+    activate ISR
+    ISR->>HW: Acknowledge flag (TIM2->SR = ~TIM_SR_UIF)
+    ISR->>Kernel: xQueueSendFromISR(queue, &seq, &xHigherPriorityTaskWoken)
+    activate Kernel
+    Kernel->>Kernel: memcpy item to queue storage
+    Kernel->>Kernel: xTaskRemoveFromEventList(xTasksWaitingToReceive)
+    Note over Kernel: unblocked_prio (3) > current_task_prio (0/Idle) -> xHigherPriorityTaskWoken = pdTRUE
+    Kernel-->>ISR: return pdPASS, xHigherPriorityTaskWoken = pdTRUE
+    deactivate Kernel
+    ISR->>SCB: portYIELD_FROM_ISR() -> writes PENDSVSET (bit 28)
+    ISR-->>HW: Exception Exit (bx lr)
+    deactivate ISR
+    Note over HW, PendSV: Cortex-M tail-chains directly to lowest-urgency PendSV
+    activate PendSV
+    PendSV->>PendSV: Context switch (save outgoing, restore Task_Consumer PSP)
+    PendSV-->>Task: Exception Return (0xFFFFFFFD)
+    deactivate PendSV
+    activate Task
+    Note over Task: Unblocks from xQueueReceive(), processes sequence_number
+    deactivate Task

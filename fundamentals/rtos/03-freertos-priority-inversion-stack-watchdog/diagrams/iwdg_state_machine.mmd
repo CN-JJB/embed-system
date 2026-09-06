@@ -1,0 +1,28 @@
+stateDiagram-v2
+    [*] --> HardwareReset: System Power-On or Watchdog Reset
+    
+    state HardwareReset {
+        [*] --> CheckCSR
+        CheckCSR: Inspect RCC->CSR & RCC_CSR_IWDGRSTF
+        CheckCSR --> ClearFlags: RMVF bit set (RCC->CSR |= RCC_CSR_RMVF)
+    }
+
+    HardwareReset --> UnlockedConfig: iwdg_init() called
+    
+    state UnlockedConfig {
+        [*] --> Write0x5555: Write 0x5555 to IWDG->KR (Unlock PR/RLR)
+        Write0x5555 --> PollSR: Poll IWDG->SR (PVU & RVU == 0) with bounded timeout
+        PollSR --> SetPrescaler: Write PR (e.g. 0x04 -> div 64)
+        SetPrescaler --> SetReload: Write RLR (e.g. 624 -> 1.0s timeout)
+    }
+
+    UnlockedConfig --> ActiveMonitoring: Write 0xCCCC to IWDG->KR (Watchdog Started)
+
+    state ActiveMonitoring {
+        [*] --> CountingDown: Down-counter running from RLR to 0
+        CountingDown --> Refreshed: Task Health audits tasks & writes 0xAAAA to KR
+        Refreshed --> CountingDown: Counter resets to RLR
+        CountingDown --> TimeoutExpired: Counter reaches 0x000 (Starvation or Lockup)
+    }
+
+    TimeoutExpired --> HardwareReset: Hardware System Reset Triggered by IWDG
