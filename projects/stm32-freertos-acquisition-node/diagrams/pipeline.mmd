@@ -1,0 +1,21 @@
+graph TD
+    subgraph Hardware ["Hardware Layer (STM32F103C8T6 @ 72 MHz)"]
+        TIM3["TIM3 Timer (1.0 kHz)<br/>PSC=71, ARR=999, MMS=010"] -->|TRGO Update Event| ADC1["ADC1 Regular Conversion<br/>PA0 Analog, ADCPRE=/6 (12 MHz), SMP0=55.5 cyc"]
+        ADC1 -->|Hardware DMA Request| DMA1["DMA1 Channel 1 (Circular)<br/>128 Transfers, 16-bit PSIZE/MSIZE"]
+        DMA1 -->|Half 0 (0..63) & Half 1 (64..127)| SRAM_POOL["Persistent SRAM Double Buffer<br/>g_adc_pool[2][64]"]
+    end
+
+    subgraph ISR ["Interrupt Service Boundary (Priority 6)"]
+        DMA1 -.->|HT / TC Interrupt| DMA_ISR["DMA1_Channel1_IRQHandler<br/>Clear IFCR, xHigherPriorityTaskWoken=pdFALSE"]
+        DMA_ISR -->|xQueueSendFromISR| ACQ_Q["xAcqQueue (Depth 4)<br/>AcquisitionMessage_t Token"]
+        DMA_ISR -.->|portYIELD_FROM_ISR| SCHED["FreeRTOS Preemptive Scheduler"]
+    end
+
+    subgraph Tasks ["Application Task Pipeline (Zero Application Mutex in Fast Path)"]
+        ACQ_Q -->|xQueueReceive portMAX_DELAY| T_PROC["Task_Process (Priority 3)<br/>Computes Min, Max, Avg, Integer RMS (isqrt)"]
+        T_PROC -->|xQueueSend non-blocking| LOG_Q["xLogQueue (Depth 4)<br/>TelemetryRecord_t"]
+        LOG_Q -->|xQueueReceive portMAX_DELAY| T_COMM["Task_Comm (Priority 2)<br/>Direct USART1 Register Driver @ 115200"]
+        T_COMM -->|USART1->SR & USART1->DR| USART_TX["USART1 TX Pin (PA9)"]
+
+        T_HLTH["Task_Health (Priority 1, 500 ms Period)<br/>Progress Check + Stack Watermarks + Heap Audit"] -->|Conditional Health Gate| IWDG["IWDG Refresh (0xAAAA)<br/>~2000 ms Independent Timeout"]
+    end
