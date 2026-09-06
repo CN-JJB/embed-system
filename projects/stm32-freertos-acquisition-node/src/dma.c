@@ -69,7 +69,7 @@ void dma1_channel1_init(void)
 
     /*
      * 7. Configure NVIC Priority and enable IRQ:
-     *    Logical priority 6 is strictly within the FreeRTOS syscall boundary (<= 5).
+     *    Logical priority 6 is within the FreeRTOS syscall-safe band (logical priority >= 5; numerically lower values are higher urgency).
      */
     NVIC_SetPriority(DMA1_Channel1_IRQn, 6);
     NVIC_EnableIRQ(DMA1_Channel1_IRQn);
