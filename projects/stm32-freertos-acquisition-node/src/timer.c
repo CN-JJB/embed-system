@@ -25,18 +25,17 @@ void tim3_trgo_init_1khz(uint32_t tim_clock_hz)
      *      ARR = (1,000,000 / 1,000) - 1 = 1000 - 1 = 999
      */
     uint32_t psc = (tim_clock_hz / 1000000U) - 1U;
-    uint32_t arr = (1000000U / 1000U) - 1U;
+    uint32_t arr = 999U;
 
     TIM3->PSC = psc;
     TIM3->ARR = arr;
 
     /*
-     * 3. Configure Master Mode Selection (MMS) in CR2:
-     *    MMS[2:0] = 0b010: The Update event is selected as Trigger Output (TRGO).
-     *    This signal connects directly to ADC1 regular external trigger (EXTSEL=100).
+     * 3. Decouple Master Mode Selection (MMS) during initialization preload:
+     *    Keep MMS cleared (0b000) so that software update generation (UG) does NOT
+     *    emit a TRGO pulse to ADC1 while the system remains in the quiescent diagnostic phase.
      */
     TIM3->CR2 &= ~TIM_CR2_MMS;
-    TIM3->CR2 |= TIM_CR2_MMS_1;  /* 0b010 = Update */
 
     /* 4. Generate an update event to pre-load PSC and ARR shadow registers */
     TIM3->EGR = TIM_EGR_UG;
@@ -45,11 +44,22 @@ void tim3_trgo_init_1khz(uint32_t tim_clock_hz)
 
 void tim3_trgo_start(void)
 {
+    /*
+     * Configure Master Mode Selection (MMS) in CR2:
+     * MMS[2:0] = 0b010: The Update event is selected as Trigger Output (TRGO).
+     * This signal connects directly to ADC1 regular external trigger (EXTSEL=100).
+     */
+    TIM3->CR2 &= ~TIM_CR2_MMS;
+    TIM3->CR2 |= TIM_CR2_MMS_1;  /* 0b010 = Update */
+
+    /* Enable counter */
     TIM3->CR1 |= TIM_CR1_CEN;
 }
 
 void tim3_trgo_stop(void)
 {
     TIM3->CR1 &= ~TIM_CR1_CEN;
+    TIM3->CR2 &= ~TIM_CR2_MMS;
 }
+
 

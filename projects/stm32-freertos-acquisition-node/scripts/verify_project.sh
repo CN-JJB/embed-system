@@ -149,6 +149,33 @@ def read_clean_file(path):
     content = re.sub(r'//.*', '', content)
     return content
 
+def extract_brace_block(text, start_pos):
+    """
+    Given text and a starting character index, find the next '{'
+    and return (content_inside_braces, block_end_pos).
+    Handles nested braces properly.
+    """
+    open_pos = text.find('{', start_pos)
+    if open_pos == -1:
+        return None, -1
+    depth = 0
+    in_single = False
+    in_double = False
+    for i in range(open_pos, len(text)):
+        c = text[i]
+        if c == "'" and not in_double:
+            in_single = not in_single
+        elif c == '"' and not in_single:
+            in_double = not in_double
+        elif not in_single and not in_double:
+            if c == '{':
+                depth += 1
+            elif c == '}':
+                depth -= 1
+                if depth == 0:
+                    return text[open_pos+1:i], i + 1
+    return None, -1
+
 main_c = read_clean_file(os.path.join(work_dir, "src/main.c"))
 dma_c = read_clean_file(os.path.join(work_dir, "src/dma.c"))
 dma_h = read_clean_file(os.path.join(work_dir, "include/dma.h"))
@@ -176,6 +203,52 @@ if not (psc_ok and arr_ok):
     print("ERROR: timer.c must compute TIM3 PSC dynamically from tim_clock_hz and ARR to 999 (1 kHz)!", file=sys.stderr)
     sys.exit(1)
 
+# Check TIM3 initialization preload decoupling: MMS=Update must NOT be set prior to EGR_UG in tim3_trgo_init_1khz
+init_match = re.search(r'void\s+tim3_trgo_init_1khz\s*\([^)]*\)\s*\{', timer_c)
+if not init_match:
+    print("ERROR: tim3_trgo_init_1khz not found in timer.c!", file=sys.stderr)
+    sys.exit(1)
+init_body, _ = extract_brace_block(timer_c, init_match.start())
+if not init_body:
+    print("ERROR: Failed to extract tim3_trgo_init_1khz body!", file=sys.stderr)
+    sys.exit(1)
+ug_pos = init_body.find("TIM_EGR_UG")
+if ug_pos == -1:
+    print("ERROR: tim3_trgo_init_1khz missing TIM_EGR_UG shadow preload!", file=sys.stderr)
+    sys.exit(1)
+init_prefix = init_body[:ug_pos]
+if re.search(r'TIM_CR2_MMS_1|TIM_CR2_MMS\s*=\s*0?x?0?2|0b010', init_prefix):
+    print("ERROR: tim3_trgo_init_1khz sets MMS=Update before EGR_UG, causing trigger leak to ADC1 before diagnostic!", file=sys.stderr)
+    sys.exit(1)
+if re.search(r'TIM_CR1_CEN', init_body):
+    print("ERROR: tim3_trgo_init_1khz must not enable TIM_CR1_CEN! Counter must only be started via tim3_trgo_start() after diagnostics!", file=sys.stderr)
+    sys.exit(1)
+
+# tim3_trgo_start must enable MMS=Update and CEN
+start_match = re.search(r'void\s+tim3_trgo_start\s*\([^)]*\)\s*\{', timer_c)
+if not start_match:
+    print("ERROR: tim3_trgo_start not found in timer.c!", file=sys.stderr)
+    sys.exit(1)
+start_body, _ = extract_brace_block(timer_c, start_match.start())
+if not start_body or not re.search(r'TIM_CR2_MMS_1|TIM_CR2_MMS\s*=\s*0?x?0?2|0b010', start_body) or not re.search(r'TIM_CR1_CEN', start_body):
+    print("ERROR: tim3_trgo_start must configure MMS=Update and enable CEN!", file=sys.stderr)
+    sys.exit(1)
+
+# tim3_trgo_start must NOT be called in main.c (must wait for post-diagnostic start)
+if re.search(r'\btim3_trgo_start\s*\(', main_c):
+    print("ERROR: tim3_trgo_start() illegally called in main.c before diagnostic completion!", file=sys.stderr)
+    sys.exit(1)
+
+# tim3_trgo_start must be called strictly after prvRunDiagnosticComparison in node_app.c
+diag_call_pos = node_c.find("prvRunDiagnosticComparison()")
+start_call_pos = node_c.find("tim3_trgo_start()")
+if start_call_pos == -1:
+    print("ERROR: tim3_trgo_start() is never called in node_app.c!", file=sys.stderr)
+    sys.exit(1)
+if diag_call_pos != -1 and start_call_pos < diag_call_pos:
+    print("ERROR: tim3_trgo_start() called before prvRunDiagnosticComparison()! Timer must only start after diagnostic completes!", file=sys.stderr)
+    sys.exit(1)
+
 # Check ADC1 Trigger & Prescaler: EXTSEL=100 (TIM3 TRGO), EXTTRIG=1, DMA=1, ADCPRE=/6, SMP0=55.5 cycles (F7)
 if not re.search(r'ADC_CR2_EXTSEL_2|0b100|0x00040000', adc_c):
     print("ERROR: adc.c does not select TIM3 TRGO (EXTSEL=100)!", file=sys.stderr)
@@ -193,9 +266,12 @@ if not re.search(r'RCC_CFGR_ADCPRE_DIV6', adc_c):
     print("ERROR: adc.c does not configure ADCPRE /6 for 12 MHz ADCCLK!", file=sys.stderr)
     sys.exit(1)
 
-# ADC SMP0 55.5 cycles: SMP0_0 and SMP0_2 bits set
+# ADC SMP0 55.5 cycles: exact SMP0[2:0] = 101 (SMP0_0 and SMP0_2 set, SMP0_1 NOT set)
 if not ((re.search(r'ADC_SMPR2_SMP0_0', adc_c) and re.search(r'ADC_SMPR2_SMP0_2', adc_c)) or re.search(r'0b101|0x05', adc_c)):
     print("ERROR: adc.c does not configure PA0 SMP0 to 55.5 cycles (SMP0[2:0] = 101)!", file=sys.stderr)
+    sys.exit(1)
+if re.search(r'ADC_SMPR2_SMP0_1\b', adc_c):
+    print("ERROR: adc.c illegally sets ADC_SMPR2_SMP0_1 (violates exact 55.5 cycle SMP0=101 timing)!", file=sys.stderr)
     sys.exit(1)
 
 # ADC bounded calibration loops (F7)
@@ -213,12 +289,29 @@ if not re.search(r'DMA_CCR_MINC', dma_c):
     print("ERROR: dma.c does not enable memory increment (DMA_CCR_MINC)!", file=sys.stderr)
     sys.exit(1)
 
+# DMA buffer sizes in dma.h and CNDTR in dma.c
+half_match = re.search(r'#define\s+ADC_BUFFER_HALF_SIZE\s+([0-9]+)', dma_h)
+if not half_match or int(half_match.group(1)) != 64:
+    print("ERROR: include/dma.h must define ADC_BUFFER_HALF_SIZE as 64!", file=sys.stderr)
+    sys.exit(1)
+total_match = re.search(r'#define\s+ADC_BUFFER_TOTAL_SIZE\s+([0-9]+|(?:\(?\s*ADC_BUFFER_HALF_SIZE\s*\*\s*2U?\s*\)?))', dma_h)
+if not total_match:
+    print("ERROR: include/dma.h must define ADC_BUFFER_TOTAL_SIZE as 128 or (ADC_BUFFER_HALF_SIZE * 2)!", file=sys.stderr)
+    sys.exit(1)
+if total_match.group(1).isdigit() and int(total_match.group(1)) != 128:
+    print("ERROR: include/dma.h ADC_BUFFER_TOTAL_SIZE must be 128!", file=sys.stderr)
+    sys.exit(1)
+
 if not re.search(r'DMA1_Channel1->CNDTR\s*=\s*(128|ADC_BUFFER_TOTAL_SIZE)\b', dma_c):
     print("ERROR: dma.c must configure DMA1_Channel1->CNDTR = 128 (ADC_BUFFER_TOTAL_SIZE)!", file=sys.stderr)
     sys.exit(1)
 
-if not re.search(r'DMA_CCR_PSIZE_0', dma_c) or not re.search(r'DMA_CCR_MSIZE_0', dma_c):
+# Exact 16-bit PSIZE and MSIZE (PSIZE_0 and MSIZE_0 set, PSIZE_1 and MSIZE_1 NOT set)
+if not re.search(r'DMA_CCR_PSIZE_0\b', dma_c) or not re.search(r'DMA_CCR_MSIZE_0\b', dma_c):
     print("ERROR: dma.c must configure 16-bit PSIZE and MSIZE for ADC halfword transfers!", file=sys.stderr)
+    sys.exit(1)
+if re.search(r'DMA_CCR_PSIZE_1\b', dma_c) or re.search(r'DMA_CCR_MSIZE_1\b', dma_c):
+    print("ERROR: dma.c illegally sets DMA_CCR_PSIZE_1 or DMA_CCR_MSIZE_1 (must be 16-bit, not 32-bit)!", file=sys.stderr)
     sys.exit(1)
 
 if not re.search(r'DMA_CCR_HTIE', dma_c) or not re.search(r'DMA_CCR_TCIE', dma_c):
@@ -245,11 +338,14 @@ if prio_val < 5:
     sys.exit(1)
 
 # Check DMA1 ISR requirements
-isr_match = re.search(r'void\s+DMA1_Channel1_IRQHandler\s*\(\s*void\s*\)\s*\{(.*?)\n\}', dma_c, re.S)
+isr_match = re.search(r'void\s+DMA1_Channel1_IRQHandler\s*\(\s*void\s*\)\s*\{', dma_c)
 if not isr_match:
     print("ERROR: DMA1_Channel1_IRQHandler not found in dma.c!", file=sys.stderr)
     sys.exit(1)
-isr_body = isr_match.group(1)
+isr_body, _ = extract_brace_block(dma_c, isr_match.start())
+if not isr_body:
+    print("ERROR: Failed to extract DMA1_Channel1_IRQHandler body!", file=sys.stderr)
+    sys.exit(1)
 
 # Must NOT use task-context queue API in ISR
 if re.search(r'\bxQueueSend\s*\(', isr_body) or re.search(r'\bxQueueGenericSend\s*\(', isr_body):
@@ -281,11 +377,14 @@ if not re.search(r'portYIELD_FROM_ISR\s*\(\s*xHigherPriorityTaskWoken\s*\)', isr
     sys.exit(1)
 
 # F6: HTIF1 and TCIF1 branch bindings
-ht_match = re.search(r'if\s*\(\s*isr\s*&\s*DMA_ISR_HTIF1\s*\)\s*\{(.*?)\n\s*\}', isr_body, re.S)
+ht_match = re.search(r'if\s*\(\s*isr\s*&\s*DMA_ISR_HTIF1\s*\)\s*\{', isr_body)
 if not ht_match:
     print("ERROR: DMA1 ISR missing HTIF1 check!", file=sys.stderr)
     sys.exit(1)
-ht_body = ht_match.group(1)
+ht_body, _ = extract_brace_block(isr_body, ht_match.start())
+if not ht_body:
+    print("ERROR: Failed to extract HTIF1 branch body!", file=sys.stderr)
+    sys.exit(1)
 if not re.search(r'DMA_IFCR_CHTIF1', ht_body):
     print("ERROR: HTIF1 branch does not clear flag with DMA_IFCR_CHTIF1!", file=sys.stderr)
     sys.exit(1)
@@ -299,11 +398,14 @@ if re.search(r'msg\.(buffer_)?index\s*=\s*1\b', ht_body):
     print("ERROR: HTIF1 branch illegally emits buffer index 1!", file=sys.stderr)
     sys.exit(1)
 
-tc_match = re.search(r'if\s*\(\s*isr\s*&\s*DMA_ISR_TCIF1\s*\)\s*\{(.*?)\n\s*\}', isr_body, re.S)
+tc_match = re.search(r'if\s*\(\s*isr\s*&\s*DMA_ISR_TCIF1\s*\)\s*\{', isr_body)
 if not tc_match:
     print("ERROR: DMA1 ISR missing TCIF1 check!", file=sys.stderr)
     sys.exit(1)
-tc_body = tc_match.group(1)
+tc_body, _ = extract_brace_block(isr_body, tc_match.start())
+if not tc_body:
+    print("ERROR: Failed to extract TCIF1 branch body!", file=sys.stderr)
+    sys.exit(1)
 if not re.search(r'DMA_IFCR_CTCIF1', tc_body):
     print("ERROR: TCIF1 branch does not clear flag with DMA_IFCR_CTCIF1!", file=sys.stderr)
     sys.exit(1)
@@ -317,15 +419,30 @@ if re.search(r'msg\.(buffer_)?index\s*=\s*0\b', tc_body):
     print("ERROR: TCIF1 branch illegally emits buffer index 0!", file=sys.stderr)
     sys.exit(1)
 
-# F5: Must check xQueueSendFromISR return value and bind g_acq_drops++ strictly to failure path
-drops_in_success = re.search(r'xResult\s*==\s*pdPASS\s*\)\s*\{[^}]*g_acq_drops\+\+', isr_body, re.S)
-if drops_in_success:
-    print("ERROR: g_acq_drops++ illegally present in xResult == pdPASS success branch!", file=sys.stderr)
-    sys.exit(1)
-drops_in_fail = re.search(r'(else\s*\{[^}]*g_acq_drops\+\+|!=\s*pdPASS\s*\)\s*\{[^}]*g_acq_drops\+\+)', isr_body, re.S)
-if not drops_in_fail:
-    print("ERROR: g_acq_drops++ must be incremented on xQueueSendFromISR failure!", file=sys.stderr)
-    sys.exit(1)
+# F5: Verify both HT and TC independently check queue send result and increment g_acq_drops on failure only
+for branch_name, b_text in [("HTIF1", ht_body), ("TCIF1", tc_body)]:
+    if not re.search(r'xQueueSendFromISR\s*\(', b_text):
+        print(f"ERROR: {branch_name} branch does not call xQueueSendFromISR!", file=sys.stderr)
+        sys.exit(1)
+    res_match = re.search(r'if\s*\(\s*xResult\s*==\s*pdPASS\s*\)\s*\{', b_text)
+    if not res_match:
+        print(f"ERROR: {branch_name} branch missing 'if (xResult == pdPASS)' check!", file=sys.stderr)
+        sys.exit(1)
+    pass_body, pass_end = extract_brace_block(b_text, res_match.start())
+    if not pass_body:
+        print(f"ERROR: Failed to extract pass body in {branch_name}!", file=sys.stderr)
+        sys.exit(1)
+    if re.search(r'g_acq_drops\+\+', pass_body):
+        print(f"ERROR: {branch_name} branch illegally increments g_acq_drops on queue success!", file=sys.stderr)
+        sys.exit(1)
+    else_match = re.search(r'else\s*\{', b_text[pass_end:])
+    if not else_match:
+        print(f"ERROR: {branch_name} branch missing 'else' failure handler for queue send!", file=sys.stderr)
+        sys.exit(1)
+    fail_body, _ = extract_brace_block(b_text[pass_end:], else_match.start())
+    if not fail_body or not re.search(r'g_acq_drops\+\+', fail_body):
+        print(f"ERROR: {branch_name} branch does not increment g_acq_drops on queue send failure!", file=sys.stderr)
+        sys.exit(1)
 
 # F1: Check Task Priority Macros and exact xTaskCreate bindings
 # Check macro definitions in node_h
@@ -361,29 +478,47 @@ if not re.search(r'xTaskCreate\s*\(\s*prvTaskHealth\s*,[^,]+,[^,]+,[^,]+,\s*(TAS
     sys.exit(1)
 
 # Process task must block on xAcqQueue with portMAX_DELAY
-proc_task = re.search(r'void\s+prvTaskProcess\s*\(\s*void\s*\*pvParameters\s*\)\s*\{(.*?)\n\}', node_c, re.S)
+proc_task = re.search(r'void\s+prvTaskProcess\s*\(\s*void\s*\*pvParameters\s*\)\s*\{', node_c)
 if not proc_task:
     print("ERROR: prvTaskProcess not found in node_app.c!", file=sys.stderr)
     sys.exit(1)
-proc_body = proc_task.group(1)
+proc_body, _ = extract_brace_block(node_c, proc_task.start())
+if not proc_body:
+    print("ERROR: Failed to extract prvTaskProcess body!", file=sys.stderr)
+    sys.exit(1)
 
 if not re.search(r'xQueueReceive\s*\(\s*xAcqQueue\s*,.*?,\s*portMAX_DELAY\s*\)', proc_body):
     print("ERROR: Task_Process does not block on xAcqQueue with portMAX_DELAY!", file=sys.stderr)
     sys.exit(1)
 
-# F2: Normal acquisition fast path must NOT take an application mutex
-acq_recv_match = re.search(r'if\s*\(\s*xQueueReceive\s*\(\s*xAcqQueue.*?\)\s*==\s*pdPASS\s*\)\s*\{(.*?)\n\s*\}', proc_body, re.S)
-if acq_recv_match:
-    acq_body = acq_recv_match.group(1)
-    if re.search(r'xSemaphoreTake\b|xMutexTake\b', acq_body):
-        print("ERROR: Mutex / Semaphore take illegally placed inside sample processing loop in Task_Process!", file=sys.stderr)
+# F2: Brace-aware normal acquisition fast path must NOT take any semaphore / mutex
+acq_recv_match = re.search(r'if\s*\(\s*xQueueReceive\s*\(\s*xAcqQueue.*?\)\s*==\s*pdPASS\s*\)\s*\{', proc_body)
+if not acq_recv_match:
+    print("ERROR: Task_Process missing 'if (xQueueReceive(xAcqQueue...) == pdPASS)' block!", file=sys.stderr)
+    sys.exit(1)
+acq_body, _ = extract_brace_block(proc_body, acq_recv_match.start())
+if not acq_body:
+    print("ERROR: Failed to extract xAcqQueue receive body in Task_Process!", file=sys.stderr)
+    sys.exit(1)
+
+if re.search(r'\b(xSemaphoreTake|xMutexTake|xSemaphoreTakeRecursive)\b', acq_body):
+    print("ERROR: Mutex / Semaphore take illegally placed inside sample processing loop in Task_Process!", file=sys.stderr)
+    sys.exit(1)
+
+# Any semaphore take in Task_Process must strictly reside within diagnostic branch
+diag_block_match = re.search(r'if\s*\(\s*ulTaskNotifyTake\s*\(', proc_body)
+if diag_block_match:
+    diag_proc_body, _ = extract_brace_block(proc_body, diag_block_match.start())
+    all_sem_takes = len(re.findall(r'\bxSemaphoreTake\b', proc_body))
+    diag_sem_takes = len(re.findall(r'\bxSemaphoreTake\b', diag_proc_body or ""))
+    if all_sem_takes != diag_sem_takes:
+        print("ERROR: Application semaphore take detected outside diagnostic branch in Task_Process!", file=sys.stderr)
         sys.exit(1)
 
-for m in re.finditer(r'xSemaphoreTake\s*\(\s*([^,]+)\s*,', proc_body):
-    sem_arg = m.group(1).strip()
-    if sem_arg != "g_diag_resource":
-        print(f"ERROR: Application mutex illegally inserted into normal acquisition fast path: '{sem_arg}'!", file=sys.stderr)
-        sys.exit(1)
+node_sem_takes = len(re.findall(r'\b(xSemaphoreTake|xMutexTake|xSemaphoreTakeRecursive)\b', node_c))
+if node_sem_takes != 3:
+    print(f"ERROR: Found {node_sem_takes} semaphore/mutex take calls in node_app.c (expected exactly 3: 2 in diagnostic comparison, 1 in diagnostic process block)!", file=sys.stderr)
+    sys.exit(1)
 
 # Comm task must output via direct USART1 registers
 if not re.search(r'USART1->SR', usart_c) or not re.search(r'USART1->DR', usart_c):
@@ -398,10 +533,19 @@ if not re.search(r'USART1->BRR\s*=\s*\(?\s*pclk2_hz\s*\+\s*\(?\s*(baud\s*/\s*2U?
     print("ERROR: usart.c does not implement rounded BRR calculation (pclk2_hz + baud/2) / baud!", file=sys.stderr)
     sys.exit(1)
 
-# F8: main.c clock configuration, HSE fallback to HSI, and dynamic frequencies
-if not re.search(r'clock_init\s*\(\s*CLOCK_PROFILE_72MHZ_HSE\s*\)', main_c) or \
-   not re.search(r'clock_init\s*\(\s*CLOCK_PROFILE_64MHZ_HSI\s*\)', main_c):
-    print("ERROR: main.c must attempt CLOCK_PROFILE_72MHZ_HSE and fall back to CLOCK_PROFILE_64MHZ_HSI!", file=sys.stderr)
+# F8: main.c clock configuration, HSE fallback to HSI structurally bound inside failure branch
+hse_match = re.search(r'if\s*\(\s*!\s*clock_init\s*\(\s*CLOCK_PROFILE_72MHZ_HSE\s*\)\s*\)\s*\{', main_c)
+if not hse_match:
+    print("ERROR: main.c must attempt CLOCK_PROFILE_72MHZ_HSE and check failure!", file=sys.stderr)
+    sys.exit(1)
+hse_fallback_body, _ = extract_brace_block(main_c, hse_match.start())
+if not hse_fallback_body or not re.search(r'clock_init\s*\(\s*CLOCK_PROFILE_64MHZ_HSI\s*\)', hse_fallback_body):
+    print("ERROR: main.c must attempt CLOCK_PROFILE_64MHZ_HSI strictly inside HSE failure fallback branch!", file=sys.stderr)
+    sys.exit(1)
+all_hsi_calls = len(re.findall(r'clock_init\s*\(\s*CLOCK_PROFILE_64MHZ_HSI\s*\)', main_c))
+fallback_hsi_calls = len(re.findall(r'clock_init\s*\(\s*CLOCK_PROFILE_64MHZ_HSI\s*\)', hse_fallback_body or ""))
+if all_hsi_calls != fallback_hsi_calls or all_hsi_calls == 0:
+    print("ERROR: CLOCK_PROFILE_64MHZ_HSI must only be called within HSE failure fallback branch!", file=sys.stderr)
     sys.exit(1)
 
 if not re.search(r'clock_get_frequencies\s*\(\s*&freqs\s*\)', main_c):
@@ -412,6 +556,13 @@ if not re.search(r'usart1_init\s*\(\s*freqs\.pclk2_hz\s*\)', main_c) or \
    not re.search(r'adc1_init\s*\(\s*freqs\.pclk2_hz\s*\)', main_c) or \
    not re.search(r'tim3_trgo_init_1khz\s*\(\s*freqs\.timclk1_hz\s*\)', main_c):
     print("ERROR: main.c must pass dynamic frequencies freqs.pclk2_hz and freqs.timclk1_hz to peripheral drivers!", file=sys.stderr)
+    sys.exit(1)
+
+# adc1_init return code check
+if not re.search(r'if\s*\(\s*adc1_init\s*\([^)]*\)\s*!=\s*ADC_INIT_OK\s*\)', main_c) and \
+   not re.search(r'if\s*\(\s*!?\s*adc1_init\s*\([^)]*\)\s*<\s*0\s*\)', main_c) and \
+   not re.search(r'if\s*\(\s*adc1_init\s*\([^)]*\)\s*==\s*ADC_INIT_ERR', main_c):
+    print("ERROR: main.c must check adc1_init() return code for calibration error!", file=sys.stderr)
     sys.exit(1)
 
 # F8 / F10: main.c IWDG prescaler /32 and reload <= 1500 (<= 1200 ms timeout), and checked return
@@ -518,14 +669,14 @@ if not os.path.exists(ledger_path):
     ledger_path = os.path.join(os.path.dirname(work_dir), "SOURCE_LEDGER.md")
 if os.path.exists(ledger_path):
     ledger_txt = open(ledger_path, "r", encoding="utf-8", errors="ignore").read()
-    if not re.search(r'9b777ae5', ledger_txt):
-        print("ERROR: SOURCE_LEDGER.md missing FreeRTOS kernel pin commit 9b777ae5!", file=sys.stderr)
+    if not re.search(r'9b777ae5c5b8e9e456065a00294d1e5f5f9facf5', ledger_txt):
+        print("ERROR: SOURCE_LEDGER.md missing full FreeRTOS kernel pin commit 9b777ae5c5b8e9e456065a00294d1e5f5f9facf5!", file=sys.stderr)
         sys.exit(1)
-    if not re.search(r'2b7495b8', ledger_txt):
-        print("ERROR: SOURCE_LEDGER.md missing CMSIS_5 pin commit 2b7495b8!", file=sys.stderr)
+    if not re.search(r'2b7495b8535bdcb306dac29b9ded4cfb679d7e5c', ledger_txt):
+        print("ERROR: SOURCE_LEDGER.md missing full CMSIS_5 pin commit 2b7495b8535bdcb306dac29b9ded4cfb679d7e5c!", file=sys.stderr)
         sys.exit(1)
-    if not re.search(r'8a76309e', ledger_txt):
-        print("ERROR: SOURCE_LEDGER.md missing cmsis-device-f1 pin commit 8a76309e!", file=sys.stderr)
+    if not re.search(r'8a76309ed1250d817e9c888c4417171d2ba3ba63', ledger_txt):
+        print("ERROR: SOURCE_LEDGER.md missing full cmsis-device-f1 pin commit 8a76309ed1250d817e9c888c4417171d2ba3ba63!", file=sys.stderr)
         sys.exit(1)
 
 

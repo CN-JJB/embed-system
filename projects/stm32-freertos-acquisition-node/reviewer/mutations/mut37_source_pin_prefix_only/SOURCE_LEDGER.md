@@ -61,7 +61,7 @@ This document tracks all primary hardware manuals, processor architecture specif
 - **Organization**: FreeRTOS / Amazon Web Services
 - **Repository**: `https://github.com/FreeRTOS/FreeRTOS-Kernel`
 - **Release**: **V11.3.0**
-- **Exact Commit**: `ffffffffc5b8e9e456065a00294d1e5f5f9facf5`
+- **Exact Commit**: `9b777ae5ffffffffffffffffffffffffffffffff`
 - **License**: MIT License (`LICENSE.md`)
 - **Components Utilized**:
   - Core scheduler: `tasks.c`, `list.c`

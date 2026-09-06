@@ -14,17 +14,12 @@ Notice that frames with sequences 143, 144, and 145 never arrived at the host re
 ## Investigation Workflow
 
 1. **Formulate Hypotheses**:
-   Draft 3 to 5 distinct technical hypotheses explaining how a sequence counter can advance while the resulting payload is omitted from transmission without incrementing the reported drop counter. Consider:
-   - Hardware transfer events and DMA interrupt firing behaviors.
-   - Queue ingress and egress contracts between interrupt and task contexts.
-   - Buffer memory management and ping-pong state tracking.
-   - Serial transmission formatting and buffer overflow behavior.
+   Draft 3 to 5 distinct technical hypotheses explaining how a sequence counter can advance while the resulting payload is omitted from transmission without incrementing the reported drop counter. Base your hypotheses strictly on the observable symptom, data flow, and system architecture.
 2. **Design Discriminative Observations**:
-   For each hypothesis, determine what concrete, observable evidence (e.g. GDB variable watch, register check, or instrumentation pin toggle) would confirm or refute it.
+   For each hypothesis, determine what concrete, observable evidence (e.g. GDB variable watch, register inspection, or instrumentation pin toggle) would confirm or refute it.
 3. **Isolate Root Cause**:
-   Trace the data path from hardware DMA interrupt notification to task-level queue submission and telemetry transmission.
+   Trace the acquisition pipeline from hardware DMA interrupt notification to task-level queue submission and telemetry transmission to isolate the failure point.
 4. **Implement Surgical Fix**:
-   Ensure all acquisition dropped frames or submission failures are reliably captured and reported in telemetry.
+   Implement a surgical fix in the acquisition pipeline that ensures all dropped frames or submission failures are reliably accounted for while preserving all architectural contracts and non-blocking ISR constraints.
 5. **Verify**:
    Confirm that `scripts/verify_project.sh` passes.
-

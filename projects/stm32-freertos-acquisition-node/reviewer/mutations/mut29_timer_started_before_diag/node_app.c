@@ -124,8 +124,6 @@ static void prvTaskProcess(void *pvParameters)
          * Strictly NO application mutex in normal fast path!
          */
         if (xQueueReceive(xAcqQueue, &msg, portMAX_DELAY) == pdPASS) {
-            xSemaphoreTake(g_diag_sem, portMAX_DELAY);
-            xSemaphoreGive(g_diag_sem);
             if (msg.buffer_index < 2 && msg.count == ADC_BUFFER_HALF_SIZE) {
                 uint16_t min_val = 0xFFFFU;
                 uint16_t max_val = 0U;
@@ -278,15 +276,13 @@ static void prvTaskHealth(void *pvParameters)
 
     /* Execute the isolated baseline diagnostic comparison on first iteration */
     if (!s_diag_completed) {
+        tim3_trgo_start();
         prvRunDiagnosticComparison();
         s_diag_completed = true;
 
         /* Establish post-scheduler steady-state heap baseline */
         g_steady_free_heap = xPortGetFreeHeapSize();
         g_steady_min_ever_heap = xPortGetMinimumEverFreeHeapSize();
-
-        /* Start TIM3 hardware trigger to begin regular acquisition */
-        tim3_trgo_start();
     }
 
     for (;;) {

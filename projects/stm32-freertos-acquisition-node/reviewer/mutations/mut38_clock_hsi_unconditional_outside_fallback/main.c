@@ -36,7 +36,13 @@ int main(void)
      *    Fallback: 64 MHz SYSCLK via 8 MHz internal HSI RC oscillator.
      *    If both clock initializations fail, trap CPU safely.
      */
-    clock_init(CLOCK_PROFILE_72MHZ_HSE);
+    if (!clock_init(CLOCK_PROFILE_72MHZ_HSE)) {
+        __disable_irq();
+        for (;;) {
+            __NOP();
+        }
+    }
+    clock_init(CLOCK_PROFILE_64MHZ_HSI);
 
     /* Retrieve dynamically resolved peripheral bus frequencies */
     clock_frequencies_t freqs;

@@ -124,8 +124,6 @@ static void prvTaskProcess(void *pvParameters)
          * Strictly NO application mutex in normal fast path!
          */
         if (xQueueReceive(xAcqQueue, &msg, portMAX_DELAY) == pdPASS) {
-            xSemaphoreTake(g_diag_sem, portMAX_DELAY);
-            xSemaphoreGive(g_diag_sem);
             if (msg.buffer_index < 2 && msg.count == ADC_BUFFER_HALF_SIZE) {
                 uint16_t min_val = 0xFFFFU;
                 uint16_t max_val = 0U;
@@ -157,6 +155,8 @@ static void prvTaskProcess(void *pvParameters)
                 if (xQueueSend(xLogQueue, &record, 0) != pdPASS) {
                     g_log_drops++;
                 }
+                xSemaphoreTake(g_diag_resource, portMAX_DELAY);
+                xSemaphoreGive(g_diag_resource);
             }
         }
     }

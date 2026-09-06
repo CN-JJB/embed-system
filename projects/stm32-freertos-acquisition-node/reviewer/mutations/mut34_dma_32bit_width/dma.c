@@ -61,9 +61,9 @@ void dma1_channel1_init(void)
      */
     DMA1_Channel1->CCR = DMA_CCR_CIRC |
                          DMA_CCR_MINC |
-                         DMA_CCR_PSIZE_0 |
-                         DMA_CCR_MSIZE_0 |
-                         
+                         DMA_CCR_PSIZE_1 |
+                         DMA_CCR_MSIZE_1 |
+                         DMA_CCR_HTIE |
                          DMA_CCR_TCIE |
                          DMA_CCR_TEIE;
 

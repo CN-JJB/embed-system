@@ -9,17 +9,12 @@ However, contrary to safety specifications, the node remains permanently hung in
 ## Investigation Workflow
 
 1. **Formulate Hypotheses**:
-   Formulate 3 to 5 candidate hypotheses explaining why the node fails to initiate a hardware watchdog reboot when the primary data acquisition pipeline has stalled:
-   - Hardware watchdog configuration failure (e.g. LSI oscillator stopped, window/prescaler mismatch, or IWDG peripheral inactive).
-   - Watchdog kick logic executing unconditionally without gating on subsystem progress.
-   - Task starvation or priority inversion affecting supervisory execution.
-   - Reset flags or fault handlers trapping execution without triggering reset.
+   Draft 3 to 5 distinct candidate hypotheses explaining why the node fails to initiate a hardware watchdog reboot when the primary data acquisition pipeline has stalled. Base your hypotheses strictly on the observable symptom, watchdog architecture, and supervisory design.
 2. **Design Discriminative Observations**:
-   Determine what debugger observations, register inspections (e.g. IWDG->SR, RCC->CSR), or GPIO timing captures distinguish between these failure modes.
+   Determine what debugger observations, register inspections (e.g. `IWDG->SR`, `RCC->CSR`), or GPIO timing captures distinguish between your candidate failure modes.
 3. **Isolate Root Cause**:
-   Trace the supervision architecture in `Task_Health` and verify how watchdog refresh decisions are coupled to actual acquisition milestones.
+   Trace the supervisory task implementation and evaluate how system health status is audited and propagated to the watchdog hardware.
 4. **Implement Surgical Fix**:
-   Ensure watchdog refreshing is strictly conditional upon verified system progress, stack bounds, and heap health.
+   Implement a surgical fix that ensures the node correctly triggers a hardware watchdog reboot when system progress invariants are violated, while preserving legitimate steady-state operation.
 5. **Verify**:
    Confirm that `scripts/verify_project.sh` passes.
-

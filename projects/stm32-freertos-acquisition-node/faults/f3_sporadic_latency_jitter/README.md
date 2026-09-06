@@ -9,18 +9,12 @@ Normally, `Task_Process` begins handling an incoming 64-sample buffer within mic
 ## Investigation Workflow
 
 1. **Formulate Hypotheses**:
-   Draft 3 to 5 candidate hypotheses explaining how a high-priority task (`Task_Process`, Priority 3) can be blocked or delayed by tens of milliseconds in a preemptive priority-based RTOS:
-   - Priority inversion or mutual exclusion lock contention on a shared resource held by lower-priority tasks.
-   - Long-duration non-preemptible interrupt service routines or critical sections masking interrupts (`taskENTER_CRITICAL()`).
-   - Task starvation caused by misconfigured task priorities or runaway compute loops.
-   - Queue operation blocking caused by inappropriate timeout parameters or backpressure.
-   - Memory allocation delays or heap fragmentation stalls.
+   Draft 3 to 5 candidate hypotheses explaining how a high-priority task (`Task_Process`, Priority 3) can be blocked or delayed by tens of milliseconds in a preemptive priority-based RTOS. Base your hypotheses strictly on the observable timing characteristics and RTOS synchronization design.
 2. **Design Discriminative Observations**:
-   Use multi-channel logic analyzer traces on PA1–PA4 or GDB thread backtraces captured during the latency spike to observe which task is currently executing and what synchronization object `Task_Process` is waiting for.
+   Use multi-channel logic analyzer traces on PA1–PA4 or GDB thread backtraces captured during the latency spike to observe task scheduling states and execution timelines.
 3. **Isolate Root Cause**:
-   Analyze the synchronization primitives accessed along the critical sample processing path and determine whether priority inheritance or unbounded lock waiting is occurring.
+   Trace the execution flow and synchronization primitives involved in the acquisition processing path to pinpoint the source of unbounded blocking.
 4. **Implement Surgical Fix**:
-   Ensure the real-time acquisition fast path is completely decoupled from non-real-time mutual exclusion resources.
+   Implement a surgical fix that eliminates the latency jitter and guarantees deterministic sample processing within real-time deadlines.
 5. **Verify**:
    Confirm that `scripts/verify_project.sh` passes.
-

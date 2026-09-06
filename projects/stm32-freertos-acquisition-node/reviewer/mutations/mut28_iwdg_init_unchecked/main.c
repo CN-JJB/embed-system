@@ -70,7 +70,12 @@ int main(void)
     iwdg_init(IWDG_PRESCALER_32, 1250);
 
     /* 8. Initialize ADC1 with TIM3 TRGO hardware trigger and DMA request */
-    adc1_init(freqs.pclk2_hz);
+    if (adc1_init(freqs.pclk2_hz) != ADC_INIT_OK) {
+        __disable_irq();
+        for (;;) {
+            __NOP();
+        }
+    }
 
     /* 9. Initialize DMA1 Channel 1 for circular 128-sample double buffering */
     dma1_channel1_init();
