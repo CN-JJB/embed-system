@@ -22,19 +22,29 @@ else
     exit 1
 fi
 
-# Step 2: Test negative mutations (all defective mutations must fail)
+# Step 2: Test negative mutations (all defective mutations must compile, then be rejected by validator)
 PASS_COUNT=0
-FAIL_COUNT=0
+COMPILE_FAIL_COUNT=0
+ACCEPT_FAIL_COUNT=0
 
 for mut in "${MUTATIONS_DIR}"/mut*; do
     if [ -d "${mut}" ]; then
         mut_name="$(basename "${mut}")"
         echo -n "Testing negative mutation [${mut_name}]... "
+
+        # 1. Overlay compilation and linking MUST pass
+        if ! bash "${VALIDATE_SH}" "${mut}" --build-only >/dev/null 2>&1; then
+            echo "FAILED (Mutation failed compile/link! Negative controls must be compilable code)"
+            COMPILE_FAIL_COUNT=$((COMPILE_FAIL_COUNT + 1))
+            continue
+        fi
+
+        # 2. Semantic validator MUST reject the defect
         if bash "${VALIDATE_SH}" "${mut}" >/dev/null 2>&1; then
             echo "FAILED (Validator falsely ACCEPTED defective mutation!)"
-            FAIL_COUNT=$((FAIL_COUNT + 1))
+            ACCEPT_FAIL_COUNT=$((ACCEPT_FAIL_COUNT + 1))
         else
-            echo "PASSED (Validator correctly REJECTED mutation)"
+            echo "COMPILE PASS / VALIDATOR REJECT"
             PASS_COUNT=$((PASS_COUNT + 1))
         fi
     fi
@@ -42,11 +52,12 @@ done
 
 echo ""
 echo "=== Mutation Suite Results ==="
-echo "Correctly rejected: ${PASS_COUNT}"
-echo "Falsely accepted:   ${FAIL_COUNT}"
+echo "COMPILE PASS / VALIDATOR REJECT: ${PASS_COUNT}"
+echo "Compilation failed (invalid mut): ${COMPILE_FAIL_COUNT}"
+echo "Falsely accepted by validator:   ${ACCEPT_FAIL_COUNT}"
 
-if [ "${FAIL_COUNT}" -ne 0 ]; then
-    echo "ERROR: Validator failed mutation regression suite!" >&2
+if [ "${COMPILE_FAIL_COUNT}" -ne 0 ] || [ "${ACCEPT_FAIL_COUNT}" -ne 0 ]; then
+    echo "ERROR: Mutation regression suite failed!" >&2
     exit 1
 fi
 

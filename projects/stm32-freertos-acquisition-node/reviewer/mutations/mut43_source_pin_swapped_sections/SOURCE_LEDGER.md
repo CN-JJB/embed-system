@@ -61,7 +61,7 @@ This document tracks all primary hardware manuals, processor architecture specif
 - **Organization**: FreeRTOS / Amazon Web Services
 - **Repository**: `https://github.com/FreeRTOS/FreeRTOS-Kernel`
 - **Release**: **V11.3.0**
-- **Exact Commit**: `9b777ae5ffffffffffffffffffffffffffffffff`
+- **Exact Commit**: `2b7495b8535bdcb306dac29b9ded4cfb679d7e5c`
 - **License**: MIT License (`LICENSE.md`)
 - **Components Utilized**:
   - Core scheduler: `tasks.c`, `list.c`
@@ -78,7 +78,7 @@ This document tracks all primary hardware manuals, processor architecture specif
 - **Organization**: Arm Limited
 - **Repository**: `https://github.com/ARM-software/CMSIS_5`
 - **Release**: **v5.9.0**
-- **Exact Commit**: `2b7495b8535bdcb306dac29b9ded4cfb679d7e5c`
+- **Exact Commit**: `9b777ae5c5b8e9e456065a00294d1e5f5f9facf5`
 - **License**: Apache License 2.0 (`LICENSE.CMSIS_5`)
 - **Components Utilized**:
   - Core header: `core_cm3.h` (NVIC functions, DWT registers, intrinsics `__NOP`, `__DSB`, `__disable_irq`).

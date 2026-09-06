@@ -36,7 +36,7 @@ write_file(os.path.join(mut_dir, "mut18_mutex_in_sample_loop/node_app.c"), m18_c
 # mut19_iwdg_bypasses_stack_heap_gate
 m19_c = src_node_c.replace(
     "if (progress_ok && stack_ok && heap_ok) {",
-    "if (progress_ok) {"
+    "(void)stack_ok;\n        (void)heap_ok;\n        if (progress_ok) {"
 )
 write_file(os.path.join(mut_dir, "mut19_iwdg_bypasses_stack_heap_gate/node_app.c"), m19_c)
 
@@ -83,7 +83,7 @@ write_file(os.path.join(mut_dir, "mut24_dma_missing_htie/dma.c"), m24_c)
 # mut25_usart_hardcoded_72mhz
 m25_c = src_usart_c.replace(
     "USART1->BRR = (pclk2_hz + (baud / 2U)) / baud;",
-    "USART1->BRR = (72000000U + (baud / 2U)) / baud;"
+    "(void)pclk2_hz;\n    USART1->BRR = (72000000U + (baud / 2U)) / baud;"
 )
 write_file(os.path.join(mut_dir, "mut25_usart_hardcoded_72mhz/usart.c"), m25_c)
 
@@ -115,8 +115,6 @@ new_iwdg = """    iwdg_init(IWDG_PRESCALER_32, 1250);"""
 m28_c = src_main_c.replace(old_iwdg, new_iwdg)
 write_file(os.path.join(mut_dir, "mut28_iwdg_init_unchecked/main.c"), m28_c)
 
-print("Mutations 17 through 28 generated successfully.")
-
 # mut29_timer_started_before_diag
 old_m29 = """    if (!s_diag_completed) {
         prvRunDiagnosticComparison();
@@ -141,13 +139,12 @@ new_m29 = """    if (!s_diag_completed) {
 m29_c = src_node_c.replace(old_m29, new_m29)
 write_file(os.path.join(mut_dir, "mut29_timer_started_before_diag/node_app.c"), m29_c)
 
-# mut30_timer_ug_trgo_leak_before_diag
-old_m30 = """    TIM3->CR2 &= ~TIM_CR2_MMS;
+# mut30_timer_ug_trgo_leak_before_diag (MMS=010 + UG)
+old_m30 = """    TIM3->CR2 = (TIM3->CR2 & ~TIM_CR2_MMS) | TIM_CR2_MMS_0;
 
     /* 4. Generate an update event to pre-load PSC and ARR shadow registers */
     TIM3->EGR = TIM_EGR_UG;"""
-new_m30 = """    TIM3->CR2 &= ~TIM_CR2_MMS;
-    TIM3->CR2 |= TIM_CR2_MMS_1;
+new_m30 = """    TIM3->CR2 = (TIM3->CR2 & ~TIM_CR2_MMS) | TIM_CR2_MMS_1;
 
     /* 4. Generate an update event to pre-load PSC and ARR shadow registers */
     TIM3->EGR = TIM_EGR_UG;"""
@@ -193,12 +190,10 @@ new_m32 = """        if (xAcqQueue != NULL) {
                 /* drop ignored */
             }
         }"""
-assert old_m32 in src_dma_c, "mut32 target not found in src/dma.c"
 m32_c = src_dma_c.replace(old_m32, new_m32)
 write_file(os.path.join(mut_dir, "mut32_dma_tc_drops_ignored/dma.c"), m32_c)
 
 # mut33_adc_smp0_all_ones
-assert "ADC1->SMPR2 |= (ADC_SMPR2_SMP0_0 | ADC_SMPR2_SMP0_2);" in src_adc_c
 m33_c = src_adc_c.replace(
     "ADC1->SMPR2 |= (ADC_SMPR2_SMP0_0 | ADC_SMPR2_SMP0_2);",
     "ADC1->SMPR2 |= (ADC_SMPR2_SMP0_0 | ADC_SMPR2_SMP0_1 | ADC_SMPR2_SMP0_2);"
@@ -214,15 +209,11 @@ new_m34 = """    DMA1_Channel1->CCR = DMA_CCR_CIRC |
                          DMA_CCR_MINC |
                          DMA_CCR_PSIZE_1 |
                          DMA_CCR_MSIZE_1 |"""
-assert old_m34 in src_dma_c, "mut34 target not found in src/dma.c"
 m34_c = src_dma_c.replace(old_m34, new_m34)
 write_file(os.path.join(mut_dir, "mut34_dma_32bit_width/dma.c"), m34_c)
 
 # mut35_dma_cndtr_wrong_size
-old_m35 = "#define ADC_BUFFER_TOTAL_SIZE   (ADC_BUFFER_HALF_SIZE * 2U)"
-new_m35 = "#define ADC_BUFFER_TOTAL_SIZE   256U"
-assert old_m35 in src_dma_h, "mut35 target not found in include/dma.h"
-m35_h = src_dma_h.replace(old_m35, new_m35)
+m35_h = src_dma_h.replace("#define ADC_BUFFER_TOTAL_SIZE   (ADC_BUFFER_HALF_SIZE * 2U)", "#define ADC_BUFFER_TOTAL_SIZE   256U")
 write_file(os.path.join(mut_dir, "mut35_dma_cndtr_wrong_size/dma.h"), m35_h)
 
 # mut36_adc1_init_unchecked
@@ -264,4 +255,73 @@ new_m38 = """    if (!clock_init(CLOCK_PROFILE_72MHZ_HSE)) {
 m38_c = src_main_c.replace(old_m38, new_m38)
 write_file(os.path.join(mut_dir, "mut38_clock_hsi_unconditional_outside_fallback/main.c"), m38_c)
 
-print("Mutations 17 through 38 generated successfully.")
+# mut39_timer_mms000_ug_leak (MMS=000 Reset mode where UG emits TRGO)
+new_m39 = """    TIM3->CR2 &= ~TIM_CR2_MMS;
+
+    /* 4. Generate an update event to pre-load PSC and ARR shadow registers */
+    TIM3->EGR = TIM_EGR_UG;"""
+m39_c = src_timer_c.replace(old_m30, new_m39)
+write_file(os.path.join(mut_dir, "mut39_timer_mms000_ug_leak/timer.c"), m39_c)
+
+# mut40_adc_smp0_decoy_token
+old_m40 = """    ADC1->SMPR2 &= ~ADC_SMPR2_SMP0;
+    ADC1->SMPR2 |= (ADC_SMPR2_SMP0_0 | ADC_SMPR2_SMP0_2);"""
+new_m40 = """    ADC1->SMPR2 &= ~ADC_SMPR2_SMP0;
+    ADC1->SMPR2 |= 0x3U; /* wrong SMP0 */
+    (void)ADC_SMPR2_SMP0_0;
+    (void)ADC_SMPR2_SMP0_2;"""
+m40_c = src_adc_c.replace(old_m40, new_m40)
+write_file(os.path.join(mut_dir, "mut40_adc_smp0_decoy_token/adc.c"), m40_c)
+
+# mut41_dma_width_decoy_token
+old_m41 = """    DMA1_Channel1->CCR = DMA_CCR_CIRC |
+                         DMA_CCR_MINC |
+                         DMA_CCR_PSIZE_0 |
+                         DMA_CCR_MSIZE_0 |
+                         DMA_CCR_HTIE |
+                         DMA_CCR_TCIE |
+                         DMA_CCR_TEIE;"""
+new_m41 = """    DMA1_Channel1->CCR = DMA_CCR_CIRC |
+                         DMA_CCR_MINC |
+                         DMA_CCR_HTIE |
+                         DMA_CCR_TCIE |
+                         DMA_CCR_TEIE;
+    (void)DMA_CCR_PSIZE_0;
+    (void)DMA_CCR_MSIZE_0;"""
+m41_c = src_dma_c.replace(old_m41, new_m41)
+write_file(os.path.join(mut_dir, "mut41_dma_width_decoy_token/dma.c"), m41_c)
+
+# mut42_dma_cndtr_decoy_token
+old_m42 = "DMA1_Channel1->CNDTR = ADC_BUFFER_TOTAL_SIZE;"
+new_m42 = """DMA1_Channel1->CNDTR = 256U;
+    (void)ADC_BUFFER_TOTAL_SIZE;"""
+m42_c = src_dma_c.replace(old_m42, new_m42)
+write_file(os.path.join(mut_dir, "mut42_dma_cndtr_decoy_token/dma.c"), m42_c)
+
+# mut43_source_pin_swapped_sections
+# Swap FreeRTOS and CMSIS_5 commits across sections
+m43_md = src_ledger_md.replace(
+    "9b777ae5c5b8e9e456065a00294d1e5f5f9facf5", "TEMP_SWAP_PIN"
+).replace(
+    "2b7495b8535bdcb306dac29b9ded4cfb679d7e5c", "9b777ae5c5b8e9e456065a00294d1e5f5f9facf5"
+).replace(
+    "TEMP_SWAP_PIN", "2b7495b8535bdcb306dac29b9ded4cfb679d7e5c"
+)
+write_file(os.path.join(mut_dir, "mut43_source_pin_swapped_sections/SOURCE_LEDGER.md"), m43_md)
+
+# mut44_clock_hsi_failure_ignored
+new_m44 = """    if (!clock_init(CLOCK_PROFILE_72MHZ_HSE)) {
+        clock_init(CLOCK_PROFILE_64MHZ_HSI); /* failure ignored */
+    }"""
+m44_c = src_main_c.replace(old_clk, new_m44)
+write_file(os.path.join(mut_dir, "mut44_clock_hsi_failure_ignored/main.c"), m44_c)
+
+# mut45_adc1_init_failure_ignored
+new_m45 = """    /* 8. Initialize ADC1 with TIM3 TRGO hardware trigger and DMA request */
+    if (adc1_init(freqs.pclk2_hz) != ADC_INIT_OK) {
+        /* empty handler: failure ignored, execution continues */
+    }"""
+m45_c = src_main_c.replace(old_m36, new_m45)
+write_file(os.path.join(mut_dir, "mut45_adc1_init_failure_ignored/main.c"), m45_c)
+
+print("Mutations 17 through 45 generated successfully.")

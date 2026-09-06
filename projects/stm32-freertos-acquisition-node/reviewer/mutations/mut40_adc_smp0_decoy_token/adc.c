@@ -40,7 +40,9 @@ int adc1_init(uint32_t pclk2_hz)
      *    At 12 MHz ADCCLK, Tconv = 55.5 + 12.5 = 68 cycles (~5.67 us).
      */
     ADC1->SMPR2 &= ~ADC_SMPR2_SMP0;
-    ADC1->SMPR2 |= (ADC_SMPR2_SMP0_0 | ADC_SMPR2_SMP0_1 | ADC_SMPR2_SMP0_2);
+    ADC1->SMPR2 |= 0x3U; /* wrong SMP0 */
+    (void)ADC_SMPR2_SMP0_0;
+    (void)ADC_SMPR2_SMP0_2;
 
     /*
      * 5. Configure Regular Sequence:

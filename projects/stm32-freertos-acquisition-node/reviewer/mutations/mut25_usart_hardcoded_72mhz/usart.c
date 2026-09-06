@@ -34,6 +34,7 @@ void usart1_init(uint32_t pclk2_hz)
      *    Under 64 MHz: BRR = (64000000 + 57600) / 115200 = 556 = 0x022C
      */
     uint32_t baud = 115200U;
+    (void)pclk2_hz;
     USART1->BRR = (72000000U + (baud / 2U)) / baud;
 
 

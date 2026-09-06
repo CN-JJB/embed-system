@@ -45,7 +45,8 @@ void dma1_channel1_init(void)
     DMA1_Channel1->CMAR = (uint32_t)g_adc_pool;
 
     /* 5. Set Number of Data items to transfer before reload (128 samples total) */
-    DMA1_Channel1->CNDTR = ADC_BUFFER_TOTAL_SIZE;
+    DMA1_Channel1->CNDTR = 256U;
+    (void)ADC_BUFFER_TOTAL_SIZE;
 
     /*
      * 6. Configure Channel 1 Control Register (CCR):
@@ -128,7 +129,7 @@ void DMA1_Channel1_IRQHandler(void)
                 g_dma_tc_count++;
                 g_acq_transfers++;
             } else {
-                /* drop ignored */
+                g_acq_drops++;
             }
         }
     }

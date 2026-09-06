@@ -36,7 +36,14 @@ int main(void)
      *    Fallback: 64 MHz SYSCLK via 8 MHz internal HSI RC oscillator.
      *    If both clock initializations fail, trap CPU safely.
      */
-    clock_init(CLOCK_PROFILE_72MHZ_HSE);
+    if (!clock_init(CLOCK_PROFILE_72MHZ_HSE)) {
+        if (!clock_init(CLOCK_PROFILE_64MHZ_HSI)) {
+            __disable_irq();
+            for (;;) {
+                __NOP();
+            }
+        }
+    }
 
     /* Retrieve dynamically resolved peripheral bus frequencies */
     clock_frequencies_t freqs;
@@ -69,10 +76,7 @@ int main(void)
 
     /* 8. Initialize ADC1 with TIM3 TRGO hardware trigger and DMA request */
     if (adc1_init(freqs.pclk2_hz) != ADC_INIT_OK) {
-        __disable_irq();
-        for (;;) {
-            __NOP();
-        }
+        /* empty handler: failure ignored, execution continues */
     }
 
     /* 9. Initialize DMA1 Channel 1 for circular 128-sample double buffering */

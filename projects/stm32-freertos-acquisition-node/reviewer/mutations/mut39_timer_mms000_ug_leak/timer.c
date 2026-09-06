@@ -41,7 +41,7 @@ void tim3_trgo_init_1khz(uint32_t tim_clock_hz)
      *    PSC and ARR shadow registers WITHOUT emitting any trigger pulse onto TRGO
      *    before the diagnostic phase completes.
      */
-    TIM3->CR2 = (TIM3->CR2 & ~TIM_CR2_MMS) | TIM_CR2_MMS_1;
+    TIM3->CR2 &= ~TIM_CR2_MMS;
 
     /* 4. Generate an update event to pre-load PSC and ARR shadow registers */
     TIM3->EGR = TIM_EGR_UG;

@@ -294,6 +294,10 @@ static void prvTaskHealth(void *pvParameters)
         size_t min_ever_heap = xPortGetMinimumEverFreeHeapSize();
         bool heap_ok = (free_heap > 1024 && min_ever_heap > 512);
 
+        (void)progress_ok;
+        (void)stack_ok;
+        (void)heap_ok;
+
         /* Health-gated IWDG refresh policy: only refresh if all audits succeed */
         iwdg_refresh(); /* unconditional refresh */
 

@@ -61,11 +61,11 @@ void dma1_channel1_init(void)
      */
     DMA1_Channel1->CCR = DMA_CCR_CIRC |
                          DMA_CCR_MINC |
-                         DMA_CCR_PSIZE_0 |
-                         DMA_CCR_MSIZE_0 |
                          DMA_CCR_HTIE |
                          DMA_CCR_TCIE |
                          DMA_CCR_TEIE;
+    (void)DMA_CCR_PSIZE_0;
+    (void)DMA_CCR_MSIZE_0;
 
     /*
      * 7. Configure NVIC Priority and enable IRQ:
@@ -128,7 +128,7 @@ void DMA1_Channel1_IRQHandler(void)
                 g_dma_tc_count++;
                 g_acq_transfers++;
             } else {
-                /* drop ignored */
+                g_acq_drops++;
             }
         }
     }
