@@ -206,21 +206,49 @@ if re.search(r'\bxQueueSend\s*\(', isr_body):
     sys.stderr.write('FAIL: Prohibited task API xQueueSend() called from ISR! Must use xQueueSendFromISR()!\n')
     sys.exit(1)
 
-# xHigherPriorityTaskWoken initialization: must be initialized before send
-init_matches = list(re.finditer(r'(?:BaseType_t\s+)?xHigherPriorityTaskWoken\s*=\s*(?:pdFALSE|0)\b', isr_body))
-if not init_matches:
-    sys.stderr.write('FAIL: TIM2_IRQHandler must initialize xHigherPriorityTaskWoken to pdFALSE per ISR invocation!\n')
-    sys.exit(1)
-
 # Must call xQueueSendFromISR with &xHigherPriorityTaskWoken
 send_match = re.search(r'xQueueSendFromISR\s*\([^,]+,[^,]+,\s*&xHigherPriorityTaskWoken\s*\)', isr_body)
 if not send_match:
     sys.stderr.write('FAIL: TIM2_IRQHandler must call xQueueSendFromISR with &xHigherPriorityTaskWoken!\n')
     sys.exit(1)
 
-pre_send_inits = [m for m in init_matches if m.start() < send_match.start()]
-if not pre_send_inits:
-    sys.stderr.write('FAIL: xHigherPriorityTaskWoken must be initialized to pdFALSE before calling xQueueSendFromISR()!\n')
+# Track assignments / modifications to xHigherPriorityTaskWoken before the send
+pre_send = isr_body[:send_match.start()]
+
+assign_pattern = re.compile(r'(?:BaseType_t\s+)?\bxHigherPriorityTaskWoken\s*(=|\+=|-=|\*=|/=|%=|&=|\|=|\^=|<<=|>>=)\s*([^;]+);')
+inc_pattern = re.compile(r'(?:\bxHigherPriorityTaskWoken\s*(\+\+|--)|(\+\+|--)\s*xHigherPriorityTaskWoken)\s*;')
+
+writes = []
+for m in assign_pattern.finditer(pre_send):
+    op = m.group(1)
+    rhs = m.group(2).strip()
+    writes.append((m.start(), m.end(), op, rhs))
+
+for m in inc_pattern.finditer(pre_send):
+    writes.append((m.start(), m.end(), 'inc/dec', ''))
+
+writes.sort(key=lambda x: x[0])
+
+if not writes:
+    sys.stderr.write('FAIL: TIM2_IRQHandler must initialize xHigherPriorityTaskWoken to pdFALSE before calling xQueueSendFromISR()!\n')
+    sys.exit(1)
+
+last_write = writes[-1]
+last_op = last_write[2]
+last_rhs = last_write[3]
+
+if last_op != '=':
+    sys.stderr.write('FAIL: Last operation on xHigherPriorityTaskWoken before xQueueSendFromISR() must be assignment to pdFALSE (got operator "' + last_op + '")!\n')
+    sys.exit(1)
+
+clean_rhs = re.sub(r'^\(\s*BaseType_t\s*\)', '', last_rhs).strip().strip('() \t')
+if not re.match(r'^(?:pdFALSE|0)$', clean_rhs):
+    sys.stderr.write(f'FAIL: Last assignment to xHigherPriorityTaskWoken before xQueueSendFromISR() must establish pdFALSE or 0 (got "{last_rhs}")!\n')
+    sys.exit(1)
+
+between_code = pre_send[last_write[1]:]
+if re.search(r'&\s*xHigherPriorityTaskWoken\b', between_code):
+    sys.stderr.write('FAIL: Intervening address-of on xHigherPriorityTaskWoken before xQueueSendFromISR() makes value unknown!\n')
     sys.exit(1)
 
 # Drop accounting must be causally bound to xQueueSendFromISR failure path

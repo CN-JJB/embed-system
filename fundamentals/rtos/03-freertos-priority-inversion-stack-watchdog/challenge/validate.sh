@@ -237,44 +237,57 @@ for c in creates:
     args = [a.strip() for a in c.group(1).split(',')]
     if len(args) < 6:
         continue
-    fn_name = args[0]
+    fn_name = args[0].lstrip('&').strip()
     task_name = args[1]
     prio_str = args[4]
-    handle_str = args[5]
+    handle_str = args[5].lstrip('&').strip()
 
-    if 'prvTaskLow' in fn_name or 'Low' in task_name:
+    # Reject binding designated handles to decoy entry functions
+    if handle_str == 'g_task_low_handle' and fn_name != 'prvTaskLow':
+        sys.stderr.write(f'FAIL: Task Low output handle &g_task_low_handle bound to incorrect entry function "{fn_name}" (must be prvTaskLow)!\n')
+        sys.exit(1)
+    if handle_str == 'g_task_medium_handle' and fn_name != 'prvTaskMedium':
+        sys.stderr.write(f'FAIL: Task Medium output handle &g_task_medium_handle bound to incorrect entry function "{fn_name}" (must be prvTaskMedium)!\n')
+        sys.exit(1)
+    if handle_str == 'g_task_high_handle' and fn_name != 'prvTaskHigh':
+        sys.stderr.write(f'FAIL: Task High output handle &g_task_high_handle bound to incorrect entry function "{fn_name}" (must be prvTaskHigh)!\n')
+        sys.exit(1)
+
+    # Task creation must strictly bind exact entry function, priority, and output handle
+    # Task name strings cannot substitute for entry function binding
+    if fn_name == 'prvTaskLow':
         if prio_str not in ('1', 'TASK_LOW_PRIORITY'):
             sys.stderr.write(f'FAIL: Task Low priority must be 1 (got {prio_str})!\n')
             sys.exit(1)
-        if 'g_task_low_handle' not in handle_str:
-            sys.stderr.write('FAIL: Task Low must pass &g_task_low_handle!\n')
+        if handle_str != 'g_task_low_handle':
+            sys.stderr.write(f'FAIL: Task Low must pass &g_task_low_handle (got {args[5]})!\n')
             sys.exit(1)
         found_low = True
-    elif 'prvTaskMedium' in fn_name or 'Medium' in task_name:
+    elif fn_name == 'prvTaskMedium':
         if prio_str not in ('2', 'TASK_MEDIUM_PRIORITY'):
             sys.stderr.write(f'FAIL: Task Medium priority must be 2 (got {prio_str})!\n')
             sys.exit(1)
-        if 'g_task_medium_handle' not in handle_str:
-            sys.stderr.write('FAIL: Task Medium must pass &g_task_medium_handle!\n')
+        if handle_str != 'g_task_medium_handle':
+            sys.stderr.write(f'FAIL: Task Medium must pass &g_task_medium_handle (got {args[5]})!\n')
             sys.exit(1)
         found_med = True
-    elif 'prvTaskHigh' in fn_name or 'High' in task_name:
+    elif fn_name == 'prvTaskHigh':
         if prio_str not in ('3', 'TASK_HIGH_PRIORITY'):
             sys.stderr.write(f'FAIL: Task High priority must be 3 (got {prio_str})!\n')
             sys.exit(1)
-        if 'g_task_high_handle' not in handle_str:
-            sys.stderr.write('FAIL: Task High must pass &g_task_high_handle!\n')
+        if handle_str != 'g_task_high_handle':
+            sys.stderr.write(f'FAIL: Task High must pass &g_task_high_handle (got {args[5]})!\n')
             sys.exit(1)
         found_high = True
 
 if not found_low:
-    sys.stderr.write('FAIL: inversion_app_init() must create Task Low (priority 1, handle &g_task_low_handle)!\n')
+    sys.stderr.write('FAIL: inversion_app_init() must create Task Low bound to entry function prvTaskLow (priority 1, handle &g_task_low_handle)!\n')
     sys.exit(1)
 if not found_med:
-    sys.stderr.write('FAIL: inversion_app_init() must create Task Medium (priority 2, handle &g_task_medium_handle)!\n')
+    sys.stderr.write('FAIL: inversion_app_init() must create Task Medium bound to entry function prvTaskMedium (priority 2, handle &g_task_medium_handle)!\n')
     sys.exit(1)
 if not found_high:
-    sys.stderr.write('FAIL: inversion_app_init() must create Task High (priority 3, handle &g_task_high_handle)!\n')
+    sys.stderr.write('FAIL: inversion_app_init() must create Task High bound to entry function prvTaskHigh (priority 3, handle &g_task_high_handle)!\n')
     sys.exit(1)
 
 # Verify deterministic sequencing in prvTaskLow
@@ -452,16 +465,78 @@ if not take_match:
 pre_take = high_str[:take_match.start()]
 post_take = high_str[take_match.end():]
 
-if not re.search(r'dwt_get_cycles\s*\(\s*\)', pre_take):
-    sys.stderr.write('FAIL: prvTaskHigh() must call dwt_get_cycles() before acquiring g_shared_resource!\n')
+# 1. Identify pre-take DWT start cycle variable
+m_pre_cycle = re.search(r'(?:(?:uint32_t|uint64_t)\s+)?([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*dwt_get_cycles\s*\(\s*\)', pre_take)
+if not m_pre_cycle:
+    sys.stderr.write('FAIL: prvTaskHigh() must call dwt_get_cycles() and record start cycles before acquiring g_shared_resource!\n')
     sys.exit(1)
+start_cycle_var = m_pre_cycle.group(1)
 
+# 2. Check post-take DWT call
 if not re.search(r'dwt_get_cycles\s*\(\s*\)', post_take):
     sys.stderr.write('FAIL: prvTaskHigh() must call dwt_get_cycles() after acquiring g_shared_resource!\n')
     sys.exit(1)
 
-if not re.search(r'g_high_wait_cycles_run_a\s*=', post_take) or not re.search(r'g_high_wait_cycles_run_b\s*=', post_take):
-    sys.stderr.write('FAIL: prvTaskHigh() must record DWT cycle duration into g_high_wait_cycles_run_a and g_high_wait_cycles_run_b!\n')
+m_post_cycle = re.search(r'(?:(?:uint32_t|uint64_t)\s+)?([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*dwt_get_cycles\s*\(\s*\)', post_take)
+post_cycle_var = m_post_cycle.group(1) if m_post_cycle else None
+
+# Helper to check if an expression computes the DWT cycle delta
+def expr_is_dwt_delta(expr_str):
+    e = expr_str.strip()
+    e = re.sub(r'^\(\s*(?:uint32_t|uint64_t|int|long)\s*\)', '', e).strip()
+    e = e.strip('() \t')
+    post_sources = [r'dwt_get_cycles\s*\(\s*\)']
+    if post_cycle_var:
+        post_sources.append(re.escape(post_cycle_var))
+    post_pat = r'(?:' + '|'.join(post_sources) + r')'
+    pat = rf'^{post_pat}\s*-\s*{re.escape(start_cycle_var)}$'
+    return bool(re.match(pat, e))
+
+# Map local variable definitions in post_take
+var_defs = {}
+for m_def in re.finditer(r'(?:(?:uint32_t|uint64_t|TickType_t|uint16_t|int)\s+)?([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*([^;]+);', post_take):
+    var_defs[m_def.group(1)] = m_def.group(2).strip()
+
+def resolves_to_dwt_delta(expr_str):
+    e = expr_str.strip()
+    e_uncast = re.sub(r'^\(\s*(?:uint32_t|uint64_t|int|long)\s*\)', '', e).strip()
+    e_uncast = e_uncast.strip('() \t')
+
+    if e_uncast == '0' or e_uncast.isdigit():
+        return False
+    if re.search(r'(?i)\btick', e_uncast):
+        return False
+
+    if expr_is_dwt_delta(e_uncast):
+        return True
+
+    if re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', e_uncast) and e_uncast in var_defs:
+        def_expr = var_defs[e_uncast]
+        if re.search(r'(?i)\btick', def_expr):
+            return False
+        return expr_is_dwt_delta(def_expr)
+
+    return False
+
+m_run_a = re.search(r'g_high_wait_cycles_run_a\s*=\s*([^;]+);', post_take)
+m_run_b = re.search(r'g_high_wait_cycles_run_b\s*=\s*([^;]+);', post_take)
+
+if not m_run_a:
+    sys.stderr.write('FAIL: prvTaskHigh() missing assignment to g_high_wait_cycles_run_a!\n')
+    sys.exit(1)
+if not m_run_b:
+    sys.stderr.write('FAIL: prvTaskHigh() missing assignment to g_high_wait_cycles_run_b!\n')
+    sys.exit(1)
+
+val_a = m_run_a.group(1).strip()
+val_b = m_run_b.group(1).strip()
+
+if not resolves_to_dwt_delta(val_a):
+    sys.stderr.write(f'FAIL: g_high_wait_cycles_run_a is assigned "{val_a}", which does not derive from DWT cycle delta (post_cycles - {start_cycle_var})!\n')
+    sys.exit(1)
+
+if not resolves_to_dwt_delta(val_b):
+    sys.stderr.write(f'FAIL: g_high_wait_cycles_run_b is assigned "{val_b}", which does not derive from DWT cycle delta (post_cycles - {start_cycle_var})!\n')
     sys.exit(1)
 
 # Prohibit libc malloc in application source
