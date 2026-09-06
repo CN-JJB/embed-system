@@ -518,25 +518,80 @@ def resolves_to_dwt_delta(expr_str):
 
     return False
 
-m_run_a = re.search(r'g_high_wait_cycles_run_a\s*=\s*([^;]+);', post_take)
-m_run_b = re.search(r'g_high_wait_cycles_run_b\s*=\s*([^;]+);', post_take)
+# Inspect all assignments to g_high_wait_cycles_run_a
+assign_pattern_a = re.compile(r'\bg_high_wait_cycles_run_a\s*(=|\+=|-=|\*=|/=|%=|&=|\|=|\^=|<<=|>>=)\s*([^;]+);')
+inc_pattern_a = re.compile(r'(?:\bg_high_wait_cycles_run_a\s*(\+\+|--)|(\+\+|--)\s*g_high_wait_cycles_run_a)\s*;')
 
-if not m_run_a:
+writes_a = []
+for m in assign_pattern_a.finditer(post_take):
+    writes_a.append((m.start(), m.end(), m.group(1), m.group(2).strip()))
+for m in inc_pattern_a.finditer(post_take):
+    writes_a.append((m.start(), m.end(), 'inc/dec', ''))
+writes_a.sort(key=lambda x: x[0])
+
+if not writes_a:
     sys.stderr.write('FAIL: prvTaskHigh() missing assignment to g_high_wait_cycles_run_a!\n')
     sys.exit(1)
-if not m_run_b:
+
+# Check for subsequent invalid overwrites after a valid DWT assignment
+for i, w in enumerate(writes_a):
+    if w[2] == '=' and resolves_to_dwt_delta(w[3]):
+        for sub in writes_a[i+1:]:
+            if sub[2] != '=' or not resolves_to_dwt_delta(sub[3]):
+                sys.stderr.write(f'FAIL: g_high_wait_cycles_run_a valid DWT delta was subsequently overwritten with "{sub[3]}"!\n')
+                sys.exit(1)
+
+# Require final assignment to derive from DWT delta
+last_a = writes_a[-1]
+if last_a[2] != '=':
+    sys.stderr.write(f'FAIL: Last operation on g_high_wait_cycles_run_a is not an assignment (operator "{last_a[2]}")!\n')
+    sys.exit(1)
+
+if not resolves_to_dwt_delta(last_a[3]):
+    sys.stderr.write(f'FAIL: Final assignment to g_high_wait_cycles_run_a is assigned "{last_a[3]}", which does not derive from DWT cycle delta (post_cycles - {start_cycle_var})!\n')
+    sys.exit(1)
+
+between_a = post_take[last_a[1]:]
+if re.search(r'&\s*g_high_wait_cycles_run_a\b', between_a):
+    sys.stderr.write('FAIL: Intervening address-of on g_high_wait_cycles_run_a makes final value unknown!\n')
+    sys.exit(1)
+
+# Inspect all assignments to g_high_wait_cycles_run_b
+assign_pattern_b = re.compile(r'\bg_high_wait_cycles_run_b\s*(=|\+=|-=|\*=|/=|%=|&=|\|=|\^=|<<=|>>=)\s*([^;]+);')
+inc_pattern_b = re.compile(r'(?:\bg_high_wait_cycles_run_b\s*(\+\+|--)|(\+\+|--)\s*g_high_wait_cycles_run_b)\s*;')
+
+writes_b = []
+for m in assign_pattern_b.finditer(post_take):
+    writes_b.append((m.start(), m.end(), m.group(1), m.group(2).strip()))
+for m in inc_pattern_b.finditer(post_take):
+    writes_b.append((m.start(), m.end(), 'inc/dec', ''))
+writes_b.sort(key=lambda x: x[0])
+
+if not writes_b:
     sys.stderr.write('FAIL: prvTaskHigh() missing assignment to g_high_wait_cycles_run_b!\n')
     sys.exit(1)
 
-val_a = m_run_a.group(1).strip()
-val_b = m_run_b.group(1).strip()
+# Check for subsequent invalid overwrites after a valid DWT assignment
+for i, w in enumerate(writes_b):
+    if w[2] == '=' and resolves_to_dwt_delta(w[3]):
+        for sub in writes_b[i+1:]:
+            if sub[2] != '=' or not resolves_to_dwt_delta(sub[3]):
+                sys.stderr.write(f'FAIL: g_high_wait_cycles_run_b valid DWT delta was subsequently overwritten with "{sub[3]}"!\n')
+                sys.exit(1)
 
-if not resolves_to_dwt_delta(val_a):
-    sys.stderr.write(f'FAIL: g_high_wait_cycles_run_a is assigned "{val_a}", which does not derive from DWT cycle delta (post_cycles - {start_cycle_var})!\n')
+# Require final assignment to derive from DWT delta
+last_b = writes_b[-1]
+if last_b[2] != '=':
+    sys.stderr.write(f'FAIL: Last operation on g_high_wait_cycles_run_b is not an assignment (operator "{last_b[2]}")!\n')
     sys.exit(1)
 
-if not resolves_to_dwt_delta(val_b):
-    sys.stderr.write(f'FAIL: g_high_wait_cycles_run_b is assigned "{val_b}", which does not derive from DWT cycle delta (post_cycles - {start_cycle_var})!\n')
+if not resolves_to_dwt_delta(last_b[3]):
+    sys.stderr.write(f'FAIL: Final assignment to g_high_wait_cycles_run_b is assigned "{last_b[3]}", which does not derive from DWT cycle delta (post_cycles - {start_cycle_var})!\n')
+    sys.exit(1)
+
+between_b = post_take[last_b[1]:]
+if re.search(r'&\s*g_high_wait_cycles_run_b\b', between_b):
+    sys.stderr.write('FAIL: Intervening address-of on g_high_wait_cycles_run_b makes final value unknown!\n')
     sys.exit(1)
 
 # Prohibit libc malloc in application source
