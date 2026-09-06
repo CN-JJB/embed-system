@@ -50,20 +50,7 @@ openocd -f interface/stlink.cfg -f target/stm32f1x.cfg \
         -c "program build/firmware.elf verify reset exit"
 ```
 
-Expected OpenOCD terminal output upon target programming:
-```text
-** Programming Started **
-Info : device id = 0x20036410
-Info : flash size = 64kbytes
-target halted due to debug-request, current mode: Thread
-auto erase enabled
-wrote 16384 bytes from file build/firmware.elf in 0.812345s (19.696 KiB/s)
-** Programming Finished **
-** Verify Started **
-verified 12168 bytes in 0.234567s (50.682 KiB/s)
-** Verified OK **
-** Resetting Target **
-```
+On a real bench run, record the actual OpenOCD programming/verify result. Do not pre-populate expected terminal output; the target run remains UNVERIFIED until a real capture is attached.
 
 ---
 
@@ -152,28 +139,28 @@ arm-none-eabi-gdb -ex "target extended-remote :3333" build/firmware.elf
 ```
 
 ### Inspect Diagnostic Cycle Results
+Run:
 ```gdb
-(gdb) print g_diag_high_wait_cycles_run_a
-$1 = 1812450   <-- EXPECTED / ILLUSTRATIVE (~25.1 ms @ 72 MHz)
-(gdb) print g_diag_high_wait_cycles_run_b
-$2 = 362480    <-- EXPECTED / ILLUSTRATIVE (~5.03 ms @ 72 MHz)
+print g_diag_high_wait_cycles_run_a
+print g_diag_high_wait_cycles_run_b
 ```
+Record only values captured from a live target. Compare them against the documented DESIGN TARGET / UNVERIFIED timing model.
 
 ### Inspect Stack Watermarks and Heap Health
+Run:
 ```gdb
-(gdb) print node_app_get_watermark_bytes(g_task_process_handle)
-$3 = 640       <-- EXPECTED / ILLUSTRATIVE (160 words remaining)
-(gdb) print xPortGetFreeHeapSize()
-$4 = 4608      <-- EXPECTED / ILLUSTRATIVE (~4.5 KB free in heap_4)
-(gdb) print xPortGetMinimumEverFreeHeapSize()
-$5 = 4608      <-- EXPECTED / ILLUSTRATIVE (Zero steady-state churn)
+print node_app_get_watermark_bytes(g_task_process_handle)
+print xPortGetFreeHeapSize()
+print xPortGetMinimumEverFreeHeapSize()
 ```
+Record only live values; do not treat illustrative heap/watermark numbers as evidence.
 
 ### Inspect Watchdog Reset Cause
+Run:
 ```gdb
-(gdb) print (bool)iwdg_check_and_clear_reset_cause()
-$6 = false     <-- EXPECTED / ILLUSTRATIVE (Normal power-on reset)
+print (bool)iwdg_check_and_clear_reset_cause()
 ```
+Record the live reset-cause result only after an actual target reset experiment.
 
 ---
 
