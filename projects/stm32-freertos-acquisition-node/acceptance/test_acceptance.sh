@@ -22,7 +22,7 @@ echo "[2/4] Executing project validator (verify_project.sh)..."
 bash "${PROJECT_DIR}/scripts/verify_project.sh"
 echo "PASS: Project validator passed."
 
-# 3. Run positive reference and 45 negative mutations suite
+# 3. Run positive reference and 46 negative mutations suite
 echo ""
 echo "[3/4] Executing reviewer mutation verification suite (verify_mutations.sh)..."
 bash "${PROJECT_DIR}/reviewer/verify_mutations.sh"

@@ -227,16 +227,43 @@ if ug_pos == -1:
     sys.exit(1)
 init_prefix = init_body[:ug_pos]
 
-# Reject MMS=010 (Update mode) before UG
-if re.search(r'TIM_CR2_MMS_1|TIM_CR2_MMS\s*=\s*0?x?0?2|0b010', init_prefix):
-    print("ERROR: tim3_trgo_init_1khz sets MMS=Update before EGR_UG, causing trigger leak to ADC1 before diagnostic!", file=sys.stderr)
+# Bind actual pre-UG TIM3->CR2 register write to effective MMS=001:
+# Must reject MMS=010 (Update mode leak)
+# Must reject MMS=000 (Reset mode leak per RM0008)
+# Must reject decoy/standalone TIM_CR2_MMS_0 tokens that are not part of TIM3->CR2 write!
+
+cr2_writes = list(re.finditer(r'TIM3->CR2\s*([|&=]?=)\s*([^;]+);', init_prefix))
+if not cr2_writes:
+    print("ERROR: tim3_trgo_init_1khz does not configure TIM3->CR2 before EGR_UG!", file=sys.stderr)
     sys.exit(1)
 
-# Reject MMS=000 (Reset mode): Per STM32F1 RM0008, MMS=000 routes UG to TRGO!
-# MMS must be explicitly set to 001 (Enable / TIM_CR2_MMS_0) while CEN=0 to hold TRGO inactive
-if not re.search(r'TIM_CR2_MMS_0|0b001\b', init_prefix):
-    print("ERROR: tim3_trgo_init_1khz leaves MMS=000 (Reset mode) during UG, which drives TRGO on STM32F1! Must set MMS=001 (Enable with CEN=0)!", file=sys.stderr)
+mms001_bound = False
+for w in cr2_writes:
+    rhs = w.group(2).strip()
+    if "TIM_CR2_MMS_1" in rhs or "0b010" in rhs or "0x20" in rhs:
+        print("ERROR: tim3_trgo_init_1khz sets MMS=Update before EGR_UG, causing trigger leak to ADC1 before diagnostic!", file=sys.stderr)
+        sys.exit(1)
+    if "TIM_CR2_MMS_0" in rhs or "0b001" in rhs or "0x10" in rhs:
+        if "TIM_CR2_MMS_1" not in rhs and "TIM_CR2_MMS_2" not in rhs and "0x20" not in rhs and "0x40" not in rhs:
+            mms001_bound = True
+
+if not mms001_bound:
+    print("ERROR: tim3_trgo_init_1khz does not bind effective MMS=001 (Enable mode) to TIM3->CR2 write before EGR_UG! Decoy tokens rejected.", file=sys.stderr)
     sys.exit(1)
+
+# Disassembly check of tim3_trgo_init_1khz for MMS=001 (bit 4 set in CR2 write)
+if asm_txt:
+    t_match = re.search(r'<tim3_trgo_init_1khz>:(.*?)(?:\n[0-9a-fA-F]+ <|\Z)', asm_txt, re.S)
+    if t_match:
+        t_asm = t_match.group(1)
+        egr_match = re.search(r'\[r[0-9]+,\s*#(?:20|0x14)\]', t_asm)
+        egr_pos = egr_match.start() if egr_match else t_asm.find("[r2, #20]")
+        if egr_pos == -1:
+            egr_pos = len(t_asm)
+        t_prefix = t_asm[:egr_pos]
+        if not re.search(r'orr(?:\.w)?\s+r[0-9]+,\s*r[0-9]+,\s*#16\b|mov[w|s]?\s+r[0-9]+,\s*#(?:16|0x10)\b', t_prefix):
+            print("ERROR: Disassembly of tim3_trgo_init_1khz does not show MMS=001 (bit 4 set) written to TIM3->CR2 before EGR_UG!", file=sys.stderr)
+            sys.exit(1)
 
 if re.search(r'TIM_CR1_CEN', init_body):
     print("ERROR: tim3_trgo_init_1khz must not enable TIM_CR1_CEN! Counter must only start via tim3_trgo_start() after diagnostics!", file=sys.stderr)

@@ -9,7 +9,7 @@ def read_file(path):
 
 def write_file(path, content):
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
+    with open(path, "w", encoding="utf-8", newline="\n") as f:
         f.write(content)
 
 src_node_c = read_file(os.path.join(base_dir, "src/node_app.c"))
@@ -324,4 +324,13 @@ new_m45 = """    /* 8. Initialize ADC1 with TIM3 TRGO hardware trigger and DMA r
 m45_c = src_main_c.replace(old_m36, new_m45)
 write_file(os.path.join(mut_dir, "mut45_adc1_init_failure_ignored/main.c"), m45_c)
 
-print("Mutations 17 through 45 generated successfully.")
+# mut46_timer_mms001_decoy_token (MMS=000 with decoy TIM_CR2_MMS_0 token)
+new_m46 = """    TIM3->CR2 &= ~TIM_CR2_MMS;
+    (void)TIM_CR2_MMS_0;
+
+    /* 4. Generate an update event to pre-load PSC and ARR shadow registers */
+    TIM3->EGR = TIM_EGR_UG;"""
+m46_c = src_timer_c.replace(old_m30, new_m46)
+write_file(os.path.join(mut_dir, "mut46_timer_mms001_decoy_token/timer.c"), m46_c)
+
+print("Mutations 17 through 46 generated successfully.")
