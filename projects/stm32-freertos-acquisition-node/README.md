@@ -8,7 +8,7 @@ The **STM32 FreeRTOS Acquisition Node** is the Phase 2 capstone integration proj
 - **Target Microcontroller**: STM32F103C8T6 (Arm Cortex-M3 @ 72 MHz)
 - **Memory Capacity**: 64 KB Flash, 20 KB SRAM
 - **Operating System**: FreeRTOS-Kernel V11.3.0 (GCC ARM_CM3 port, `heap_4`)
-- **Firmware Footprint**: 12,168 bytes Flash (~18.6%), 10,888 bytes SRAM (~53.2%)
+- **Firmware Footprint**: 12,584 bytes Flash (~19.2%), 10,896 bytes SRAM (~53.2%)
 - **Driver Architecture**: Direct CMSIS register-level implementation; **zero HAL, CubeMX, or CMSIS-RTOS wrapper dependencies**.
 
 ---
@@ -16,7 +16,7 @@ The **STM32 FreeRTOS Acquisition Node** is the Phase 2 capstone integration proj
 ## 2. System Architecture & Acquisition Fast Path
 
 ```text
-TIM3 update @ 1.0 kHz
+TIM3 update @ 1.0 kHz (configured before scheduler, started after diagnostic)
 → TIM3 TRGO
 → ADC1 regular PA0 conversion (12 MHz ADCCLK, SMP0=55.5 cycles)
 → DMA1 Channel 1 circular 2 × 64 uint16_t pool (g_adc_pool)
@@ -60,26 +60,32 @@ TIM3 update @ 1.0 kHz
 Watchdog refreshing represents an active health decision, not a blind timer:
 1. **Acquisition Progress Audit**: Confirms that `g_acq_transfers` has increased since the prior audit cycle.
 2. **Stack High-Water Mark Audit**: Queries `uxTaskGetStackHighWaterMark()` for all tasks; requires $\ge 32$ words ($\ge 128$ bytes) remaining.
-3. **Heap Health Audit**: Queries `xPortGetFreeHeapSize()` and `xPortGetMinimumEverFreeHeapSize()`.
+3. **Steady-State Heap Audit**: Verifies `free_heap == g_steady_free_heap && min_ever_heap >= g_steady_min_ever_heap` against the post-scheduler baseline established in `Task_Health`.
 4. **Conditional Refresh Gate**:
    - If **all three audits pass**, `iwdg_refresh()` is called.
    - If **any audit fails** (e.g. DMA stalls, stack nears overflow, or memory leaks), `iwdg_refresh()` is withheld.
-   - The Independent Watchdog (configured for ~2000 ms timeout via prescaler /64, reload 1250) resets the microcontroller.
+   - The Independent Watchdog (configured for ~1000 ms nominal timeout via prescaler /32, reload 1250, meeting $\le 1200\text{ ms}$ design target) resets the microcontroller.
    - `iwdg_check_and_clear_reset_cause()` inspects `RCC_CSR_IWDGRSTF` on boot.
 
 ---
 
 ## 5. Controlled Priority-Inversion Diagnostic
 
-To demonstrate priority inheritance without disrupting steady-state acquisition, the firmware includes an isolated benchmark:
+To demonstrate priority inheritance without disrupting steady-state acquisition, the diagnostic executes once at startup in `Task_Health` under completely quiescent conditions (TIM3 stopped):
 - **High**: `Task_Process` (Priority 3)
 - **Medium**: `Task_Compute` (Priority 2)
 - **Low**: `Task_Health` (Priority 1)
 - **Shared Resource**: `g_diag_resource`
 
+Deterministic High unblocking is achieved via `xTaskNotifyGive()` coupled with `xTaskAbortDelay()`, asserting `pdPASS`. After Run A and Run B finish:
+1. `Task_Health` captures the steady-state heap baseline:
+   `g_steady_free_heap = xPortGetFreeHeapSize();`
+   `g_steady_min_ever_heap = xPortGetMinimumEverFreeHeapSize();`
+2. `tim3_trgo_start()` is called to begin regular 1.0 kHz hardware acquisition.
+
 ### Run A — Binary Semaphore (No Inheritance)
 1. Low acquires binary semaphore `g_diag_sem`.
-2. Low releases High via direct task notification.
+2. Low releases High via direct task notification and aborts delay.
 3. High awakens, samples DWT cycle counter, calls `xSemaphoreTake(g_diag_sem)`, and blocks.
 4. Only after High has had the deterministic block opportunity does Low release Medium.
 5. Medium preempts Low (Priority 2 > 1) and runs finite CPU interference (~20 ms).
@@ -89,7 +95,7 @@ To demonstrate priority inheritance without disrupting steady-state acquisition,
 
 ### Run B — Mutex (Priority Inheritance Active)
 1. Low acquires mutex `g_diag_mutex`.
-2. Low releases High via direct task notification.
+2. Low releases High via direct task notification and aborts delay.
 3. High awakens, samples DWT, calls `xSemaphoreTake(g_diag_mutex)`, and blocks.
 4. **Low inherits Priority 3** from High!
 5. Low releases Medium. Medium awakens at Priority 2, but **cannot preempt inherited Priority 3 Low**!
@@ -114,16 +120,17 @@ In strict compliance with root `AGENTS.md`:
 | Evidence Item | Status | Basis | Does Not Prove |
 |---|---|---|---|
 | Target compile and link | **VERIFIED** | Clean compilation with `arm-none-eabi-gcc` 13.2.1 under `-Werror` | Target physical execution |
-| Memory bounds (Flash / SRAM) | **VERIFIED** | Flash = 12,168 / 65,536 B, SRAM = 10,888 / 20,480 B | Target runtime stability |
+| Memory bounds (Flash / SRAM) | **VERIFIED** | Flash = 12,584 / 65,536 B, SRAM = 10,896 / 20,480 B | Target runtime stability |
 | FreeRTOS V11.3.0 pin | **VERIFIED** | Pinned upstream commit `9b777ae5` | Non-regressed third-party code |
 | Peripheral register disassembly | **VERIFIED** | `objdump` direct access verification for TIM3, ADC1, DMA1, USART1, IWDG, DWT | Physical analog accuracy |
 | Positive reference validation | **VERIFIED** | `scripts/verify_project.sh` passed on reference bundle | Target hardware execution |
-| Negative mutation suite | **VERIFIED** | All 16 compilable defective mutations rejected by validator | Completeness of future Final Gate |
+| Negative mutation suite | **VERIFIED** | All 28 compilable defective mutations rejected by validator | Completeness of future Final Gate |
 | Physical target flash and run | **UNVERIFIED** | No bench hardware attached | Live silicon operation |
 | GDB register inspection | **UNVERIFIED** | Illustrative commands; no probe attached | Actual register snapshots |
 | Serial telemetry stream | **UNVERIFIED** | Illustrative protocol; no UART logic capture | Measured baud rate or line noise |
 | Physical oscilloscope waveforms | **UNVERIFIED** | Illustrative timing diagrams; no oscilloscope | Physical rise times or jitter |
-| Physical watchdog reset timing | **UNVERIFIED** | Illustrative timing (~2000 ms); no timer capture | LSI frequency drift |
+| Physical watchdog reset timing | **UNVERIFIED** | Illustrative timing (~1000 ms); no timer capture | LSI frequency drift |
+
 
 ---
 

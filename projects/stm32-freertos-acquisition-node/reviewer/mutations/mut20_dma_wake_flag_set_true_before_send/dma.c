@@ -101,6 +101,7 @@ void DMA1_Channel1_IRQHandler(void)
         msg.sequence = g_acq_sequence++;
 
         if (xAcqQueue != NULL) {
+            xHigherPriorityTaskWoken = pdTRUE;
             BaseType_t xResult = xQueueSendFromISR(xAcqQueue, &msg, &xHigherPriorityTaskWoken);
             if (xResult == pdPASS) {
                 g_dma_ht_count++;
@@ -123,6 +124,7 @@ void DMA1_Channel1_IRQHandler(void)
         msg.sequence = g_acq_sequence++;
 
         if (xAcqQueue != NULL) {
+            xHigherPriorityTaskWoken = pdTRUE;
             BaseType_t xResult = xQueueSendFromISR(xAcqQueue, &msg, &xHigherPriorityTaskWoken);
             if (xResult == pdPASS) {
                 g_dma_tc_count++;

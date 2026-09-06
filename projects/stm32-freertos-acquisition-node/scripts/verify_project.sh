@@ -34,6 +34,8 @@ if [ "${BUNDLE_DIR}" != "${PROJECT_DIR}" ]; then
                 cp "$f" "${TEMP_BUILD_DIR}/src/${fname}"
             elif [ -f "${TEMP_BUILD_DIR}/include/${fname}" ]; then
                 cp "$f" "${TEMP_BUILD_DIR}/include/${fname}"
+            elif [ -f "${TEMP_BUILD_DIR}/${fname}" ]; then
+                cp "$f" "${TEMP_BUILD_DIR}/${fname}"
             else
                 cp "$f" "${TEMP_BUILD_DIR}/src/${fname}"
             fi
@@ -155,6 +157,7 @@ timer_c = read_clean_file(os.path.join(work_dir, "src/timer.c"))
 usart_c = read_clean_file(os.path.join(work_dir, "src/usart.c"))
 iwdg_c = read_clean_file(os.path.join(work_dir, "src/iwdg.c"))
 node_c = read_clean_file(os.path.join(work_dir, "src/node_app.c"))
+node_h = read_clean_file(os.path.join(work_dir, "include/node_app.h"))
 
 # Check Priority Grouping: NVIC_SetPriorityGrouping(0)
 if not re.search(r'NVIC_SetPriorityGrouping\s*\(\s*0\s*\)', main_c):
@@ -166,7 +169,14 @@ if not re.search(r'TIM_CR2_MMS_1|TIM_CR2_MMS\s*=\s*0?x?0?2|0b010', timer_c):
     print("ERROR: timer.c does not set TIM3 TRGO output to Update event (MMS=010)!", file=sys.stderr)
     sys.exit(1)
 
-# Check ADC1 Trigger & Prescaler: EXTSEL=100 (TIM3 TRGO), EXTTRIG=1, DMA=1, ADCPRE=/6, SMP0=55.5 cycles
+# Check TIM3 ARR / PSC formula (F7)
+psc_ok = re.search(r'TIM3->PSC\s*=\s*.*?tim_clock_hz', timer_c) or (re.search(r'psc\s*=\s*.*?tim_clock_hz', timer_c) and re.search(r'TIM3->PSC\s*=\s*psc', timer_c))
+arr_ok = re.search(r'TIM3->ARR\s*=\s*999\b', timer_c) or (re.search(r'arr\s*=\s*.*?(999|1000000|1000\b)', timer_c) and re.search(r'TIM3->ARR\s*=\s*arr\b', timer_c))
+if not (psc_ok and arr_ok):
+    print("ERROR: timer.c must compute TIM3 PSC dynamically from tim_clock_hz and ARR to 999 (1 kHz)!", file=sys.stderr)
+    sys.exit(1)
+
+# Check ADC1 Trigger & Prescaler: EXTSEL=100 (TIM3 TRGO), EXTTRIG=1, DMA=1, ADCPRE=/6, SMP0=55.5 cycles (F7)
 if not re.search(r'ADC_CR2_EXTSEL_2|0b100|0x00040000', adc_c):
     print("ERROR: adc.c does not select TIM3 TRGO (EXTSEL=100)!", file=sys.stderr)
     sys.exit(1)
@@ -183,17 +193,36 @@ if not re.search(r'RCC_CFGR_ADCPRE_DIV6', adc_c):
     print("ERROR: adc.c does not configure ADCPRE /6 for 12 MHz ADCCLK!", file=sys.stderr)
     sys.exit(1)
 
-if not re.search(r'ADC_SMPR2_SMP0', adc_c):
-    print("ERROR: adc.c does not configure PA0 SMP0 sample time!", file=sys.stderr)
+# ADC SMP0 55.5 cycles: SMP0_0 and SMP0_2 bits set
+if not ((re.search(r'ADC_SMPR2_SMP0_0', adc_c) and re.search(r'ADC_SMPR2_SMP0_2', adc_c)) or re.search(r'0b101|0x05', adc_c)):
+    print("ERROR: adc.c does not configure PA0 SMP0 to 55.5 cycles (SMP0[2:0] = 101)!", file=sys.stderr)
     sys.exit(1)
 
-# Check DMA1 Channel 1 Circular Mode and Configuration
+# ADC bounded calibration loops (F7)
+if not re.search(r'while\s*\(\s*\(?\s*ADC1->CR2\s*&\s*ADC_CR2_RSTCAL.*?\)\s*\{[^}]*timeout', adc_c, re.S) or \
+   not re.search(r'while\s*\(\s*\(?\s*ADC1->CR2\s*&\s*ADC_CR2_CAL.*?\)\s*\{[^}]*timeout', adc_c, re.S):
+    print("ERROR: adc.c must use bounded timeout loops for RSTCAL and CAL calibration!", file=sys.stderr)
+    sys.exit(1)
+
+# Check DMA1 Channel 1 Circular Mode and Configuration (F7)
 if not re.search(r'DMA_CCR_CIRC', dma_c):
     print("ERROR: dma.c does not enable DMA circular mode (DMA_CCR_CIRC)!", file=sys.stderr)
     sys.exit(1)
 
 if not re.search(r'DMA_CCR_MINC', dma_c):
     print("ERROR: dma.c does not enable memory increment (DMA_CCR_MINC)!", file=sys.stderr)
+    sys.exit(1)
+
+if not re.search(r'DMA1_Channel1->CNDTR\s*=\s*(128|ADC_BUFFER_TOTAL_SIZE)\b', dma_c):
+    print("ERROR: dma.c must configure DMA1_Channel1->CNDTR = 128 (ADC_BUFFER_TOTAL_SIZE)!", file=sys.stderr)
+    sys.exit(1)
+
+if not re.search(r'DMA_CCR_PSIZE_0', dma_c) or not re.search(r'DMA_CCR_MSIZE_0', dma_c):
+    print("ERROR: dma.c must configure 16-bit PSIZE and MSIZE for ADC halfword transfers!", file=sys.stderr)
+    sys.exit(1)
+
+if not re.search(r'DMA_CCR_HTIE', dma_c) or not re.search(r'DMA_CCR_TCIE', dma_c):
+    print("ERROR: dma.c must enable both HTIE and TCIE interrupts!", file=sys.stderr)
     sys.exit(1)
 
 # Check DMA sample pool is persistent static storage and correctly bound
@@ -232,43 +261,103 @@ if not re.search(r'xQueueSendFromISR\s*\(', isr_body):
     print("ERROR: DMA ISR does not call xQueueSendFromISR!", file=sys.stderr)
     sys.exit(1)
 
-# Must initialize xHigherPriorityTaskWoken to pdFALSE / 0
-wake_init = re.findall(r'xHigherPriorityTaskWoken\s*=\s*(pdFALSE|0)\b', isr_body)
-if not wake_init:
-    print("ERROR: DMA ISR does not initialize xHigherPriorityTaskWoken to pdFALSE/0!", file=sys.stderr)
+# F4: Wake flag last write before FromISR send must be pdFALSE / 0
+send_positions = [m.start() for m in re.finditer(r'xQueueSendFromISR\b', isr_body)]
+if not send_positions:
+    print("ERROR: No xQueueSendFromISR call found in DMA ISR!", file=sys.stderr)
     sys.exit(1)
+for pos in send_positions:
+    prefix = isr_body[:pos]
+    assigns = list(re.finditer(r'xHigherPriorityTaskWoken\s*=\s*([^;]+);', prefix))
+    if assigns:
+        last_val = assigns[-1].group(1).strip()
+        if last_val not in ["pdFALSE", "0"]:
+            print(f"ERROR: xHigherPriorityTaskWoken last set to '{last_val}' before xQueueSendFromISR (must be pdFALSE/0)!", file=sys.stderr)
+            sys.exit(1)
 
 # Must call portYIELD_FROM_ISR
 if not re.search(r'portYIELD_FROM_ISR\s*\(\s*xHigherPriorityTaskWoken\s*\)', isr_body):
     print("ERROR: DMA ISR does not call portYIELD_FROM_ISR(xHigherPriorityTaskWoken)!", file=sys.stderr)
     sys.exit(1)
 
-# Must emit both HT (buffer 0) and TC (buffer 1) tokens
-if not re.search(r'msg\.(buffer_)?index\s*=\s*0\b', isr_body) or not re.search(r'msg\.(buffer_)?index\s*=\s*1\b', isr_body):
-    print("ERROR: DMA ISR does not emit both buffer index 0 (HT) and 1 (TC) tokens!", file=sys.stderr)
+# F6: HTIF1 and TCIF1 branch bindings
+ht_match = re.search(r'if\s*\(\s*isr\s*&\s*DMA_ISR_HTIF1\s*\)\s*\{(.*?)\n\s*\}', isr_body, re.S)
+if not ht_match:
+    print("ERROR: DMA1 ISR missing HTIF1 check!", file=sys.stderr)
+    sys.exit(1)
+ht_body = ht_match.group(1)
+if not re.search(r'DMA_IFCR_CHTIF1', ht_body):
+    print("ERROR: HTIF1 branch does not clear flag with DMA_IFCR_CHTIF1!", file=sys.stderr)
+    sys.exit(1)
+if re.search(r'DMA_IFCR_CTCIF1', ht_body):
+    print("ERROR: HTIF1 branch illegally references DMA_IFCR_CTCIF1!", file=sys.stderr)
+    sys.exit(1)
+if not re.search(r'msg\.(buffer_)?index\s*=\s*0\b', ht_body):
+    print("ERROR: HTIF1 branch must emit buffer index 0!", file=sys.stderr)
+    sys.exit(1)
+if re.search(r'msg\.(buffer_)?index\s*=\s*1\b', ht_body):
+    print("ERROR: HTIF1 branch illegally emits buffer index 1!", file=sys.stderr)
     sys.exit(1)
 
-# Must check xQueueSendFromISR return value and handle queue drops
-if not re.search(r'xResult\s*==\s*pdPASS|xQueueSendFromISR\s*\(.*?\)\s*==\s*pdPASS|!=\s*pdPASS|g_acq_drops\+\+', isr_body):
-    print("ERROR: DMA ISR ignores queue-full / failure return code from xQueueSendFromISR!", file=sys.stderr)
+tc_match = re.search(r'if\s*\(\s*isr\s*&\s*DMA_ISR_TCIF1\s*\)\s*\{(.*?)\n\s*\}', isr_body, re.S)
+if not tc_match:
+    print("ERROR: DMA1 ISR missing TCIF1 check!", file=sys.stderr)
+    sys.exit(1)
+tc_body = tc_match.group(1)
+if not re.search(r'DMA_IFCR_CTCIF1', tc_body):
+    print("ERROR: TCIF1 branch does not clear flag with DMA_IFCR_CTCIF1!", file=sys.stderr)
+    sys.exit(1)
+if re.search(r'DMA_IFCR_CHTIF1', tc_body):
+    print("ERROR: TCIF1 branch illegally references DMA_IFCR_CHTIF1!", file=sys.stderr)
+    sys.exit(1)
+if not re.search(r'msg\.(buffer_)?index\s*=\s*1\b', tc_body):
+    print("ERROR: TCIF1 branch must emit buffer index 1!", file=sys.stderr)
+    sys.exit(1)
+if re.search(r'msg\.(buffer_)?index\s*=\s*0\b', tc_body):
+    print("ERROR: TCIF1 branch illegally emits buffer index 0!", file=sys.stderr)
     sys.exit(1)
 
-# Check Task Pipeline and Priorities
-# Process=3, Comm=2, Compute=2, Health=1
-if not re.search(r'xTaskCreate\s*\(.*?prvTaskProcess.*?TASK_PROCESS_PRIORITY', node_c, re.S) and not re.search(r'xTaskCreate\s*\(.*?prvTaskProcess.*?,\s*3\s*,', node_c, re.S):
-    print("ERROR: Task_Process must be created with priority 3!", file=sys.stderr)
+# F5: Must check xQueueSendFromISR return value and bind g_acq_drops++ strictly to failure path
+drops_in_success = re.search(r'xResult\s*==\s*pdPASS\s*\)\s*\{[^}]*g_acq_drops\+\+', isr_body, re.S)
+if drops_in_success:
+    print("ERROR: g_acq_drops++ illegally present in xResult == pdPASS success branch!", file=sys.stderr)
+    sys.exit(1)
+drops_in_fail = re.search(r'(else\s*\{[^}]*g_acq_drops\+\+|!=\s*pdPASS\s*\)\s*\{[^}]*g_acq_drops\+\+)', isr_body, re.S)
+if not drops_in_fail:
+    print("ERROR: g_acq_drops++ must be incremented on xQueueSendFromISR failure!", file=sys.stderr)
     sys.exit(1)
 
-if not re.search(r'xTaskCreate\s*\(.*?prvTaskComm.*?TASK_COMM_PRIORITY', node_c, re.S) and not re.search(r'xTaskCreate\s*\(.*?prvTaskComm.*?,\s*2\s*,', node_c, re.S):
-    print("ERROR: Task_Comm must be created with priority 2!", file=sys.stderr)
+# F1: Check Task Priority Macros and exact xTaskCreate bindings
+# Check macro definitions in node_h
+m_prio = re.search(r'#define\s+TASK_PROCESS_PRIORITY\s+([0-9]+)', node_h)
+if not m_prio or int(m_prio.group(1)) != 3:
+    print("ERROR: TASK_PROCESS_PRIORITY must be defined as 3 in node_app.h!", file=sys.stderr)
+    sys.exit(1)
+m_prio = re.search(r'#define\s+TASK_COMM_PRIORITY\s+([0-9]+)', node_h)
+if not m_prio or int(m_prio.group(1)) != 2:
+    print("ERROR: TASK_COMM_PRIORITY must be defined as 2 in node_app.h!", file=sys.stderr)
+    sys.exit(1)
+m_prio = re.search(r'#define\s+TASK_COMPUTE_PRIORITY\s+([0-9]+)', node_h)
+if not m_prio or int(m_prio.group(1)) != 2:
+    print("ERROR: TASK_COMPUTE_PRIORITY must be defined as 2 in node_app.h!", file=sys.stderr)
+    sys.exit(1)
+m_prio = re.search(r'#define\s+TASK_HEALTH_PRIORITY\s+([0-9]+)', node_h)
+if not m_prio or int(m_prio.group(1)) != 1:
+    print("ERROR: TASK_HEALTH_PRIORITY must be defined as 1 in node_app.h!", file=sys.stderr)
     sys.exit(1)
 
-if not re.search(r'xTaskCreate\s*\(.*?prvTaskCompute.*?TASK_COMPUTE_PRIORITY', node_c, re.S) and not re.search(r'xTaskCreate\s*\(.*?prvTaskCompute.*?,\s*2\s*,', node_c, re.S):
-    print("ERROR: Task_Compute must be created with priority 2!", file=sys.stderr)
+# Check xTaskCreate calls binding task functions, priority macros, and handles:
+if not re.search(r'xTaskCreate\s*\(\s*prvTaskProcess\s*,[^,]+,[^,]+,[^,]+,\s*(TASK_PROCESS_PRIORITY|3)\s*,\s*&g_task_process_handle\s*\)', node_c):
+    print("ERROR: xTaskCreate for prvTaskProcess must bind TASK_PROCESS_PRIORITY and &g_task_process_handle!", file=sys.stderr)
     sys.exit(1)
-
-if not re.search(r'xTaskCreate\s*\(.*?prvTaskHealth.*?TASK_HEALTH_PRIORITY', node_c, re.S) and not re.search(r'xTaskCreate\s*\(.*?prvTaskHealth.*?,\s*1\s*,', node_c, re.S):
-    print("ERROR: Task_Health must be created with priority 1!", file=sys.stderr)
+if not re.search(r'xTaskCreate\s*\(\s*prvTaskComm\s*,[^,]+,[^,]+,[^,]+,\s*(TASK_COMM_PRIORITY|2)\s*,\s*&g_task_comm_handle\s*\)', node_c):
+    print("ERROR: xTaskCreate for prvTaskComm must bind TASK_COMM_PRIORITY and &g_task_comm_handle!", file=sys.stderr)
+    sys.exit(1)
+if not re.search(r'xTaskCreate\s*\(\s*prvTaskCompute\s*,[^,]+,[^,]+,[^,]+,\s*(TASK_COMPUTE_PRIORITY|2)\s*,\s*&g_task_compute_handle\s*\)', node_c):
+    print("ERROR: xTaskCreate for prvTaskCompute must bind TASK_COMPUTE_PRIORITY and &g_task_compute_handle!", file=sys.stderr)
+    sys.exit(1)
+if not re.search(r'xTaskCreate\s*\(\s*prvTaskHealth\s*,[^,]+,[^,]+,[^,]+,\s*(TASK_HEALTH_PRIORITY|1)\s*,\s*&g_task_health_handle\s*\)', node_c):
+    print("ERROR: xTaskCreate for prvTaskHealth must bind TASK_HEALTH_PRIORITY and &g_task_health_handle!", file=sys.stderr)
     sys.exit(1)
 
 # Process task must block on xAcqQueue with portMAX_DELAY
@@ -282,7 +371,14 @@ if not re.search(r'xQueueReceive\s*\(\s*xAcqQueue\s*,.*?,\s*portMAX_DELAY\s*\)',
     print("ERROR: Task_Process does not block on xAcqQueue with portMAX_DELAY!", file=sys.stderr)
     sys.exit(1)
 
-# Normal acquisition fast path must NOT take an application mutex
+# F2: Normal acquisition fast path must NOT take an application mutex
+acq_recv_match = re.search(r'if\s*\(\s*xQueueReceive\s*\(\s*xAcqQueue.*?\)\s*==\s*pdPASS\s*\)\s*\{(.*?)\n\s*\}', proc_body, re.S)
+if acq_recv_match:
+    acq_body = acq_recv_match.group(1)
+    if re.search(r'xSemaphoreTake\b|xMutexTake\b', acq_body):
+        print("ERROR: Mutex / Semaphore take illegally placed inside sample processing loop in Task_Process!", file=sys.stderr)
+        sys.exit(1)
+
 for m in re.finditer(r'xSemaphoreTake\s*\(\s*([^,]+)\s*,', proc_body):
     sem_arg = m.group(1).strip()
     if sem_arg != "g_diag_resource":
@@ -294,15 +390,60 @@ if not re.search(r'USART1->SR', usart_c) or not re.search(r'USART1->DR', usart_c
     print("ERROR: usart.c does not access direct hardware registers USART1->SR and USART1->DR!", file=sys.stderr)
     sys.exit(1)
 
-# Health task must NOT refresh IWDG unconditionally
+# F8: USART BRR calculation and dynamic clock usage
+if re.search(r'72000000', usart_c):
+    print("ERROR: usart.c must not hardcode 72000000; must use dynamic pclk2_hz parameter!", file=sys.stderr)
+    sys.exit(1)
+if not re.search(r'USART1->BRR\s*=\s*\(?\s*pclk2_hz\s*\+\s*\(?\s*(baud\s*/\s*2U?|57600U?)\s*\)?\s*\)?\s*/\s*(baud|115200U?)', usart_c):
+    print("ERROR: usart.c does not implement rounded BRR calculation (pclk2_hz + baud/2) / baud!", file=sys.stderr)
+    sys.exit(1)
+
+# F8: main.c clock configuration, HSE fallback to HSI, and dynamic frequencies
+if not re.search(r'clock_init\s*\(\s*CLOCK_PROFILE_72MHZ_HSE\s*\)', main_c) or \
+   not re.search(r'clock_init\s*\(\s*CLOCK_PROFILE_64MHZ_HSI\s*\)', main_c):
+    print("ERROR: main.c must attempt CLOCK_PROFILE_72MHZ_HSE and fall back to CLOCK_PROFILE_64MHZ_HSI!", file=sys.stderr)
+    sys.exit(1)
+
+if not re.search(r'clock_get_frequencies\s*\(\s*&freqs\s*\)', main_c):
+    print("ERROR: main.c must retrieve dynamic peripheral bus frequencies via clock_get_frequencies(&freqs)!", file=sys.stderr)
+    sys.exit(1)
+
+if not re.search(r'usart1_init\s*\(\s*freqs\.pclk2_hz\s*\)', main_c) or \
+   not re.search(r'adc1_init\s*\(\s*freqs\.pclk2_hz\s*\)', main_c) or \
+   not re.search(r'tim3_trgo_init_1khz\s*\(\s*freqs\.timclk1_hz\s*\)', main_c):
+    print("ERROR: main.c must pass dynamic frequencies freqs.pclk2_hz and freqs.timclk1_hz to peripheral drivers!", file=sys.stderr)
+    sys.exit(1)
+
+# F8 / F10: main.c IWDG prescaler /32 and reload <= 1500 (<= 1200 ms timeout), and checked return
+if not re.search(r'iwdg_init\s*\(\s*(IWDG_PRESCALER_32|0x03|3)\s*,\s*([0-9]+)\s*\)', main_c):
+    print("ERROR: main.c must configure IWDG with prescaler /32!", file=sys.stderr)
+    sys.exit(1)
+iwdg_m = re.search(r'iwdg_init\s*\(\s*(?:IWDG_PRESCALER_32|0x03|3)\s*,\s*([0-9]+)\s*\)', main_c)
+if iwdg_m and int(iwdg_m.group(1)) > 1500:
+    print("ERROR: IWDG reload value exceeds 1200 ms design target timeout!", file=sys.stderr)
+    sys.exit(1)
+if not re.search(r'if\s*\(\s*!\s*iwdg_init\b', main_c):
+    print("ERROR: main.c does not check return value of iwdg_init()!", file=sys.stderr)
+    sys.exit(1)
+
+# F3: Health task must gate IWDG refresh behind progress_ok && stack_ok && heap_ok
 health_task = re.search(r'void\s+prvTaskHealth\s*\(\s*void\s*\*pvParameters\s*\)\s*\{(.*?)\n\}', node_c, re.S)
 if not health_task:
     print("ERROR: prvTaskHealth not found in node_app.c!", file=sys.stderr)
     sys.exit(1)
 health_body = health_task.group(1)
 
-if not re.search(r'if\s*\(.*?progress_ok.*?iwdg_refresh', health_body, re.S):
-    print("ERROR: Health task refreshes IWDG unconditionally without checking acquisition progress!", file=sys.stderr)
+iwdg_gate = re.search(r'if\s*\((.*?)\)\s*\{[^{}]*iwdg_refresh\s*\(\s*\);', health_body, re.S)
+if not iwdg_gate:
+    print("ERROR: Health task does not guard iwdg_refresh inside an if condition!", file=sys.stderr)
+    sys.exit(1)
+gate_cond = iwdg_gate.group(1)
+if not (re.search(r'\bprogress_ok\b', gate_cond) and re.search(r'\bstack_ok\b', gate_cond) and re.search(r'\bheap_ok\b', gate_cond)):
+    print("ERROR: Health task must gate iwdg_refresh on all three audits: progress_ok && stack_ok && heap_ok!", file=sys.stderr)
+    sys.exit(1)
+
+if not re.search(r'g_steady_free_heap', health_body) or not re.search(r'g_steady_min_ever_heap', health_body):
+    print("ERROR: Health task must check steady-state heap baseline g_steady_free_heap and g_steady_min_ever_heap!", file=sys.stderr)
     sys.exit(1)
 
 # Steady-state memory: no dynamic allocation / creation calls outside node_app_init()
@@ -335,6 +476,14 @@ if high_pos == -1 or med_pos == -1 or high_pos > med_pos:
     print("ERROR: Diagnostic High notification/block opportunity must precede Medium release!", file=sys.stderr)
     sys.exit(1)
 
+# Deterministic High abort: xTaskAbortDelay called and asserted pdPASS
+if not re.search(r'xTaskAbortDelay\s*\(\s*g_task_process_handle\s*\)', diag_body):
+    print("ERROR: Diagnostic comparison must call xTaskAbortDelay(g_task_process_handle)!", file=sys.stderr)
+    sys.exit(1)
+if not re.search(r'configASSERT\s*\(\s*(xRes\s*==\s*pdPASS|xTaskAbortDelay\s*\(\s*g_task_process_handle\s*\)\s*==\s*pdPASS)\s*\)', diag_body):
+    print("ERROR: Diagnostic comparison must assert that xTaskAbortDelay returns pdPASS!", file=sys.stderr)
+    sys.exit(1)
+
 # Diagnostic Low workload must strictly NOT contain vTaskDelay
 low_workload = re.search(r'void\s+(?:__attribute__\(\(.*?\)\)\s+)?inversion_execute_low_workload\s*\(\s*void\s*\)\s*\{(.*?)\n\}', node_c, re.S)
 if not low_workload:
@@ -362,6 +511,23 @@ for var_name in ["g_diag_high_wait_cycles_run_a", "g_diag_high_wait_cycles_run_b
     if last_val != "duration_cycles":
         print(f"ERROR: {var_name} assignment provenance violated! Last assignment was '{last_val}', expected 'duration_cycles'!", file=sys.stderr)
         sys.exit(1)
+
+# F9: Source Pin Metadata Validation in SOURCE_LEDGER.md
+ledger_path = os.path.join(work_dir, "SOURCE_LEDGER.md")
+if not os.path.exists(ledger_path):
+    ledger_path = os.path.join(os.path.dirname(work_dir), "SOURCE_LEDGER.md")
+if os.path.exists(ledger_path):
+    ledger_txt = open(ledger_path, "r", encoding="utf-8", errors="ignore").read()
+    if not re.search(r'9b777ae5', ledger_txt):
+        print("ERROR: SOURCE_LEDGER.md missing FreeRTOS kernel pin commit 9b777ae5!", file=sys.stderr)
+        sys.exit(1)
+    if not re.search(r'2b7495b8', ledger_txt):
+        print("ERROR: SOURCE_LEDGER.md missing CMSIS_5 pin commit 2b7495b8!", file=sys.stderr)
+        sys.exit(1)
+    if not re.search(r'8a76309e', ledger_txt):
+        print("ERROR: SOURCE_LEDGER.md missing cmsis-device-f1 pin commit 8a76309e!", file=sys.stderr)
+        sys.exit(1)
+
 
 PYEOF
 

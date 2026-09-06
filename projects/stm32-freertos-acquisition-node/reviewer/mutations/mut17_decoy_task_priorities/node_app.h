@@ -11,7 +11,7 @@
 #include "dma.h"
 
 /* Canonical task priority hierarchy */
-#define TASK_PROCESS_PRIORITY   3
+#define TASK_PROCESS_PRIORITY   2
 #define TASK_COMM_PRIORITY      2
 #define TASK_COMPUTE_PRIORITY   2
 #define TASK_HEALTH_PRIORITY    1

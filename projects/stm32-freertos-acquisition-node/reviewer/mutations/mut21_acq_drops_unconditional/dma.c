@@ -103,6 +103,7 @@ void DMA1_Channel1_IRQHandler(void)
         if (xAcqQueue != NULL) {
             BaseType_t xResult = xQueueSendFromISR(xAcqQueue, &msg, &xHigherPriorityTaskWoken);
             if (xResult == pdPASS) {
+                g_acq_drops++;
                 g_dma_ht_count++;
                 g_acq_transfers++;
             } else {

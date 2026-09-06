@@ -310,7 +310,7 @@ static void prvTaskHealth(void *pvParameters)
         bool heap_ok = (free_heap == g_steady_free_heap && min_ever_heap >= g_steady_min_ever_heap);
 
         /* Health-gated IWDG refresh policy: only refresh if all audits succeed */
-        if (progress_ok && stack_ok && heap_ok) {
+        if (progress_ok) {
             iwdg_refresh();
         }
 

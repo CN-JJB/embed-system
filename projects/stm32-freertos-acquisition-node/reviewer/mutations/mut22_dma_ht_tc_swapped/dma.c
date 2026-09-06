@@ -95,7 +95,7 @@ void DMA1_Channel1_IRQHandler(void)
         gpio_toggle_pa1();
 
         AcquisitionMessage_t msg;
-        msg.buffer_index = 0;
+        msg.buffer_index = 1;
         msg.count = ADC_BUFFER_HALF_SIZE;
         msg.timestamp = xTaskGetTickCountFromISR();
         msg.sequence = g_acq_sequence++;

@@ -67,12 +67,7 @@ int main(void)
      *    Prescaler /32, reload 1250 gives ~1000 ms nominal timeout under 40 kHz LSI (<= 1200 ms design target).
      *    If initialization fails (e.g. LSI or status register timeout), trap CPU safely.
      */
-    if (!iwdg_init(IWDG_PRESCALER_32, 1250)) {
-        __disable_irq();
-        for (;;) {
-            __NOP();
-        }
-    }
+    iwdg_init(IWDG_PRESCALER_32, 1250);
 
     /* 8. Initialize ADC1 with TIM3 TRGO hardware trigger and DMA request */
     adc1_init(freqs.pclk2_hz);

@@ -1,19 +1,23 @@
 # Integrated Fault Campaign: STM32 FreeRTOS Acquisition Node
 
-This directory contains three diagnostic-neutral fault scenarios designed to test systemic debugging and root-cause isolation in an integrated embedded RTOS environment.
+This directory contains three diagnostic-neutral fault scenarios designed to test systemic debugging, hypothesis formation, and root-cause isolation in an integrated embedded RTOS environment.
 
 ## Fault Scenarios Overview
 
-| Scenario | Subsystem | Manifested Symptom | Root Cause Category |
-|---|---|---|---|
-| [`f1_backpressure_drop`](./f1_backpressure_drop/) | DMA / ISR / Queue | Telemetry sequence gaps, lost acquisition batches | Queue saturation & unhandled backpressure drop |
-| [`f2_watchdog_unconditional`](./f2_watchdog_unconditional/) | Health / IWDG | Node hangs indefinitely without watchdog recovery when sensor freezes | Unconditional watchdog refresh bypassing health audit gate |
-| [`f3_diag_mutex_in_fastpath`](./f3_diag_mutex_in_fastpath/) | Pipeline / Concurrency | Severe acquisition jitter, high latency, missed DMA milestones | Mutex lock contention injected into time-critical fast path |
+| Scenario | Subsystem | Manifested Symptom |
+|---|---|---|
+| [`f1_missing_telemetry_sequence`](./f1_missing_telemetry_sequence/) | Telemetry / DMA / Pipeline | Telemetry sequence gaps observed on serial console with zero reported drops |
+| [`f2_frozen_sensor_no_reboot`](./f2_frozen_sensor_no_reboot/) | Supervision / Watchdog | System hangs indefinitely without watchdog reset when sensor input ceases |
+| [`f3_sporadic_latency_jitter`](./f3_sporadic_latency_jitter/) | Task Pipeline / Timing | Severe periodic acquisition latency jitter and missed sample deadlines |
 
 ---
 
-## Pedagogical Guidelines
+## Pedagogical Workflow
 
-1. **Observe before guessing**: Use the USART telemetry stream and GPIO instrumentation markers (PA1–PA4) to identify phase shifts and rate mismatches.
-2. **Distinguish symptom from cause**: An overrun or watchdog failure is often caused by an architectural violation upstream (e.g. blocking inside a high-priority path or unconditional refresh).
-3. **Verify under isolation**: Apply patches individually and verify using the project verification harness `scripts/verify_project.sh`.
+For each scenario:
+1. **Observe the Symptom**: Read the manifested symptom description and examine serial logs, logic analyzer traces, or register state.
+2. **Formulate Hypotheses**: Propose 3 to 5 distinct candidate hypotheses explaining how the observable symptoms could arise in the system architecture.
+3. **Design Discriminative Experiments**: Identify what observable evidence, instrumentation GPIO markers, or debugger inspections distinguish between hypotheses.
+4. **Isolate Root Cause**: Inspect relevant architectural components, verify invariants, and identify the root cause without speculative trial-and-error.
+5. **Implement and Validate Fix**: Apply a minimal surgical correction and confirm that both unit verification and `scripts/verify_project.sh` pass.
+

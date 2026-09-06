@@ -24,13 +24,14 @@ arm-none-eabi-size build/firmware.elf
 *Actual Host Build Output (GCC 13.2.1)*:
 ```text
    text    data     bss     dec     hex filename
-  12160       8   10880   23048    5a08 build/firmware.elf
+  12576       8   10888   23472    5bb0 build/firmware.elf
 ```
 *Memory Budget Breakdown*:
-- **Total Flash (text + data)**: 12,168 bytes ($\approx 18.6\%$ of 64 KB capacity, $\ge 52$ KB headroom).
-- **Total SRAM (data + bss)**: 10,888 bytes ($\approx 53.2\%$ of 20 KB capacity, $\ge 9.5$ KB headroom).
+- **Total Flash (text + data)**: 12,584 bytes ($\approx 19.2\%$ of 64 KB capacity, $\ge 51$ KB headroom).
+- **Total SRAM (data + bss)**: 10,896 bytes ($\approx 53.2\%$ of 20 KB capacity, $\ge 9.5$ KB headroom).
 - **FreeRTOS Heap (`ucHeap` in `.bss`)**: 9,216 bytes (9 KB).
 - **Acquisition DMA Double Pool**: 256 bytes (`2 * 64 * 2` bytes, halfword aligned).
+
 
 ### Map File Inspection
 ```bash
@@ -184,8 +185,9 @@ $6 = false     <-- EXPECTED / ILLUSTRATIVE (Normal power-on reset)
 | Memory bounds (Flash / SRAM) | **VERIFIED** | Linker map and `size` tool confirmation | Target runtime memory behavior |
 | Peripheral register disassembly | **VERIFIED** | `objdump` confirmation of TIM3, ADC1, DMA1, USART1, IWDG, DWT | Physical hardware timing or conversions |
 | Positive reference validation | **VERIFIED** | `scripts/verify_project.sh` passed on reference bundle | Target runtime correctness |
-| Negative mutation rejection | **VERIFIED** | All 16 defective mutations rejected by validator | Completeness of future Final Gate |
+| Negative mutation rejection | **VERIFIED** | All 28 defective mutations rejected by validator | Completeness of future Final Gate |
 | Target flash and run | **UNVERIFIED** | No bench hardware physically connected | Real electrical operation |
+
 | GDB register inspection | **UNVERIFIED** | Illustrative commands; no live probe attached | Measured register contents |
 | Telemetry serial output | **UNVERIFIED** | Illustrative protocol; no UART logic capture | Measured baud rate or jitter |
 | Physical oscilloscope waveforms | **UNVERIFIED** | Illustrative timing diagrams; no oscilloscope | Hardware rise times or propagation delays |

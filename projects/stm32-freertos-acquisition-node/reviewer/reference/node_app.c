@@ -8,6 +8,7 @@
  */
 
 #include "node_app.h"
+#include "timer.h"
 #include "gpio.h"
 #include "usart.h"
 #include "iwdg.h"
@@ -36,8 +37,11 @@ volatile uint32_t g_diag_high_wait_cycles_run_b = 0;
 volatile uint32_t g_low_workload_iterations = 0;
 volatile uint32_t g_log_drops = 0;
 volatile uint8_t  g_diag_run_state = 0;
+volatile size_t   g_steady_free_heap = 0;
+volatile size_t   g_steady_min_ever_heap = 0;
 
 static volatile uint8_t s_current_diag_run = 0; /* 0 = Run A, 1 = Run B */
+
 
 uint32_t isqrt_u32(uint32_t val)
 {
@@ -200,6 +204,8 @@ static void prvTaskCompute(void *pvParameters)
 
 static void prvRunDiagnosticComparison(void)
 {
+    BaseType_t xRes;
+
     /* -------------------------------------------------------------
      * RUN A: Binary Semaphore Control (No priority inheritance)
      * ------------------------------------------------------------- */
@@ -210,9 +216,10 @@ static void prvRunDiagnosticComparison(void)
     xSemaphoreTake(g_diag_resource, portMAX_DELAY);
     gpio_set_pa4();
 
-    /* Step 2: Low releases High via direct task notification */
+    /* Step 2: Low releases High via direct task notification and delay abort */
     xTaskNotifyGive(g_task_process_handle);
-    xTaskAbortDelay(g_task_process_handle);
+    xRes = xTaskAbortDelay(g_task_process_handle);
+    configASSERT(xRes == pdPASS);
 
     /* Step 3: High awakens, blocks on lock. Execution returns to Low.
      * Step 4: Only after High has had deterministic block opportunity, Low releases Medium */
@@ -239,9 +246,10 @@ static void prvRunDiagnosticComparison(void)
     xSemaphoreTake(g_diag_resource, portMAX_DELAY);
     gpio_set_pa4();
 
-    /* Step 2: Low releases High via direct task notification */
+    /* Step 2: Low releases High via direct task notification and delay abort */
     xTaskNotifyGive(g_task_process_handle);
-    xTaskAbortDelay(g_task_process_handle);
+    xRes = xTaskAbortDelay(g_task_process_handle);
+    configASSERT(xRes == pdPASS);
 
     /* Step 3: High awakens, blocks on mutex. Low inherits Priority 3!
      * Step 4: Low releases Medium */
@@ -270,6 +278,13 @@ static void prvTaskHealth(void *pvParameters)
     if (!s_diag_completed) {
         prvRunDiagnosticComparison();
         s_diag_completed = true;
+
+        /* Establish post-scheduler steady-state heap baseline */
+        g_steady_free_heap = xPortGetFreeHeapSize();
+        g_steady_min_ever_heap = xPortGetMinimumEverFreeHeapSize();
+
+        /* Start TIM3 hardware trigger to begin regular acquisition */
+        tim3_trgo_start();
     }
 
     for (;;) {
@@ -289,10 +304,10 @@ static void prvTaskHealth(void *pvParameters)
         bool stack_ok = (wm_process >= 128 && wm_comm >= 128 &&
                          wm_compute >= 128 && wm_health >= 128);
 
-        /* Audit 3: Heap health observation */
+        /* Audit 3: Steady-state heap health check */
         size_t free_heap = xPortGetFreeHeapSize();
         size_t min_ever_heap = xPortGetMinimumEverFreeHeapSize();
-        bool heap_ok = (free_heap > 1024 && min_ever_heap > 512);
+        bool heap_ok = (free_heap == g_steady_free_heap && min_ever_heap >= g_steady_min_ever_heap);
 
         /* Health-gated IWDG refresh policy: only refresh if all audits succeed */
         if (progress_ok && stack_ok && heap_ok) {

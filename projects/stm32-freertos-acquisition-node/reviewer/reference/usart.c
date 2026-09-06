@@ -26,19 +26,16 @@ void usart1_init(uint32_t pclk2_hz)
 
     /*
      * 3. Configure Baud Rate:
-     *    For 115200 baud under 72 MHz APB2:
-     *      DIV = 72,000,000 / (16 * 115200) = 39.0625
-     *      Mantissa = 39 (0x27)
-     *      Fraction = round(0.0625 * 16) = 1 (0x1)
-     *      BRR = (39 << 4) | 1 = 0x0271
+     *    USARTDIV is represented in BRR with 4 fractional bits (i.e. USARTDIV * 16).
+     *    Since USARTDIV = pclk2_hz / (16 * baud), USARTDIV * 16 = pclk2_hz / baud.
+     *    With rounding to nearest 1/16th:
+     *      BRR = (pclk2_hz + (baud / 2)) / baud
+     *    Under 72 MHz: BRR = (72000000 + 57600) / 115200 = 625 = 0x0271
+     *    Under 64 MHz: BRR = (64000000 + 57600) / 115200 = 556 = 0x022C
      */
-    uint32_t mantissa = pclk2_hz / (16U * 115200U);
-    uint32_t fraction = ((pclk2_hz % (16U * 115200U)) * 16U + (115200U / 2U)) / 115200U;
-    if (fraction >= 16U) {
-        mantissa += 1U;
-        fraction = 0U;
-    }
-    USART1->BRR = (mantissa << 4) | (fraction & 0x0FU);
+    uint32_t baud = 115200U;
+    USART1->BRR = (pclk2_hz + (baud / 2U)) / baud;
+
 
     /* 4. Enable Transmitter and USART peripheral (8 data bits, no parity, 1 stop bit) */
     USART1->CR1 = USART_CR1_UE | USART_CR1_TE;
