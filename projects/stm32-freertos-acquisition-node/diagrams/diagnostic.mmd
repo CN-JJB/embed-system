@@ -1,0 +1,35 @@
+sequenceDiagram
+    autonumber
+    participant H as High: Task_Process (Prio 3)
+    participant M as Medium: Task_Compute (Prio 2)
+    participant L as Low: Task_Health (Prio 1)
+    participant S as Shared Resource (g_diag_resource)
+
+    Note over H,S: RUN A: Binary Semaphore Control (No Priority Inheritance)
+    L->>S: xSemaphoreTake(g_diag_sem) [Low acquires lock]
+    L->>H: xTaskNotifyGive(High) & xTaskAbortDelay
+    Note over H: High awakens, starts DWT sample
+    H->>S: xSemaphoreTake(g_diag_sem) -> BLOCKS
+    Note over L: Context returns to Low
+    L->>M: xTaskNotifyGive(Medium) [Deterministic Block Opportunity Passed]
+    Note over M: Medium awakens (Prio 2 > 1) -> PREEMPTS Low!
+    M-->>M: Executes ~20 ms CPU Interference Workload
+    Note over L: Medium finishes; Low resumes execution
+    L-->>L: Executes ~5 ms CPU Critical Workload
+    L->>S: xSemaphoreGive(g_diag_sem) [Low releases lock]
+    Note over H: High unblocks! DWT delta recorded (~25 ms)
+    H->>S: xSemaphoreGive(g_diag_sem)
+
+    Note over H,S: RUN B: Mutex Comparison (Priority Inheritance Active)
+    L->>S: xSemaphoreTake(g_diag_mutex) [Low acquires mutex]
+    L->>H: xTaskNotifyGive(High) & xTaskAbortDelay
+    Note over H: High awakens, starts DWT sample
+    H->>S: xSemaphoreTake(g_diag_mutex) -> BLOCKS
+    Note over L: Low inherits Priority 3 from High!
+    L->>M: xTaskNotifyGive(Medium)
+    Note over M: Medium awakens at Prio 2 (Cannot preempt inherited Prio 3 Low!)
+    L-->>L: Executes ~5 ms CPU Critical Workload Immediately
+    L->>S: xSemaphoreGive(g_diag_mutex) [Low disinherits to Prio 1]
+    Note over H: High unblocks! DWT delta recorded (~5 ms)
+    H->>S: xSemaphoreGive(g_diag_mutex)
+    Note over M: Medium finally runs interference workload after High yields

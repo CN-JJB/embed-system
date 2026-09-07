@@ -1,0 +1,82 @@
+/**
+ * =============================================================================
+ * Direct Register USART1 Driver for STM32F103C8T6
+ * =============================================================================
+ * Course: Embedded Systems Foundations - Phase 2 MCU & FreeRTOS
+ * Project: P2-M07 STM32 FreeRTOS Acquisition Node Integration Project
+ * =============================================================================
+ */
+
+#include "usart.h"
+#include "stm32f103xb.h"
+
+void usart1_init(uint32_t pclk2_hz)
+{
+    /* 1. Enable APB2 clock gates for USART1 and GPIOA */
+    RCC->APB2ENR |= RCC_APB2ENR_USART1EN | RCC_APB2ENR_IOPAEN;
+
+    /*
+     * 2. Configure GPIO Pins for USART1:
+     *    - PA9:  TX, Alternate function output Push-Pull, 50 MHz (MODE9 = 11, CNF9 = 10)
+     *    - PA10: RX, Input floating (MODE10 = 00, CNF10 = 01)
+     */
+    GPIOA->CRH &= ~(GPIO_CRH_MODE9 | GPIO_CRH_CNF9 | GPIO_CRH_MODE10 | GPIO_CRH_CNF10);
+    GPIOA->CRH |= (GPIO_CRH_MODE9_0 | GPIO_CRH_MODE9_1 | GPIO_CRH_CNF9_1);
+    GPIOA->CRH |= GPIO_CRH_CNF10_0;
+
+    /*
+     * 3. Configure Baud Rate:
+     *    For 115200 baud under 72 MHz APB2:
+     *      DIV = 72,000,000 / (16 * 115200) = 39.0625
+     *      Mantissa = 39 (0x27)
+     *      Fraction = round(0.0625 * 16) = 1 (0x1)
+     *      BRR = (39 << 4) | 1 = 0x0271
+     */
+    uint32_t mantissa = pclk2_hz / (16U * 115200U);
+    uint32_t fraction = ((pclk2_hz % (16U * 115200U)) * 16U + (115200U / 2U)) / 115200U;
+    if (fraction >= 16U) {
+        mantissa += 1U;
+        fraction = 0U;
+    }
+    USART1->BRR = (mantissa << 4) | (fraction & 0x0FU);
+
+    /* 4. Enable Transmitter and USART peripheral (8 data bits, no parity, 1 stop bit) */
+    USART1->CR1 = USART_CR1_UE | USART_CR1_TE;
+}
+
+void usart1_write_byte(uint8_t ch)
+{
+    /* Wait until transmit data register is empty (TXE status bit set) */
+    /* direct SR register polling omitted */ while (0) {
+        __NOP();
+    }
+    USART1->DR = (ch & 0xFFU);
+}
+
+void usart1_write_str(const char *str)
+{
+    if (!str) return;
+    while (*str) {
+        usart1_write_byte((uint8_t)*str++);
+    }
+}
+
+void usart1_write_u32(uint32_t val)
+{
+    char buf[11];
+    int idx = 0;
+
+    if (val == 0) {
+        usart1_write_byte('0');
+        return;
+    }
+
+    while (val > 0) {
+        buf[idx++] = (char)('0' + (val % 10));
+        val /= 10;
+    }
+
+    while (idx > 0) {
+        usart1_write_byte((uint8_t)buf[--idx]);
+    }
+}
