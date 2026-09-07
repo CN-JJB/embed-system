@@ -22,7 +22,7 @@ However, during execution under real-time event traffic, the system abruptly hal
 ## 2. Deliverables & Investigation Tasks
 
 1. **Context Switch Stack Frame Derivation:**
-   Inspect the pre-recorded GDB trace fixture in `fixtures/pendsv_gdb_trace.txt` (labeled `SEEDED FIXTURE / ASSESSMENT INPUT`).
+   Inspect the pre-recorded GDB trace fixture in `fixtures/pendsv_gdb_trace.txt` (labeled `SCRIPTED / SEEDED ASSESSMENT FIXTURE — NOT LIVE HARDWARE EVIDENCE`).
    - Identify active stack pointers: Which stack pointer (MSP vs PSP) is active in Handler mode? Which in Thread mode?
    - Derive the exact memory addresses and contents of the 8-word hardware-pushed exception frame (`r0-r3, r12, lr, pc, xpsr`) on the PSP using the ARMv7-M Architecture Manual (DDI 0403E.e Section B1.5).
    - Trace the software stack push executed by `xPortPendSVHandler` (`stmdb r0!, {r4-r11}`). Calculate the resulting value of `pxCurrentTCB->pxTopOfStack`.
