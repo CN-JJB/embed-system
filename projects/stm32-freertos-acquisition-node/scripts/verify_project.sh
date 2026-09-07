@@ -231,38 +231,109 @@ init_prefix = init_body[:ug_pos]
 # Must reject MMS=010 (Update mode leak)
 # Must reject MMS=000 (Reset mode leak per RM0008)
 # Must reject decoy/standalone TIM_CR2_MMS_0 tokens that are not part of TIM3->CR2 write!
+# Must perform ordered analysis of MMS writes and reject any subsequent clear or overwrite before UG!
 
-cr2_writes = list(re.finditer(r'TIM3->CR2\s*([|&=]?=)\s*([^;]+);', init_prefix))
+cr2_writes = list(re.finditer(r'TIM3->CR2\s*([|&=^]?=)\s*([^;]+);', init_prefix))
 if not cr2_writes:
     print("ERROR: tim3_trgo_init_1khz does not configure TIM3->CR2 before EGR_UG!", file=sys.stderr)
     sys.exit(1)
 
-mms001_bound = False
-for w in cr2_writes:
-    rhs = w.group(2).strip()
-    if "TIM_CR2_MMS_1" in rhs or "0b010" in rhs or "0x20" in rhs:
-        print("ERROR: tim3_trgo_init_1khz sets MMS=Update before EGR_UG, causing trigger leak to ADC1 before diagnostic!", file=sys.stderr)
-        sys.exit(1)
-    if "TIM_CR2_MMS_0" in rhs or "0b001" in rhs or "0x10" in rhs:
-        if "TIM_CR2_MMS_1" not in rhs and "TIM_CR2_MMS_2" not in rhs and "0x20" not in rhs and "0x40" not in rhs:
-            mms001_bound = True
+# Ordered analysis of MMS field state leading up to TIM_EGR_UG
+# Possible states: '000' (Reset), '001' (Enable), '010' (Update), 'OTHER', 'UNKNOWN'
+effective_mms = "000"
 
-if not mms001_bound:
-    print("ERROR: tim3_trgo_init_1khz does not bind effective MMS=001 (Enable mode) to TIM3->CR2 write before EGR_UG! Decoy tokens rejected.", file=sys.stderr)
+for w in cr2_writes:
+    op = w.group(1)
+    rhs = w.group(2).strip()
+
+    has_mms1 = bool(re.search(r'TIM_CR2_MMS_1\b|0b010\b|(?<![0-9a-zA-Z_])0x20\b', rhs))
+    has_mms2 = bool(re.search(r'TIM_CR2_MMS_2\b|0b100\b|(?<![0-9a-zA-Z_])0x40\b', rhs))
+    has_mms0 = bool(re.search(r'TIM_CR2_MMS_0\b|0b001\b|(?<![0-9a-zA-Z_])0x10\b', rhs))
+    clears_mms = bool(re.search(r'~(?:TIM_CR2_MMS\b|0x70\b|112\b|0b1110000\b)', rhs) or re.search(r'0xffffff8f|0xFFFFFF8F', rhs))
+
+    if op == '&=':
+        if clears_mms:
+            effective_mms = "000"
+        else:
+            # Masking other bits leaves MMS unchanged
+            pass
+    elif op == '|=':
+        if has_mms1:
+            effective_mms = "010"
+        elif has_mms2:
+            effective_mms = "OTHER"
+        elif has_mms0:
+            if effective_mms in ("000", "001"):
+                effective_mms = "001"
+            else:
+                effective_mms = "OTHER"
+        else:
+            # Setting non-MMS bits leaves MMS unchanged
+            pass
+    elif op == '=':
+        if has_mms1:
+            effective_mms = "010"
+        elif has_mms2:
+            effective_mms = "OTHER"
+        elif has_mms0:
+            if not has_mms1 and not has_mms2:
+                effective_mms = "001"
+            else:
+                effective_mms = "OTHER"
+        elif clears_mms:
+            effective_mms = "000"
+        elif rhs in ("0", "0U", "0x0", "0x00"):
+            effective_mms = "000"
+        else:
+            effective_mms = "UNKNOWN"
+    else:
+        effective_mms = "UNKNOWN"
+
+if effective_mms != "001":
+    if effective_mms == "010":
+        print("ERROR: tim3_trgo_init_1khz sets/leaves effective MMS=Update (010) before EGR_UG, causing trigger leak to ADC1 before diagnostic!", file=sys.stderr)
+    elif effective_mms == "000":
+        print("ERROR: tim3_trgo_init_1khz leaves effective MMS=Reset (000) before EGR_UG, which drives TRGO on STM32F1! Effective MMS must resolve to 001 (Enable mode with CEN=0).", file=sys.stderr)
+    else:
+        print(f"ERROR: tim3_trgo_init_1khz leaves invalid/unknown effective MMS ({effective_mms}) before EGR_UG! Effective MMS must resolve to 001 (Enable mode with CEN=0).", file=sys.stderr)
     sys.exit(1)
 
-# Disassembly check of tim3_trgo_init_1khz for MMS=001 (bit 4 set in CR2 write)
+# Disassembly check of tim3_trgo_init_1khz for effective MMS=001 (bit 4 set in final CR2 write before EGR_UG)
 if asm_txt:
     t_match = re.search(r'<tim3_trgo_init_1khz>:(.*?)(?:\n[0-9a-fA-F]+ <|\Z)', asm_txt, re.S)
     if t_match:
         t_asm = t_match.group(1)
-        egr_match = re.search(r'\[r[0-9]+,\s*#(?:20|0x14)\]', t_asm)
+        egr_match = re.search(r'str(?:\.w)?\s+r[0-9]+,\s*\[r[0-9]+,\s*#(?:20|0x14)\]', t_asm)
         egr_pos = egr_match.start() if egr_match else t_asm.find("[r2, #20]")
         if egr_pos == -1:
             egr_pos = len(t_asm)
         t_prefix = t_asm[:egr_pos]
-        if not re.search(r'orr(?:\.w)?\s+r[0-9]+,\s*r[0-9]+,\s*#16\b|mov[w|s]?\s+r[0-9]+,\s*#(?:16|0x10)\b', t_prefix):
-            print("ERROR: Disassembly of tim3_trgo_init_1khz does not show MMS=001 (bit 4 set) written to TIM3->CR2 before EGR_UG!", file=sys.stderr)
+
+        # Find all stores to TIM3->CR2 (offset 4) before EGR store
+        cr2_stores = list(re.finditer(r'str(?:\.w)?\s+(r[0-9]+),\s*\[r[0-9]+,\s*#(?:4|0x04)\]', t_prefix))
+        if not cr2_stores:
+            print("ERROR: Disassembly of tim3_trgo_init_1khz does not show any write to TIM3->CR2 before EGR_UG!", file=sys.stderr)
+            sys.exit(1)
+
+        # The last store to TIM3->CR2 before EGR must store a register with MMS=001 (bit 4 set / 16)
+        last_cr2_store = cr2_stores[-1]
+        stored_reg = last_cr2_store.group(1)
+        prev_pos = cr2_stores[-2].end() if len(cr2_stores) > 1 else 0
+        last_store_segment = t_prefix[prev_pos:last_cr2_store.start()]
+
+        bit4_match = re.search(rf'orr(?:\.w)?\s+{stored_reg},\s*[a-z0-9]+,\s*#16\b|mov[w|s]?\s+{stored_reg},\s*#(?:16|0x10)\b', last_store_segment)
+        has_effective_bit4 = False
+        if bit4_match:
+            post_bit4 = last_store_segment[bit4_match.end():]
+            if re.search(rf'bic(?:\.w)?\s+{stored_reg},\s*.*#(?:112|0x70)\b|mov[w|s]?\s+{stored_reg},\s*#0\b', post_bit4):
+                has_effective_bit4 = False
+            elif re.search(rf'orr(?:\.w)?\s+{stored_reg},\s*.*#(?:32|0x20)\b', post_bit4):
+                has_effective_bit4 = False
+            else:
+                has_effective_bit4 = True
+
+        if not has_effective_bit4:
+            print("ERROR: Disassembly of tim3_trgo_init_1khz does not show effective MMS=001 (bit 4 set) in final TIM3->CR2 write before EGR_UG!", file=sys.stderr)
             sys.exit(1)
 
 if re.search(r'TIM_CR1_CEN', init_body):

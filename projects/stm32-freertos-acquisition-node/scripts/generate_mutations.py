@@ -333,4 +333,13 @@ new_m46 = """    TIM3->CR2 &= ~TIM_CR2_MMS;
 m46_c = src_timer_c.replace(old_m30, new_m46)
 write_file(os.path.join(mut_dir, "mut46_timer_mms001_decoy_token/timer.c"), m46_c)
 
-print("Mutations 17 through 46 generated successfully.")
+# mut47_timer_mms001_then_cleared_before_ug (MMS=001 then cleared to MMS=000 before UG)
+new_m47 = """    TIM3->CR2 = (TIM3->CR2 & ~TIM_CR2_MMS) | TIM_CR2_MMS_0;
+    TIM3->CR2 &= ~TIM_CR2_MMS;
+
+    /* 4. Generate an update event to pre-load PSC and ARR shadow registers */
+    TIM3->EGR = TIM_EGR_UG;"""
+m47_c = src_timer_c.replace(old_m30, new_m47)
+write_file(os.path.join(mut_dir, "mut47_timer_mms001_then_cleared_before_ug/timer.c"), m47_c)
+
+print("Mutations 17 through 47 generated successfully.")
