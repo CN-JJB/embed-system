@@ -34,6 +34,6 @@ t = 0.121 s .. 0.501 s: PA1 LOW, PA2 LOW.
 t = 0.501 s: System reset vector transition observed. RCC->CSR reads 0x24000000.
 
 # ASSESSMENT INPUT NOTE:
-# The recorded reboot at t = 0.501 s represents the timing of this assessment run.
+# The scripted reboot timestamp at t = 0.501 s is supplied assessment input, not a live target observation.
 # Static register calculations establish nominal 500.8 ms, but do not prove physical reset timing,
 # which spans 334 ms to 668 ms due to physical LSI oscillator manufacturing tolerances.
