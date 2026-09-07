@@ -45,36 +45,14 @@ $3 = {
   pcWriteTo = 0x0,
   u = {
     xSemaphore = {
-      xMutexHolder = 0x20000240,
-      uxRecursiveCallCount = 0
-    }
-  },
-  xTasksWaitingToSend = { ... },
-  xTasksWaitingToReceive = {
-    uxNumberOfItems = 1,
-    pxIndex = 0x20000408
-  },
-  uxMessagesWaiting = 0,
-  uxLength = 1,
-  uxItemSize = 0,
-  cRxLock = -1,
-  cTxLock = -1
-}
-
-(gdb) print *(Queue_t *)xTelemetryBufferLock
-$4 = {
-  pcHead = 0x0,
-  pcWriteTo = 0x0,
-  u = {
-    xSemaphore = {
       xMutexHolder = 0x20000300,
       uxRecursiveCallCount = 0
     }
   },
   xTasksWaitingToSend = { ... },
   xTasksWaitingToReceive = {
-    uxNumberOfItems = 1,
-    pxIndex = 0x20000508
+    uxNumberOfItems = 2,
+    pxIndex = 0x20000408
   },
   uxMessagesWaiting = 0,
   uxLength = 1,

@@ -1,10 +1,15 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # verify_reviewer.sh: Master Regression Verification Script for Reviewers
-# Tests:
-#   1. Seeded defective fixtures compile cleanly (COMPILE PASS).
-#   2. Seeded fixtures fail specifically for the intended semantic defect (INTENDED SEMANTIC DEFECT REJECT).
-#   3. Reference solutions pass all automated checks with zero errors (REFERENCE PASS).
+# Hardened for Leader Rework Round 2:
+# Proves for each fresh seed (A, B, C, D):
+#   1. COMPILE/LINK PASS (Seeded defective fixture compiles cleanly)
+#   2. INTENDED REVIEWER ORACLE REJECT (Exact semantic defect caught by reviewer oracle)
+#   3. REFERENCE COMPILE/LINK PASS (Reference fix compiles cleanly)
+#   4. REFERENCE ORACLE PASS (Reviewer oracle confirms contract satisfied)
+# Also verifies:
+#   5. Learner `make check` fails neutrally on seeded, passes on reference
+#   6. Zero answer leakage across learner files via verify_isolation.py
 # ==============================================================================
 set -euo pipefail
 
@@ -16,77 +21,85 @@ echo "=== Starting Phase 2 Gate Reviewer Regression Verification ==="
 TEMP_BACKUP_DIR=$(mktemp -d /tmp/p2_gate_rev_XXXXXX)
 trap 'rm -rf "$TEMP_BACKUP_DIR"' EXIT
 
-run_part_regression() {
+run_staged_part_regression() {
     local part="$1"
     local target_file="$2"
     local ref_file="$3"
-    local expected_fail_pattern="$4"
-    local expected_pass_pattern="$5"
+    local oracle_target="$4"
 
     echo "------------------------------------------------------------"
     echo "Testing $part:"
     echo "------------------------------------------------------------"
 
-    # 1. Test seeded compile/build (COMPILE PASS)
-    echo "--> [1/4] Building seeded fixture for $part..."
+    # Stage 1: Seeded compile & link (COMPILE PASS)
+    echo "--> [1/4] Building seeded fixture for $part (COMPILE PASS)..."
     if ! make -C "$GATE_DIR/$part" clean all > /dev/null 2>&1; then
         echo "ERROR: Seeded fixture for $part failed compilation/link!"
         exit 1
     fi
     echo "PASS: Seeded fixture for $part compiled and linked cleanly (COMPILE PASS)."
 
-    # 2. Test intended semantic defect failure (INTENDED SEMANTIC DEFECT REJECT)
-    echo "--> [2/4] Verifying seeded fixture exhibits intended semantic defect..."
-    local check_output=""
-    if check_output=$(make -C "$GATE_DIR/$part" check 2>&1); then
-        echo "ERROR: Seeded broken fixture for $part unexpectedly passed check!"
-        echo "$check_output"
+    # Verify learner-visible make check emits neutral failure
+    if make -C "$GATE_DIR/$part" check > /dev/null 2>&1; then
+        echo "ERROR: Seeded fixture for $part unexpectedly passed learner check!"
         exit 1
+    fi
+    echo "PASS: Learner check for $part failed neutrally as expected."
+
+    # Stage 2: Intended semantic defect rejection via Reviewer Oracle
+    echo "--> [2/4] Verifying seeded fixture exhibits intended defect (INTENDED ORACLE REJECT)..."
+    local oracle_seed_out=""
+    if ! oracle_seed_out=$(python3 "$GATE_DIR/reviewer/regression_oracle.py" "$part" "$GATE_DIR/$part/$oracle_target" 2>&1); then
+        echo "ERROR: Seeded fixture failed reviewer oracle unexpectedly!"
+        echo "$oracle_seed_out"
+        exit 1
+    fi
+    if echo "$oracle_seed_out" | grep -q "\[SEEDED_DEFECT_REJECT\]"; then
+        echo "PASS: Reviewer oracle confirmed intended semantic defect:"
+        echo "      $oracle_seed_out"
     else
-        if echo "$check_output" | grep -Eq "$expected_fail_pattern"; then
-            echo "PASS: Seeded fixture for $part failed specifically for intended semantic reason:"
-            echo "      Pattern matched: '$expected_fail_pattern'"
-        else
-            echo "ERROR: Seeded fixture for $part failed for unexpected reason!"
-            echo "Expected pattern: '$expected_fail_pattern'"
-            echo "Actual output:"
-            echo "$check_output"
-            exit 1
-        fi
+        echo "ERROR: Reviewer oracle did not output [SEEDED_DEFECT_REJECT]!"
+        echo "$oracle_seed_out"
+        exit 1
     fi
 
-    # 3. Backup seeded file
+    # Backup seeded file
     mkdir -p "$TEMP_BACKUP_DIR/$part"
     cp "$GATE_DIR/$part/$target_file" "$TEMP_BACKUP_DIR/$part/"
 
-    # 4. Apply reference fix
-    echo "--> [3/4] Applying reference fix for $part..."
+    # Stage 3: Apply reference fix and compile (REFERENCE COMPILE PASS)
+    echo "--> [3/4] Applying reference fix and building (REFERENCE COMPILE PASS)..."
     cp "$GATE_DIR/reviewer/reference/$ref_file" "$GATE_DIR/$part/$target_file"
-
-    # 5. Test reference pass (REFERENCE PASS)
-    echo "--> [4/4] Verifying reference fix passes check..."
     if ! make -C "$GATE_DIR/$part" clean all > /dev/null 2>&1; then
         echo "ERROR: Reference fix for $part failed compilation/link!"
         cp "$TEMP_BACKUP_DIR/$part/$(basename "$target_file")" "$GATE_DIR/$part/$target_file"
         exit 1
     fi
+    echo "PASS: Reference fix for $part compiled and linked cleanly (REFERENCE COMPILE PASS)."
 
-    local ref_output=""
-    if ! ref_output=$(make -C "$GATE_DIR/$part" check 2>&1); then
-        echo "ERROR: Reference fix for $part failed check!"
-        echo "$ref_output"
+    # Verify learner-visible make check passes on reference
+    if ! make -C "$GATE_DIR/$part" check > /dev/null 2>&1; then
+        echo "ERROR: Reference fix for $part failed learner check!"
         cp "$TEMP_BACKUP_DIR/$part/$(basename "$target_file")" "$GATE_DIR/$part/$target_file"
         exit 1
     fi
+    echo "PASS: Learner check passed on reference fix."
 
-    if echo "$ref_output" | grep -Eq "$expected_pass_pattern"; then
-        echo "PASS: Reference fix for $part passed check with expected contract confirmation:"
-        echo "      Pattern matched: '$expected_pass_pattern'"
+    # Stage 4: Verify reference passes Reviewer Oracle (REFERENCE ORACLE PASS)
+    echo "--> [4/4] Verifying reference fix satisfies Reviewer Oracle (REFERENCE ORACLE PASS)..."
+    local oracle_ref_out=""
+    if ! oracle_ref_out=$(python3 "$GATE_DIR/reviewer/regression_oracle.py" "$part" "$GATE_DIR/$part/$oracle_target" 2>&1); then
+        echo "ERROR: Reference fix failed reviewer oracle!"
+        echo "$oracle_ref_out"
+        cp "$TEMP_BACKUP_DIR/$part/$(basename "$target_file")" "$GATE_DIR/$part/$target_file"
+        exit 1
+    fi
+    if echo "$oracle_ref_out" | grep -q "\[REFERENCE_PASS\]"; then
+        echo "PASS: Reviewer oracle confirmed reference contract satisfied:"
+        echo "      $oracle_ref_out"
     else
-        echo "ERROR: Reference fix for $part passed check but output lacked expected contract confirmation!"
-        echo "Expected pattern: '$expected_pass_pattern'"
-        echo "Actual output:"
-        echo "$ref_output"
+        echo "ERROR: Reviewer oracle did not output [REFERENCE_PASS]!"
+        echo "$oracle_ref_out"
         cp "$TEMP_BACKUP_DIR/$part/$(basename "$target_file")" "$GATE_DIR/$part/$target_file"
         exit 1
     fi
@@ -97,29 +110,30 @@ run_part_regression() {
     echo "PASS: Restored seeded broken fixture for $part."
 }
 
-run_part_regression "part-a" \
+run_staged_part_regression "part-a" \
     "linker/stm32f103c8tx_flash.ld" \
     "part-a/stm32f103c8tx_flash.ld" \
-    "Part A LMA mismatch: _sidata" \
-    "Part A Linker LMA contract verified"
+    "build/firmware.elf"
 
-run_part_regression "part-b" \
+run_staged_part_regression "part-b" \
     "src/dma.c" \
     "part-b/dma.c" \
-    "DMA1_Channel1->CCR does not enable circular mode \(DMA_CCR_CIRC\)" \
-    "DMA1_Channel1->CCR enables circular mode"
+    "build/firmware.elf"
 
-run_part_regression "part-c" \
+run_staged_part_regression "part-c" \
     "src/interrupt_config.c" \
     "part-c/interrupt_config.c" \
-    "EXTI0_IRQn configured with priority byte 0x00" \
-    "safe for FreeRTOS"
+    "build/firmware.elf"
 
-run_part_regression "part-d" \
+run_staged_part_regression "part-d" \
     "src/node_app.c" \
     "part-d/node_app.c" \
-    "Inverted lock acquisition hierarchy in task_storage" \
-    "Canonical lock hierarchy verified"
+    "src/node_app.c"
+
+echo "------------------------------------------------------------"
+echo "Running Reviewer Secrecy & Isolation Audit..."
+echo "------------------------------------------------------------"
+python3 "$GATE_DIR/reviewer/verify_isolation.py"
 
 echo "============================================================"
 echo ">>> ALL REVIEWER REFERENCE & ORACLE CHECKS PASSED <<<"

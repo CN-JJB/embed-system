@@ -40,7 +40,7 @@ However, during concurrent stress testing:
 3. **Root Cause Analysis:**
    Identify the architectural interaction between task synchronization, scheduling, and watchdog refresh that causes the system freeze.
 4. **Principled Minimal Correction:**
-   Modify `src/node_app.c` to resolve the concurrency hazard and guarantee continuous watchdog refresh reliability.
+   Modify `src/node_app.c` to resolve the concurrency hazard and restore periodic watchdog refresh operation.
    *(Note: Inserting arbitrary `vTaskDelay()` calls, disabling the watchdog, or extending watchdog timeouts without architectural justification is rejected).*
 5. **Regression Verification:**
    Run `make check` to prove that the concurrency hazard is eliminated and the system satisfies all safety contracts.

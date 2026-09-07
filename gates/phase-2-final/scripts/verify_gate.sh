@@ -92,6 +92,8 @@ assert sum([score_map['Part A'], score_map['Part B'], score_map['Part C'], score
 # ------------------------------------------------------------------------------
 echo "Check 3: Part floors and overall threshold"
 python3 -c "
+import re
+
 with open('$GATE_DIR/SCORE.md') as f:
     text = f.read()
 
@@ -103,21 +105,28 @@ for line in text.splitlines():
             crit = cols[0].replace('*', '').strip()
             table_rows[crit] = cols[2].strip()
 
-overall_thresh = table_rows.get('Overall Total Score', '')
-assert '75' in overall_thresh, f'Overall Total Score threshold invalid: {overall_thresh}'
+def parse_threshold(cell):
+    m = re.search(r'(?:\\\\ge|>=)\s*(?:\\\\mathbf\{)?([0-9]+(?:\.[0-9]+)?)\s*(?:/\s*([0-9]+))?', cell)
+    assert m, f'Could not parse active numeric threshold from cell: {cell}'
+    num = float(m.group(1))
+    denom = int(m.group(2)) if m.group(2) else None
+    return num, denom
 
-part_a_thresh = table_rows.get('Part A Floor', '')
-assert '15.0' in part_a_thresh, f'Part A Floor threshold invalid: {part_a_thresh}'
+ov_num, ov_den = parse_threshold(table_rows.get('Overall Total Score', ''))
+assert ov_num == 75.0 and ov_den == 100, f'Overall Total Score threshold invalid: {ov_num}/{ov_den}'
 
-part_b_thresh = table_rows.get('Part B Floor', '')
-assert '15.0' in part_b_thresh, f'Part B Floor threshold invalid: {part_b_thresh}'
+pa_num, pa_den = parse_threshold(table_rows.get('Part A Floor', ''))
+assert pa_num == 15.0 and pa_den == 25, f'Part A Floor threshold invalid: {pa_num}/{pa_den}'
 
-part_c_thresh = table_rows.get('Part C Floor', '')
-assert '15.0' in part_c_thresh, f'Part C Floor threshold invalid: {part_c_thresh}'
+pb_num, pb_den = parse_threshold(table_rows.get('Part B Floor', ''))
+assert pb_num == 15.0 and pb_den == 25, f'Part B Floor threshold invalid: {pb_num}/{pb_den}'
 
-part_d_thresh = table_rows.get('Part D Floor (Mastery Bar)', '')
-assert '17.5' in part_d_thresh, f'Part D Floor threshold invalid: {part_d_thresh}'
-" && report_pass "Canonical floors structurally verified: Total>=75, A>=15.0 (60%), B>=15.0 (60%), C>=15.0 (60%), D>=17.5 (70%)" || report_fail "Canonical floors structural check failed in SCORE.md"
+pc_num, pc_den = parse_threshold(table_rows.get('Part C Floor', ''))
+assert pc_num == 15.0 and pc_den == 25, f'Part C Floor threshold invalid: {pc_num}/{pc_den}'
+
+pd_num, pd_den = parse_threshold(table_rows.get('Part D Floor (Mastery Bar)', ''))
+assert pd_num == 17.5 and pd_den == 25, f'Part D Floor threshold invalid: {pd_num}/{pd_den}'
+" && report_pass "Canonical floors structurally verified: Total>=75.0/100, A>=15.0/25 (60%), B>=15.0/25 (60%), C>=15.0/25 (60%), D>=17.5/25 (70%)" || report_fail "Canonical floors structural check failed in SCORE.md"
 
 # ------------------------------------------------------------------------------
 # Check 4: Total time budget is 210 minutes (3.5 h) with exact per-part budgets
@@ -220,21 +229,18 @@ prohibited_reviewer = [
     'seed_mapping.md',
     'regression_oracle.md',
     'scoring_anchors.md',
-    'verify_reviewer.sh'
+    'verify_reviewer.sh',
+    'verify_isolation.py',
+    'regression_oracle.py',
+    'test_reviewer_negative_controls.sh'
 ]
 
-# Specific root causes, canonical fixes, and solution decodings forbidden in learner-facing docs
-prohibited_answers = [
-    '_sidata = LOADADDR',
-    'LMA mismatch',
-    'DMA_CCR_CIRC',
-    'circular mode omitted',
-    'logical priority 0',
-    'priority byte 0x00',
-    'inverted lock',
-    'AB-BA deadlock',
-    'circular wait deadlock',
-    'acquire xSensorLock before xStorageLock',
+# Generic solution/defect leak markers forbidden in learner-facing materials
+generic_leak_markers = [
+    'Seeded Defect:',
+    'Root Cause:',
+    'Reference Fix:',
+    'Canonical Fix:',
 ]
 
 leaks = []
@@ -248,11 +254,11 @@ for doc in learner_docs:
                 leaks.append(f'{doc}: contains prohibited reviewer reference: {p}')
         if re.search(r'\[.*?\]\(.*?reviewer/', txt):
             leaks.append(f'{doc}: contains direct markdown link to reviewer/')
-        for ans in prohibited_answers:
-            if ans in txt:
-                leaks.append(f'{doc}: leaks root cause / fix: {ans}')
+        for marker in generic_leak_markers:
+            if marker in txt:
+                leaks.append(f'{doc}: contains generic answer leak marker: {marker}')
 
-# Also scan all other files in learner directories for reviewer references
+# Also scan all other files in learner directories for reviewer references and generic markers
 for d in ['part-a', 'part-b', 'part-c', 'part-d']:
     full_dir = os.path.join(gate_dir, d)
     for root, _, files in os.walk(full_dir):
@@ -267,6 +273,9 @@ for d in ['part-a', 'part-b', 'part-c', 'part-d']:
                         leaks.append(f'{p}: contains prohibited reviewer reference: {prob}')
                 if re.search(r'\[.*?\]\((\.\./)*reviewer/', content):
                     leaks.append(f'{p}: contains markdown link to reviewer/')
+                for marker in generic_leak_markers:
+                    if marker in content:
+                        leaks.append(f'{p}: contains generic answer leak marker: {marker}')
 
 if leaks:
     print('\n'.join(leaks))
@@ -374,7 +383,7 @@ for part in part-a part-b part-c part-d; do
     fi
 done
 if [ $SEEDED_FAIL -eq 0 ]; then
-    report_pass "All 4 seeded broken fixtures fail check with intended diagnostic messages"
+    report_pass "All 4 seeded broken fixtures fail check with neutral failure messages"
 fi
 
 # ------------------------------------------------------------------------------

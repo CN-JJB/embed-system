@@ -30,8 +30,8 @@ ADC1->SQR3   = 0x00000000
 ADC1->DR     = 0x0000073A
 
 # DMA1 Channel 1 Configuration
-DMA1_Channel1->CCR   = 0x0000058F
-DMA1_Channel1->CNDTR = 0x00000000
+DMA1_Channel1->CCR   = 0x0000052F
+DMA1_Channel1->CNDTR = 0x0000005A
 DMA1_Channel1->CPAR  = 0x4001244C
 DMA1_Channel1->CMAR  = 0x20000200
 DMA1->ISR            = 0x00000002

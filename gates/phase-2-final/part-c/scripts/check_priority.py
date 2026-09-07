@@ -36,9 +36,8 @@ val = int(prio_match.group(1))
 # configMAX_SYSCALL_INTERRUPT_PRIORITY is 0x50 (80 decimal)
 # Numerical values < 80 have higher hardware urgency and violate the FreeRTOS API boundary!
 if val < 80:
-    print(f"[FAIL] EXTI0_IRQn configured with priority byte 0x{val:02x} (< 0x50 / logical 5)!")
-    print("       BASEPRI (0x50) fails to mask this ISR, violating FreeRTOS critical sections.")
+    print("[FAIL] Part C interrupt priority contract not satisfied; collect required evidence and diagnose.")
     sys.exit(1)
 else:
-    print(f"[PASS] EXTI0_IRQn priority byte is 0x{val:02x} (>= 0x50, safe for FreeRTOS).")
+    print("[PASS] Part C interrupt priority contract satisfied.")
     sys.exit(0)

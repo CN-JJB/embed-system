@@ -19,12 +19,11 @@ Clock Tree (72 MHz SYSCLK, APB1=36 MHz, APB2=72 MHz, ADCPRE=/6 -> 12 MHz)
 
 The firmware builds cleanly with zero warnings (`-Wall -Wextra -Werror`).
 When flashed to hardware (or simulated), the following symptom is reported:
-* TIM3 is running and generating update events.
+* TIM3 is running and generating update events at 10.0 kHz.
 * ADC1 receives triggers and executes conversions.
-* The acquisition stream initializes cleanly and captures an initial block of 128 samples.
-* Half-Transfer and Transfer-Complete interrupt events fire once upon buffer fill.
-* **HOWEVER, continuous streaming immediately halts thereafter:** no subsequent samples are transferred into `g_adc_buffer`, `DMA1_Channel1->CNDTR` remains locked at zero, and interrupt counters cease advancing despite TIM3 and ADC1 continuing to run!
-* Downstream signal-processing threads stall waiting for continuous double-buffer ping-pong replenishment.
+* DMA transfers execute and interrupt counters (`g_dma_ht_count`, `g_dma_tc_count`) advance continuously.
+* **HOWEVER, inspection of `g_adc_buffer` reveals data integrity failure:** only the very first buffer entry (`g_adc_buffer[0][0]`) is continuously updated, while all subsequent array elements (`g_adc_buffer[0][1..63]`, `g_adc_buffer[1][0..63]`) remain completely unwritten (`0x0000`)!
+* Downstream signal-processing algorithms receive constant zero vectors across the ping-pong buffers instead of full waveform records.
 
 ---
 

@@ -78,17 +78,16 @@ SECTIONS
         . = ALIGN(4);
     } > FLASH
 
-    /* Seeded defect: assigning _sidata to _etext ignores intervening .rodata and .init_array in Flash */
-    _sidata = _etext;
+    _sidata = LOADADDR(.data);
 
     .data :
     {
         . = ALIGN(4);
         _sdata = .;
+        _edata = .;
         *(.data)
         *(.data*)
         . = ALIGN(4);
-        _edata = .;
     } > RAM AT > FLASH
 
     .bss :

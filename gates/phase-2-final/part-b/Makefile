@@ -85,18 +85,7 @@ check: $(TARGET).elf $(TARGET).asm
 	@if ! $(NM) $(TARGET).elf | grep -q "g_adc_buffer"; then \
 		echo "[FAIL] Missing symbol 'g_adc_buffer'"; exit 1; \
 	fi
-	@# Check that DMA1 Channel 1 CCR configuration enables circular mode (DMA_CCR_CIRC = bit 5 = 0x20)
-	@# In disasm of dma1_channel1_init, CCR value without CIRC is 0x58e; with CIRC is 0x5ae.
-	@if $(OBJDUMP) -d $(TARGET).elf | grep -A 35 "<dma1_channel1_init>:" | grep -Eq "#1422|0x58e"; then \
-		echo "[FAIL] DMA1_Channel1->CCR does not enable circular mode (DMA_CCR_CIRC)!"; \
-		echo "       Value 0x58e lacks bit 5 (0x20). Continuous acquisition halts after 128 samples."; \
-		exit 1; \
-	elif ! $(OBJDUMP) -d $(TARGET).elf | grep -A 35 "<dma1_channel1_init>:" | grep -Eq "#1454|0x5ae"; then \
-		echo "[FAIL] DMA1_Channel1->CCR missing expected circular configuration (0x5ae / bit 5)!"; \
-		exit 1; \
-	else \
-		echo "[PASS] DMA1_Channel1->CCR enables circular mode (CIRC: 0x5ae), MINC, and interrupts."; \
-	fi
+	@python3 scripts/check_dma.py $(TARGET).elf $(OBJDUMP)
 	@echo "=== Part B Verification Complete ==="
 
 -include $(DEPS)

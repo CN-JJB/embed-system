@@ -28,7 +28,7 @@ However, upon executing the firmware, the processor fails the startup health con
    Use GNU Binutils (`arm-none-eabi-readelf -S`, `readelf -l`, `nm`, and the linker map `build/firmware.map`) to examine the ELF binary. Capture verbatim evidence demonstrating the relationship between Flash load memory addresses (LMA) and SRAM virtual memory addresses (VMA).
 3. **Formulate Hypotheses:**
    Write 3–5 competing hypotheses explaining why initialized data in SRAM fails to match its compile-time initializers despite compiling without error.
-4. **Identify Root Cause:**
+4. **Root-Cause Investigation:**
    Determine the precise root cause in the linker script memory allocation, section definitions, and startup symbol exports.
 5. **Apply Minimal Principled Correction:**
    Apply the minimal correction to the linker script.

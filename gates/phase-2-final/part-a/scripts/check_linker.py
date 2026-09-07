@@ -16,12 +16,15 @@ except Exception as e:
     print(f"[FAIL] Could not run {nm} on {elf}: {e}")
     sys.exit(1)
 
-sidata = None
+symbols = {}
 for line in nm_out.splitlines():
     parts = line.split()
-    if len(parts) >= 3 and parts[2] == "_sidata":
-        sidata = int(parts[0], 16)
-        break
+    if len(parts) >= 3:
+        symbols[parts[2]] = int(parts[0], 16)
+
+sidata = symbols.get("_sidata")
+sdata = symbols.get("_sdata")
+edata = symbols.get("_edata")
 
 try:
     readelf_out = subprocess.check_output([readelf, "-l", elf]).decode("utf-8", errors="replace")
@@ -36,18 +39,13 @@ for line in readelf_out.splitlines():
         data_lma = int(parts[3], 16)
         break
 
-if sidata is None:
-    print("[FAIL] Symbol '_sidata' not found in ELF symbol table")
+if sidata is None or sdata is None or edata is None or data_lma is None:
+    print("[FAIL] Part A runtime data relocation contract not satisfied; collect required evidence and diagnose.")
     sys.exit(1)
 
-if data_lma is None:
-    print("[FAIL] Could not determine LMA for .data segment from program headers")
+if edata <= sdata or sidata != data_lma:
+    print("[FAIL] Part A runtime data relocation contract not satisfied; collect required evidence and diagnose.")
     sys.exit(1)
 
-if sidata != data_lma:
-    print(f"[FAIL] Part A LMA mismatch: _sidata (0x{sidata:08x}) != LOADADDR(.data) (0x{data_lma:08x})!")
-    print("       Startup data copy loop will copy wrong Flash bytes into SRAM .data section.")
-    sys.exit(1)
-else:
-    print(f"[PASS] Part A Linker LMA contract verified: _sidata == LOADADDR(.data) == 0x{sidata:08x}.")
-    sys.exit(0)
+print("[PASS] Part A runtime data relocation contract satisfied.")
+sys.exit(0)

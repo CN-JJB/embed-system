@@ -5,7 +5,6 @@
 #include "semphr.h"
 
 SemaphoreHandle_t xSensorBusLock = NULL;
-SemaphoreHandle_t xTelemetryBufferLock = NULL;
 
 volatile uint32_t g_telemetry_cycles = 0;
 volatile uint32_t g_storage_cycles = 0;
@@ -17,7 +16,7 @@ void iwdg_init(void)
     IWDG->KR = 0x5555;
     /* Prescaler /64 -> nominal 625 Hz from LSI 40 kHz */
     IWDG->PR = 0x04;
-    /* Reload value 312 -> nominal 500 ms timeout */
+    /* Reload value 312 -> downcounter counts 313 cycles -> nominal 500.8 ms timeout */
     IWDG->RLR = 312;
     /* Reload counter */
     IWDG->KR = 0xAAAA;
@@ -38,17 +37,14 @@ static void task_telemetry(void *pvParameters)
     while (1) {
         vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(50));
 
-        /* Telemetry task acquires Sensor Bus Lock then Telemetry Buffer Lock */
-        if (xSemaphoreTake(xSensorBusLock, portMAX_DELAY) == pdTRUE) {
-            if (xSemaphoreTake(xTelemetryBufferLock, portMAX_DELAY) == pdTRUE) {
-                g_telemetry_cycles++;
-                xSemaphoreGive(xTelemetryBufferLock);
-            }
-            xSemaphoreGive(xSensorBusLock);
-        }
-
         /* Refresh hardware watchdog */
         iwdg_refresh();
+
+        /* Sample sensor telemetry under bus protection */
+        if (xSemaphoreTake(xSensorBusLock, portMAX_DELAY) == pdTRUE) {
+            g_telemetry_cycles++;
+            xSemaphoreGive(xSensorBusLock);
+        }
     }
 }
 
@@ -59,25 +55,17 @@ static void task_storage(void *pvParameters)
     while (1) {
         vTaskDelay(pdMS_TO_TICKS(100));
 
-        /*
-         * Storage task logging cycle.
-         * Seeded Defect: Inverted lock acquisition order creates circular wait.
-         */
-        if (xSemaphoreTake(xTelemetryBufferLock, portMAX_DELAY) == pdTRUE) {
-            if (xSemaphoreTake(xSensorBusLock, portMAX_DELAY) == pdTRUE) {
-                g_storage_cycles++;
-                xSemaphoreGive(xSensorBusLock);
-            }
-            xSemaphoreGive(xTelemetryBufferLock);
+        /* Storage task logging cycle */
+        if (xSemaphoreTake(xSensorBusLock, portMAX_DELAY) == pdTRUE) {
+            g_storage_cycles++;
         }
     }
 }
 
 void node_app_init(void)
 {
-    /* Initialize mutual exclusion locks for shared resources */
+    /* Initialize mutual exclusion lock for shared sensor bus */
     xSensorBusLock = xSemaphoreCreateMutex();
-    xTelemetryBufferLock = xSemaphoreCreateMutex();
 
     /* Initialize hardware independent watchdog */
     iwdg_init();
