@@ -75,17 +75,8 @@ clean:
 	rm -rf $(BUILD_DIR)
 
 check: $(TARGET).elf $(TARGET).asm
-	@echo "=== Verifying Part B Peripheral & DMA Contract ==="
-	@if [ ! -f "$(TARGET).elf" ]; then \
-		echo "[FAIL] $(TARGET).elf does not exist"; exit 1; \
-	fi
-	@if ! $(NM) $(TARGET).elf | grep -q "dma1_channel1_init"; then \
-		echo "[FAIL] Missing symbol 'dma1_channel1_init'"; exit 1; \
-	fi
-	@if ! $(NM) $(TARGET).elf | grep -q "g_adc_buffer"; then \
-		echo "[FAIL] Missing symbol 'g_adc_buffer'"; exit 1; \
-	fi
-	@python3 scripts/check_dma.py $(TARGET).elf $(OBJDUMP)
+	@echo "=== Verifying Part B Firmware Artifact Integrity ==="
+	@python3 scripts/check_artifact.py $(TARGET).elf $(READELF) $(NM)
 	@echo "=== Part B Verification Complete ==="
 
 -include $(DEPS)

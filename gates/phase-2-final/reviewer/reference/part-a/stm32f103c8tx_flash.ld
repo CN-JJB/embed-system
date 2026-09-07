@@ -1,8 +1,7 @@
 /*
  * =============================================================================
- * Reference Linker Script for STM32F103C8T6 (64 KB Flash, 20 KB RAM)
- * =============================================================================
- * Reviewer Reference Solution for Part A: Retains .init_array via KEEP
+ * Linker Script for STM32F103C8T6 (64 KB Flash, 20 KB RAM)
+ * Reference Solution for Part A Linker Reasoning
  * =============================================================================
  */
 
@@ -71,12 +70,13 @@ SECTIONS
     {
         . = ALIGN(4);
         PROVIDE_HIDDEN (__fini_array_start = .);
-        KEEP (*(SORT(.fini_array.*)))
-        KEEP (*(.fini_array*))
+        *(SORT(.fini_array.*))
+        *(.fini_array*)
         PROVIDE_HIDDEN (__fini_array_end = .);
         . = ALIGN(4);
     } > FLASH
 
+    /* Canonical reference fix: load address of .data must be retrieved via LOADADDR */
     _sidata = LOADADDR(.data);
 
     .data :
@@ -102,11 +102,11 @@ SECTIONS
 
     ._user_heap_stack :
     {
-        . = ALIGN(4);
+        . = ALIGN(8);
         PROVIDE ( end = . );
         PROVIDE ( _end = . );
         . = . + _min_stack_size;
-        . = ALIGN(4);
+        . = ALIGN(8);
     } > RAM
 
     /DISCARD/ :
@@ -115,4 +115,6 @@ SECTIONS
         libm.a ( * )
         libgcc.a ( * )
     }
+
+    .ARM.attributes 0 : { *(.ARM.attributes) }
 }

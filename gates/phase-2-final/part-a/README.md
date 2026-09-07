@@ -32,8 +32,8 @@ However, upon executing the firmware, the processor fails the startup health con
    Determine the precise root cause in the linker script memory allocation, section definitions, and startup symbol exports.
 5. **Apply Minimal Principled Correction:**
    Apply the minimal correction to the linker script.
-6. **Verify Regression Resolution:**
-   Rebuild the binary and prove that `make check` passes, confirming that the runtime data relocation contract is fulfilled.
+6. **Verify Artifact & Regression Resolution:**
+   Rebuild the binary and run `make check` to confirm that the firmware artifact compiles, links, and complies with silicon memory limits. (Note: `make check` validates generic artifact integrity; technical evaluation of the relocation contract is performed by reviewer-isolated testing).
 
 ---
 
@@ -43,7 +43,7 @@ However, upon executing the firmware, the processor fails the startup health con
    ```bash
    make clean && make
    ```
-2. Run the automated check to observe the failure:
+2. Run `make check` to confirm valid firmware build and artifact generation:
    ```bash
    make check
    ```
@@ -52,5 +52,5 @@ However, upon executing the firmware, the processor fails the startup health con
    arm-none-eabi-readelf -l build/firmware.elf
    arm-none-eabi-nm build/firmware.elf | grep -E '_si|_sd|_ed|_et'
    ```
-4. Record your findings in Section 4 of `../SUBMISSION_TEMPLATE.md`.
-5. Apply the fix and run `make check` to confirm resolution.
+4. Record your findings and reasoning in Section 4 of `../SUBMISSION_TEMPLATE.md`.
+5. Apply the minimal principled correction to `linker/stm32f103c8tx_flash.ld` and verify build integrity with `make check`.

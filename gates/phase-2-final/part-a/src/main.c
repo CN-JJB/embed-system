@@ -4,6 +4,7 @@
 
 /* Read-only constant configuration metadata stored in .rodata */
 static const char g_part_a_banner[] = "PART_A_STARTUP_REASONING_STM32F103";
+volatile const char * volatile g_active_banner = g_part_a_banner;
 static const uint32_t g_firmware_build_id = 0x20260907U;
 
 /* Initialized runtime configuration resident in .data */
@@ -14,7 +15,7 @@ volatile uint32_t g_boot_status = 0;
 int main(void)
 {
     /* Suppress unused variable warning while guaranteeing .rodata allocation */
-    (void)g_part_a_banner;
+    (void)g_active_banner;
     (void)g_firmware_build_id;
 
     /* Verify that runtime .data section was correctly relocated from Flash LMA */

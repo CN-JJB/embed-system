@@ -27,9 +27,10 @@ void dma1_channel1_init(void)
 
     /*
      * 6. Configure Channel 1 Control Register (CCR):
-     *    Peripheral-to-memory transfer with 16-bit word size and interrupt enables.
+     *    Peripheral-to-memory transfer with 16-bit word size, memory increment,
+     *    and interrupt enables.
      */
-    DMA1_Channel1->CCR = DMA_CCR_CIRC |
+    DMA1_Channel1->CCR = DMA_CCR_MINC |
                          DMA_CCR_PSIZE_0 |
                          DMA_CCR_MSIZE_0 |
                          DMA_CCR_HTIE |

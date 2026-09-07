@@ -5,6 +5,7 @@
 #include "semphr.h"
 
 SemaphoreHandle_t xSensorBusLock = NULL;
+SemaphoreHandle_t xLogBufferLock = NULL;
 
 volatile uint32_t g_telemetry_cycles = 0;
 volatile uint32_t g_storage_cycles = 0;
@@ -35,16 +36,16 @@ static void task_telemetry(void *pvParameters)
     TickType_t xLastWakeTime = xTaskGetTickCount();
 
     while (1) {
-        vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(50));
-
-        /* Refresh hardware watchdog */
-        iwdg_refresh();
-
-        /* Sample sensor telemetry under bus protection */
+        /* Sample telemetry under shared sensor bus protection */
         if (xSemaphoreTake(xSensorBusLock, portMAX_DELAY) == pdTRUE) {
             g_telemetry_cycles++;
             xSemaphoreGive(xSensorBusLock);
+
+            /* Refresh hardware watchdog after successful acquisition */
+            iwdg_refresh();
         }
+
+        vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(50));
     }
 }
 
@@ -52,20 +53,25 @@ static void task_storage(void *pvParameters)
 {
     (void)pvParameters;
 
-    while (1) {
-        vTaskDelay(pdMS_TO_TICKS(100));
+    /* Initial phase offset to decouple periodic task boundaries */
+    vTaskDelay(pdMS_TO_TICKS(20));
 
-        /* Storage task logging cycle */
+    while (1) {
+        /* Storage logging cycle */
         if (xSemaphoreTake(xSensorBusLock, portMAX_DELAY) == pdTRUE) {
             g_storage_cycles++;
+            xSemaphoreGive(xLogBufferLock);
         }
+
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
 
 void node_app_init(void)
 {
-    /* Initialize mutual exclusion lock for shared sensor bus */
+    /* Initialize mutual exclusion locks for shared resources */
     xSensorBusLock = xSemaphoreCreateMutex();
+    xLogBufferLock = xSemaphoreCreateMutex();
 
     /* Initialize hardware independent watchdog */
     iwdg_init();

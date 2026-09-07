@@ -35,15 +35,15 @@ However, during concurrent stress testing:
    - Step 8: Fix & Regression.
 2. **Two Independent Evidence Channels:**
    Collect and interpret evidence across at least two distinct channels:
-   - **Channel 1 (RTOS Task State & Synchronization Inspection):** Inspect `fixtures/task_state_dump.txt` (labeled `SEEDED FIXTURE / ASSESSMENT INPUT`). Examine task scheduling states, queue wait lists, and resource ownership.
+   - **Channel 1 (RTOS Task State & Synchronization Inspection):** Inspect `fixtures/task_state_dump.txt` (labeled `SCRIPTED / SEEDED ASSESSMENT FIXTURE — NOT LIVE HARDWARE EVIDENCE`). Examine task scheduling states, queue wait lists, and resource ownership.
    - **Channel 2 (Hardware Reset Flag & Timing Markers):** Inspect `fixtures/watchdog_reset_trace.txt`. Trace task execution windows, timing relationships, and the `RCC_CSR_IWDGRSTF` reset trigger.
 3. **Root Cause Analysis:**
    Identify the architectural interaction between task synchronization, scheduling, and watchdog refresh that causes the system freeze.
 4. **Principled Minimal Correction:**
    Modify `src/node_app.c` to resolve the concurrency hazard and restore periodic watchdog refresh operation.
    *(Note: Inserting arbitrary `vTaskDelay()` calls, disabling the watchdog, or extending watchdog timeouts without architectural justification is rejected).*
-5. **Regression Verification:**
-   Run `make check` to prove that the concurrency hazard is eliminated and the system satisfies all safety contracts.
+5. **Verify Artifact & Build Integrity:**
+   Rebuild the firmware and run `make check` to confirm valid compilation, symbol exports, and artifact generation. (Note: `make check` validates generic artifact integrity; technical evaluation of the concurrency safety contract is performed by reviewer-isolated testing).
 
 ---
 
@@ -53,10 +53,10 @@ However, during concurrent stress testing:
    ```bash
    make clean && make
    ```
-2. Run `make check` to observe the automated concurrency check failure:
+2. Run `make check` to verify initial build integrity:
    ```bash
    make check
    ```
 3. Inspect `fixtures/task_state_dump.txt` and `fixtures/watchdog_reset_trace.txt`.
 4. Document your 8-step diagnostic report in Section 7 of `../SUBMISSION_TEMPLATE.md`.
-5. Apply the minimal fix in `src/node_app.c` and verify with `make check`.
+5. Apply the minimal fix in `src/node_app.c` and verify build integrity with `make check`.

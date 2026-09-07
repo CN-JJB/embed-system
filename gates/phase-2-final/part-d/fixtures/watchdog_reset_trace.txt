@@ -1,15 +1,13 @@
 # ==============================================================================
-# SEEDED FIXTURE / ASSESSMENT INPUT (NOT LIVE HARDWARE EVIDENCE)
-# Context: OpenOCD / GDB Reset Inspection & Logic Analyzer Timing Trace
+# SCRIPTED / SEEDED ASSESSMENT FIXTURE — NOT LIVE HARDWARE EVIDENCE
 # Target: STM32F103C8T6 (72 MHz SYSCLK, IWDG PR=4 (/64), RLR=312)
 # IWDG Count Model: Reload count = RLR + 1 = 313 cycles.
 # Nominal: 313 * (64 / 40,000 Hz) = 500.8 ms nominal timeout @ 40 kHz LSI.
-# Tolerance: Physical LSI varies 30–60 kHz (DS5319 Table 26), yielding 334–668 ms.
+# Tolerance: Physical LSI spans 30–60 kHz (DS5319 Table 26), yielding 334–668 ms.
+# Supplied assessment inputs formatted as Logic Analyzer trace and GDB session.
 # ==============================================================================
 
-# ------------------------------------------------------------------------------
 # Channel 2 Evidence: Reset Status Register Readout upon System Reboot
-# ------------------------------------------------------------------------------
 (gdb) monitor reset init
 target halted due to debug-request, current mode: Thread 
 xPSR: 0x01000000 pc: 0x080001f1 msp: 0x20005000
@@ -17,29 +15,25 @@ xPSR: 0x01000000 pc: 0x080001f1 msp: 0x20005000
 (gdb) x/1wx 0x40021024
 0x40021024:	0x24000000
 
-# ------------------------------------------------------------------------------
-# Logic Analyzer Timing Trace Summary
+# Channel 1 Evidence: Logic Analyzer State Transitions
 # Probes:
 #   CH1 (PA1): Task_Telemetry execution window (nominal period: 50 ms)
-#   CH2 (PA2): Task_Storage execution window (nominal period: 100 ms)
-# ------------------------------------------------------------------------------
+#   CH2 (PA2): Task_Storage execution window (nominal period: 100 ms, phase offset: 20 ms)
+# Signal format: [Timestamp] [Signal Level] [Context]
 Timeline:
-t = 0.000 s: System startup and task scheduling initiated.
-t = 0.050 s: Task_Telemetry executes cycle 1 (PA1 HIGH 2 ms, IWDG refreshed).
-t = 0.100 s: Task_Storage executes cycle 1 (PA2 HIGH 3 ms).
-             Task_Storage acquires xSensorBusLock.
-             Task_Storage completes record update; lock is NOT released (PA2 drops).
-t = 0.100 s: Task_Telemetry activates (PA1 HIGH).
-             Task_Telemetry calls iwdg_refresh().
-             Task_Telemetry requests xSensorBusLock -> BLOCKS (PA1 drops).
-t = 0.200 s: Task_Storage wakes after 100 ms delay (PA2 HIGH).
-             Task_Storage requests xSensorBusLock -> BLOCKS on held mutex (PA2 drops).
-t = 0.200 s .. 0.601 s: PA1 and PA2 remain LOW. Both tasks permanently Blocked.
-             No further task execution or watchdog refresh occurs.
-t = 0.601 s: System abruptly halts and reboots (~501 ms after last refresh at t = 0.100 s).
-             GDB catches processor at reset vector with RCC->CSR = 0x24000000 (IWDGRSTF = 1).
+t = 0.000 s: System startup and scheduler activation.
+t = 0.000 s .. 0.002 s: PA1 HIGH (2 ms duration), PA2 LOW.
+t = 0.002 s: PA1 LOW.
+t = 0.020 s .. 0.023 s: PA2 HIGH (3 ms duration), PA1 LOW.
+t = 0.023 s: PA2 LOW.
+t = 0.050 s .. 0.051 s: PA1 HIGH (1 ms duration).
+t = 0.051 s: PA1 LOW.
+t = 0.120 s .. 0.121 s: PA2 HIGH (1 ms duration).
+t = 0.121 s: PA2 LOW.
+t = 0.121 s .. 0.501 s: PA1 LOW, PA2 LOW.
+t = 0.501 s: System reset vector transition observed. RCC->CSR reads 0x24000000.
 
 # ASSESSMENT INPUT NOTE:
-# The observed reset at t = 0.601 s represents the captured timing of this assessment run.
-# Static register calculations indicate nominal 500.8 ms, but do not prove physical reset timing,
+# The recorded reboot at t = 0.501 s represents the timing of this assessment run.
+# Static register calculations establish nominal 500.8 ms, but do not prove physical reset timing,
 # which spans 334 ms to 668 ms due to physical LSI oscillator manufacturing tolerances.

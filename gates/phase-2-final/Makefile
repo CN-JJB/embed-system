@@ -29,14 +29,10 @@ part-d:
 
 clean:
 	@echo "=== Cleaning Phase 2 Final Gate Build Artifacts ==="
-	@for part in $(PARTS); do \
-		if [ -d "$$part" ]; then \
-			$(MAKE) -C "$$part" clean || exit 1; \
-		fi; \
-	done
-	@if [ -d "reviewer" ] && [ -f "reviewer/Makefile" ]; then \
-		$(MAKE) -C reviewer clean || true; \
-	fi
+	$(MAKE) -C part-a clean
+	$(MAKE) -C part-b clean
+	$(MAKE) -C part-c clean
+	$(MAKE) -C part-d clean
 
 check: all
 	@echo "=== Running Phase 2 Gate Static Package Verification ==="

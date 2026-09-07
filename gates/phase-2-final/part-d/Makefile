@@ -99,21 +99,8 @@ clean:
 	rm -rf $(BUILD_DIR)
 
 check: $(TARGET).elf $(TARGET).asm
-	@echo "=== Verifying Part D Concurrency & Lock Hierarchy Contract ==="
-	@if [ ! -f "$(TARGET).elf" ]; then \
-		echo "[FAIL] $(TARGET).elf does not exist"; exit 1; \
-	fi
-	@if ! $(NM) $(TARGET).elf | grep -q "node_app_init"; then \
-		echo "[FAIL] Missing symbol 'node_app_init'"; exit 1; \
-	fi
-	@if ! $(NM) $(TARGET).elf | grep -q "iwdg_init"; then \
-		echo "[FAIL] Missing symbol 'iwdg_init'"; exit 1; \
-	fi
-	@if ! $(NM) $(TARGET).elf | grep -qE "xQueueCreateMutex|xQueueCreateMutexStatic"; then \
-		echo "[FAIL] Mutex creation symbols missing from binary!"; \
-		exit 1; \
-	fi
-	@python3 scripts/check_concurrency.py src/node_app.c
+	@echo "=== Verifying Part D Firmware Artifact Integrity ==="
+	@python3 scripts/check_artifact.py $(TARGET).elf $(READELF) $(NM)
 	@echo "=== Part D Verification Complete ==="
 
 -include $(DEPS)

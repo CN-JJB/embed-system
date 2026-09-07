@@ -1,7 +1,7 @@
 # ==============================================================================
-# SEEDED FIXTURE / ASSESSMENT INPUT (NOT LIVE HARDWARE EVIDENCE)
-# Context: Live GDB Task State Inspection captured during system freeze
+# SCRIPTED / SEEDED ASSESSMENT FIXTURE — NOT LIVE HARDWARE EVIDENCE
 # Target: STM32F103C8T6 running FreeRTOS V11.3.0
+# Supplied assessment input formatted as GDB task inspection session.
 # ==============================================================================
 
 (gdb) info threads
@@ -34,7 +34,7 @@ $2 = {
     pvOwner = 0x20000300,
     pxContainer = 0x20000408
   },
-  uxPriority = 1,
+  uxPriority = 2,
   uxBasePriority = 1,
   pcTaskName = "Task_Storage\000\000"
 }
@@ -55,6 +55,28 @@ $3 = {
     pxIndex = 0x20000408
   },
   uxMessagesWaiting = 0,
+  uxLength = 1,
+  uxItemSize = 0,
+  cRxLock = -1,
+  cTxLock = -1
+}
+
+(gdb) print *(Queue_t *)xLogBufferLock
+$4 = {
+  pcHead = 0x0,
+  pcWriteTo = 0x0,
+  u = {
+    xSemaphore = {
+      xMutexHolder = 0x0,
+      uxRecursiveCallCount = 0
+    }
+  },
+  xTasksWaitingToSend = { ... },
+  xTasksWaitingToReceive = {
+    uxNumberOfItems = 0,
+    pxIndex = 0x0
+  },
+  uxMessagesWaiting = 1,
   uxLength = 1,
   uxItemSize = 0,
   cRxLock = -1,

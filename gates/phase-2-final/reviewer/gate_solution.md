@@ -22,8 +22,8 @@ Firmware compiles and links cleanly with `-nostartfiles -Wl,--gc-sections` and z
 
 ### 2. Plausible Hypotheses
 1. `.data` copy loop in `Reset_Handler` has an off-by-one boundary condition or loop termination defect.
-2. Linker script positions `_edata = .;` before `*(.data*)`, collapsing the copy range to 0 bytes (`_edata == _sdata`).
-3. Linker script assigns the relocation source pointer `_sidata` incorrectly, ignoring intervening sections in Flash.
+2. Linker script assigns the relocation source pointer `_sidata = _etext;` without accounting for intervening `.rodata` and `.init_array` sections in Flash, causing the startup copy loop to populate RAM with read-only constants rather than data initializers.
+3. Linker script positions `_edata = .;` before `*(.data*)`, collapsing the copy range to 0 bytes (`_edata == _sdata`).
 4. `.bss` zeroing loop executes after `.data` copy loop and accidentally clears `.data`.
 
 ### 3. Discriminative Evidence
@@ -39,66 +39,48 @@ Section Headers:
   [ 1] .isr_vector       PROGBITS        08000000 010000 00010c 00   A  0   0  1
   [ 2] .text             PROGBITS        0800010c 01010c 000100 00  AX  0   0  4
   [ 3] .rodata           PROGBITS        0800020c 01020c 000020 00   A  0   0  4
-  [ 4] .data             PROGBITS        20000000 020000 000004 00  WA  0   0  4
+  [ 4] .init_array       INIT_ARRAY      0800022c 01022c 000004 04  WA  0   0  4
+  [ 5] .data             PROGBITS        20000000 020000 000004 00  WA  0   0  4
 ```
-Symbol table inspect:
+Symbol table inspection:
 ```text
+0800020c A _etext
+0800020c A _sidata
 20000000 D _sdata
-20000000 D _edata
-0800022c A _sidata
+20000004 D _edata
 ```
 Discriminative Finding:
-- `_sdata = 0x20000000`
-- `_edata = 0x20000000`
-- `_edata == _sdata`! The relocation range calculated by the startup code (`&_edata - &_sdata`) has a length of exactly 0 bytes.
+- `.data` LMA (Load Memory Address) is at `0x08000230` (or `0x0800024c` depending on alignment/padding), strictly after `.rodata` and `.init_array`.
+- Symbol `_sidata` is set to `_etext` (`0x0800020c`).
 - In `startup_stm32f103c8.s`, the startup copy loop evaluates:
   ```assembly
-  ldr r2, =_edata
-  ...
-  cmp r0, r2
-  bcc copy_loop
+  ldr r0, =_sdata
+  ldr r1, =_edata
+  ldr r2, =_sidata
   ```
-- Because `r0 (_sdata) == r2 (_edata)`, the branch condition `bcc` fails on the very first iteration. The copy loop exits immediately without relocating `.data` from Flash (`_sidata = 0x0800022C`) to SRAM (`0x20000000`).
-- Global initialized variables in `.data` remain uninitialized random SRAM garbage or unwritten zeroes, triggering the boot check failure.
+- Because `r2 (_sidata)` points to `_etext` (`0x0800020c`), the copy loop reads the bytes of `.rodata` and copies them into `.data` at `0x20000000`.
+- The actual initial value of `g_boot_config_token` (located in Flash at `LOADADDR(.data)`) is never loaded into SRAM. Instead, `g_boot_config_token` receives `.rodata` constants/strings, failing the verification in `main()`.
 
 ### 4. Root Cause
-In `linker/stm32f103c8tx_flash.ld`, the linker symbol `_edata = .;` was placed immediately after `_sdata = .;` and *before* `*(.data*)` rather than after the section input specifications:
+In `linker/stm32f103c8tx_flash.ld`, `_sidata` was defined as:
 ```ld
-  .data : 
-  {
-    . = ALIGN(4);
-    _sdata = .;        /* create a global symbol at data start */
-    _edata = .;        /* DEFECT: positioned before input sections */
-    *(.data)           /* .data sections */
-    *(.data*)          /* .data* sections */
-
-    . = ALIGN(4);
-  } >RAM AT> FLASH
+_sidata = _etext;
 ```
-Because the location counter `.` had not yet advanced past `*(.data*)`, `_edata` captured `.` at `0x20000000`, making the copy range 0 bytes.
+Because read-only sections (`.rodata`, `.init_array`) reside in Flash between `_etext` and the load address of `.data`, `_etext` does not equal `LOADADDR(.data)`.
 
 ### 5. Minimal Fix
-In `linker/stm32f103c8tx_flash.ld`, move `_edata = .;` after the section input specifications and alignment:
+In `linker/stm32f103c8tx_flash.ld`, define `_sidata` using the builtin function `LOADADDR(.data)`:
 ```ld
-  .data : 
-  {
-    . = ALIGN(4);
-    _sdata = .;        /* create a global symbol at data start */
-    *(.data)           /* .data sections */
-    *(.data*)          /* .data* sections */
-
-    . = ALIGN(4);
-    _edata = .;        /* create a global symbol at data end */
-  } >RAM AT> FLASH
+_sidata = LOADADDR(.data);
 ```
 
 ### 6. Regression
 Run `make clean && make check`:
-`python3 scripts/check_linker.py` confirms that `_edata > _sdata` (`_edata = 0x20000004`, size = 4 bytes) and `_sidata == LOADADDR(.data) == 0x0800022C`.
+Reviewer oracle verifies that symbol `_sidata` equals `LOADADDR(.data)`.
 Runtime initialized variables in `.data` match their compile-time initializers, and `main()` proceeds to operational execution.
 
 ### 7. Non-Proof Limits
-Proving `_edata > _sdata` statically confirms the linker script exports non-zero section bounds. It does **not** prove that hardware Flash wait-states were configured correctly or that SRAM retention was verified across reset cycles.
+Proving `_sidata == LOADADDR(.data)` statically confirms the linker script exports correct section load addresses. It does **not** prove that hardware Flash wait-states were configured correctly or that SRAM retention was verified across reset cycles.
 
 ---
 
@@ -115,48 +97,48 @@ symptom
 ```
 
 ### 1. Symptom
-The autonomous acquisition pipeline initializes and triggers via TIM3 TRGO. DMA interrupt counters (`g_dma_ht_count`, `g_dma_tc_count`) continuously advance (142 counts recorded), proving the DMA transfer requests fire and reload cyclically. However, inspecting the double buffer `g_adc_buffer` reveals that only the very first sample slot (`g_adc_buffer[0][0]`) is ever updated with live data (`0x073A`), while all other 127 slots (`g_adc_buffer[0][1..63]` and `g_adc_buffer[1][0..63]`) remain completely unwritten (`0x0000`).
+The autonomous acquisition pipeline initializes and triggers via TIM3 TRGO. DMA transfers the initial 128-sample double buffer, advancing `g_dma_ht_count` to 1 and `g_dma_tc_count` to 1. However, all subsequent streaming halts permanently: `g_dma_ht_count` and `g_dma_tc_count` remain stuck at 1, `DMA1_Channel1->CNDTR` reads 0, and no further samples are acquired.
 
 ### 2. Plausible Hypotheses
-1. ADC1 calibration failed or input multiplexer was disconnected.
-2. TIM3 TRGO master mode was misconfigured.
-3. DMA channel CCR omitted memory increment (`DMA_CCR_MINC = 0`), causing destination pointer stagnation.
-4. Circular mode was disabled (`DMA_CCR_CIRC = 0`), causing channel shutdown.
+1. Circular mode was omitted (`DMA_CCR_CIRC = 0`), causing the DMA channel to disable upon CNDTR decrementing to 0.
+2. ADC1 calibration failed or input multiplexer was disconnected.
+3. TIM3 TRGO master mode was misconfigured.
+4. Memory increment was omitted (`DMA_CCR_MINC = 0`).
 
 ### 3. Discriminative Evidence
 Inspect `fixtures/register_dump.txt`:
 ```text
-DMA1_Channel1->CCR   = 0x0000052F
-DMA1_Channel1->CNDTR = 0x0000005A
+DMA1_Channel1->CCR   = 0x0000058F
+DMA1_Channel1->CNDTR = 0x00000000
 DMA1->ISR            = 0x00000002
 ```
 And `fixtures/buffer_dump.txt`:
 ```text
-0x20000200 <g_adc_buffer>:      0x073a  0x0000  0x0000  0x0000 ...
-g_dma_ht_count = 142
-g_dma_tc_count = 142
+0x20000200 <g_adc_buffer>:      0x073a  0x0742  0x073f  0x0745 ...
+g_dma_ht_count = 1
+g_dma_tc_count = 1
 ```
-Decoding `DMA1_Channel1->CCR = 0x0000052F` against ST RM0008 Section 10.4.3:
-- Bit 0: `EN = 1` (Channel enabled)
-- Bit 1: `TCIE = 1` (Transfer complete interrupt enabled)
-- Bit 2: `HTIE = 1` (Half-transfer interrupt enabled)
-- Bit 3: `TEIE = 1` (Transfer error interrupt enabled)
+Decoding `DMA1_Channel1->CCR = 0x0000058F` against ST RM0008 Section 10.4.3:
+- Bit 0: `EN = 1`
+- Bit 1: `TCIE = 1`
+- Bit 2: `HTIE = 1`
+- Bit 3: `TEIE = 1`
 - Bit 4: `DIR = 0` (Peripheral to memory)
-- Bit 5: `CIRC = 1` (Circular mode ENABLED!)
-- Bit 7: `MINC = 0` (Memory increment DISABLED!)
+- Bit 5: `CIRC = 0` (Circular mode DISABLED!)
+- Bit 7: `MINC = 1` (Memory increment ENABLED)
 - Bit 8: `PSIZE = 01` (16-bit peripheral data size)
 - Bit 10: `MSIZE = 01` (16-bit memory data size)
 
 Discriminative Finding:
-- Bit 5 (`CIRC`) is 1: circular reloading is functioning (confirmed by 142 HT/TC interrupt events).
-- Bit 7 (`MINC`) is 0: the DMA controller does not increment `CMAR` after each transfer.
-- Every single conversion transferred by DMA1 Channel 1 is written to the base address in `CMAR` (`&g_adc_buffer[0][0]`), constantly overwriting slot 0 and leaving the rest of the buffer unpopulated.
+- Bit 7 (`MINC`) is 1: memory increment is active; all 128 slots in `g_adc_buffer` receive valid ADC samples on the first pass.
+- Bit 5 (`CIRC`) is 0: circular reloading is disabled.
+- When `CNDTR` decrements to 0, transfer complete interrupt fires (`g_dma_tc_count = 1`), and the channel halts automatically. Without `CIRC = 1`, `CNDTR` is not reloaded from the initial count register, and DMA transfers cease permanently.
 
 ### 4. Root Cause
-In `src/dma.c`, `DMA1_Channel1->CCR` configuration omitted `DMA_CCR_MINC`. Without memory address incrementation, all incoming peripheral samples are written to the identical memory destination address.
+In `src/dma.c`, `DMA1_Channel1->CCR` configuration omitted `DMA_CCR_CIRC`.
 
 ### 5. Minimal Fix
-In `src/dma.c`, add `DMA_CCR_MINC` to `DMA1_Channel1->CCR`:
+In `src/dma.c`, add `DMA_CCR_CIRC` to `DMA1_Channel1->CCR`:
 ```c
     DMA1_Channel1->CCR = DMA_CCR_CIRC |
                          DMA_CCR_MINC |
@@ -168,10 +150,11 @@ In `src/dma.c`, add `DMA_CCR_MINC` to `DMA1_Channel1->CCR`:
 ```
 
 ### 6. Regression
-`make check` runs `scripts/check_dma.py` which verifies the compiled configuration constant matches the expected cryptographic contract hash, proving both `DMA_CCR_CIRC` and `DMA_CCR_MINC` are enabled (`CCR = 0x5AE` / 1454).
+`reviewer/regression_oracle.py` verifies `DMA1_Channel1->CCR` has `DMA_CCR_CIRC` enabled (`CCR = 0x5AE` / 1454).
+Continuous buffer streaming and periodic HT/TC reloading resume.
 
 ### 7. Non-Proof Limits
-Confirming `MINC=1` in `CCR` proves the DMA controller is configured to increment destination pointers. It does **not** prove analog signal integrity, absence of DMA bus contention, or jitter-free sampling timing on physical silicon.
+Confirming `CIRC=1` in `CCR` proves the DMA controller is configured to reload transfer counts cyclically. It does **not** prove analog signal integrity, absence of DMA bus contention, or jitter-free sampling timing on physical silicon.
 
 ---
 
@@ -193,22 +176,22 @@ During execution under real-time event traffic, the system halts inside an unrec
 ### 2. Plausible Hypotheses
 1. FreeRTOS priority grouping in `SCB->AIRCR` was configured with subpriorities rather than group priority 0 (all preemption bits).
 2. `EXTI0_IRQHandler` called a non-ISR FreeRTOS API (`xQueueSend` instead of `xQueueSendFromISR`).
-3. Developer configured EXTI0 with logical priority 3, which maps to hardware priority byte `0x30`, exceeding the urgency limit set by `configMAX_SYSCALL_INTERRUPT_PRIORITY` (`0x50`), violating the FreeRTOS critical section boundary.
+3. Developer configured EXTI0 with logical priority 4, which maps to hardware priority byte `0x40`, exceeding the urgency limit set by `configMAX_SYSCALL_INTERRUPT_PRIORITY` (`0x50`), violating the FreeRTOS critical section boundary.
 
 ### 3. Discriminative Evidence
 Inspect `fixtures/pendsv_gdb_trace.txt`:
 ```text
 (gdb) x/1bx (0xE000E400 + 6)
-0xe000e406:	0x30
+0xe000e406:	0x40
 ```
-- Hardware priority register for EXTI0 (`NVIC->IP[6]`) contains `0x30`.
-- In Cortex-M3 (4-bit implemented priority), priority byte `0x30` corresponds to logical priority 3 (`0x30 >> 4 = 3`).
+- Hardware priority register for EXTI0 (`NVIC->IP[6]`) contains `0x40`.
+- In Cortex-M3 (4-bit implemented priority), priority byte `0x40` corresponds to logical priority 4 (`0x40 >> 4 = 4`).
 - In `FreeRTOSConfig.h`:
   `configMAX_SYSCALL_INTERRUPT_PRIORITY` is `0x50` (CMSIS logical priority 5).
 - In Cortex-M, numerically lower priority values indicate higher preemption urgency.
-- Because `0x30 < 0x50`, EXTI0 has **higher urgency** than the FreeRTOS syscall boundary (`BASEPRI = 0x50`).
+- Because `0x40 < 0x50`, EXTI0 has **higher urgency** than the FreeRTOS syscall boundary (`BASEPRI = 0x50`).
 - When FreeRTOS enters a critical section, it writes `0x50` into `BASEPRI`.
-- Because `0x30 < 0x50`, EXTI0 is **not masked** by `BASEPRI`.
+- Because `0x40 < 0x50`, EXTI0 is **not masked** by `BASEPRI`.
 - When `EXTI0_IRQHandler` executes during a critical section and invokes `xQueueSendFromISR()`, it concurrently mutates kernel list structures, corrupting the scheduler. FreeRTOS guards against this using `configASSERT` in `vPortValidateInterruptPriority()`.
 
 Context Switch Derivation from `pendsv_gdb_trace.txt`:
@@ -232,9 +215,9 @@ Context Switch Derivation from `pendsv_gdb_trace.txt`:
 ### 4. Root Cause
 In `src/interrupt_config.c`:
 ```c
-    NVIC_SetPriority(EXTI0_IRQn, 3);
+    NVIC_SetPriority(EXTI0_IRQn, 4);
 ```
-Configuring logical priority 3 sets hardware byte `0x30`. Because `0x30 < 0x50` (`configMAX_SYSCALL_INTERRUPT_PRIORITY`), EXTI0 is not masked by `BASEPRI`, violating FreeRTOS API execution safety from ISR context.
+Configuring logical priority 4 sets hardware byte `0x40`. Because `0x40 < 0x50` (`configMAX_SYSCALL_INTERRUPT_PRIORITY`), EXTI0 is not masked by `BASEPRI`, violating FreeRTOS API execution safety from ISR context.
 
 ### 5. Minimal Fix
 Configure logical priority $\ge 5$ (e.g. 5 or 6, producing hardware byte `0x50` or `0x60`):
@@ -243,7 +226,7 @@ Configure logical priority $\ge 5$ (e.g. 5 or 6, producing hardware byte `0x50` 
 ```
 
 ### 6. Regression
-`make check` runs `scripts/check_priority.py`, confirming `EXTI0_IRQn` priority byte is $\ge 0x50$ (`0x60`), safely within FreeRTOS syscall boundary.
+`reviewer/regression_oracle.py` confirms `EXTI0_IRQn` priority byte is $\ge 0x50$ (`0x60`), safely within FreeRTOS syscall boundary.
 
 ### 7. Non-Proof Limits
 A static priority check proves the interrupt priority is compatible with `BASEPRI`. It does **not** prove that queue buffers will not overflow under extreme external interrupt rates or that context switches occur within bounded time.
@@ -271,7 +254,7 @@ Under concurrent multi-task operation:
 ### 2. Plausible Hypotheses
 1. `task_telemetry` stack overflowed, triggering `vApplicationStackOverflowHook()`.
 2. A task entered an unbounded busy-wait loop, starving all lower-priority tasks and the watchdog refresh.
-3. `task_storage` acquires the shared `xSensorBusLock` and omits `xSemaphoreGive(xSensorBusLock)`, leaking the mutex and starving `task_telemetry` and `iwdg_refresh()`.
+3. `task_storage` acquires `xSensorBusLock` but releases `xLogBufferLock` (wrong semaphore), leaking `xSensorBusLock` and starving `task_telemetry` and `iwdg_refresh()`.
 4. The IWDG prescaler/reload values were misconfigured, causing watchdog expiration under normal execution.
 
 ### 3. Discriminative Evidence
@@ -280,8 +263,8 @@ Under concurrent multi-task operation:
   * `info threads` shows both `Task_Telemetry` and `Task_Storage` in `Blocked` state inside `vListInsert ()`.
   * `Task_Telemetry` is blocked waiting on `xSensorBusLock` (`0x20000408`).
     In `xSensorBusLock`, `xMutexHolder` is `0x20000300` (`Task_Storage`)!
-  * `Task_Storage` is also blocked waiting for `xSensorBusLock` on its next cycle or blocked on task delays.
-  * `Task_Storage` acquired `xSensorBusLock`, copied sensor data, and exited the critical section block without releasing the mutex (`xSemaphoreGive` omitted).
+  * `Task_Storage` is also blocked waiting for `xSensorBusLock` on its next cycle.
+  * In `task_storage`, code acquired `xSensorBusLock` but called `xSemaphoreGive(xLogBufferLock)`, leaving `xSensorBusLock` locked by `Task_Storage`.
   * `Task_Telemetry` is permanently blocked waiting for the unreleased lock.
 - **Channel 2 (Hardware Reset Flag & Timing Trace):**
   Inspect `fixtures/watchdog_reset_trace.txt`:
@@ -295,17 +278,18 @@ Under concurrent multi-task operation:
     - Minimum timeout (at 60 kHz): $313 \times (64 / 60000) \approx 333.9\text{ ms}$.
     - Maximum timeout (at 30 kHz): $313 \times (64 / 30000) \approx 667.7\text{ ms}$.
   * Timing trace shows:
-    - t = 0.100 s: `iwdg_refresh()` executed.
-    - t = 0.105 s: `Task_Storage` acquires `xSensorBusLock` and fails to give it back.
-    - t = 0.110 s: `Task_Telemetry` activates, requests `xSensorBusLock`, and blocks permanently.
-    - t = 0.110 s .. 0.601 s: Both tasks suspended. Watchdog refresh starved.
-    - t = 0.601 s (501 ms after last refresh at t = 0.100 s, within [334 ms, 668 ms] window): Hardware IWDG counter decrements to 0 -> hardware reset asserted.
+    - t = 0.000 s: `task_telemetry` active, `iwdg_refresh()` executed.
+    - t = 0.020 s: `task_storage` wakes, acquires `xSensorBusLock`, releases `xLogBufferLock` (defect).
+    - t = 0.050 s: `task_telemetry` wakes, attempts to acquire `xSensorBusLock`, blocks permanently.
+    - t = 0.120 s: `task_storage` wakes, attempts to acquire `xSensorBusLock`, blocks permanently.
+    - t = 0.050 s .. 0.501 s: Both tasks blocked. Watchdog refresh starved.
+    - t = 0.501 s (501 ms after refresh at t = 0.000 s): Hardware IWDG downcounter decrements to 0 -> hardware reset asserted.
 
 ### 4. Root Cause
-In `src/node_app.c`, `task_storage` acquired `xSensorBusLock` but omitted the release call `xSemaphoreGive(xSensorBusLock)`. Leaking the mutex permanently blocked `task_telemetry`, preventing it from calling `iwdg_refresh()` and causing hardware watchdog timeout.
+In `src/node_app.c`, `task_storage` acquired `xSensorBusLock` but called `xSemaphoreGive(xLogBufferLock)` instead of `xSemaphoreGive(xSensorBusLock)`. Leaking the mutex permanently blocked `task_telemetry`, preventing it from calling `iwdg_refresh()` and causing hardware watchdog timeout.
 
 ### 5. Minimal Fix
-In `src/node_app.c`, ensure `xSemaphoreGive(xSensorBusLock)` is called in `task_storage` after accessing shared data:
+In `src/node_app.c`, ensure `xSemaphoreGive(xSensorBusLock)` is called in `task_storage`:
 ```c
         if (xSemaphoreTake(xSensorBusLock, portMAX_DELAY) == pdTRUE) {
             g_storage_cycles++;
@@ -314,7 +298,7 @@ In `src/node_app.c`, ensure `xSemaphoreGive(xSensorBusLock)` is called in `task_
 ```
 
 ### 6. Regression
-`make check` executes `scripts/check_concurrency.py`, verifying that all mutex acquisitions are properly paired with `xSemaphoreGive()`.
+`reviewer/regression_oracle.py` audits AST/control-flow to ensure `task_storage` releases `xSensorBusLock`.
 
 ### 7. Non-Proof Limits
 A static mutex release audit proves that locks are paired within the examined task bodies. It does **not** prove that third-party library calls cannot block or that hardware LSI clock drift cannot reduce watchdog margins under extreme temperatures.

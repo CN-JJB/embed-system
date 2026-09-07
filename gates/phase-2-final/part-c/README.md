@@ -37,8 +37,8 @@ However, during execution under real-time event traffic, the system abruptly hal
    Provide a disciplined analysis of what the register and stack evidence proves and does not prove.
 4. **Minimal Principled Correction:**
    Apply the minimal correction to `src/interrupt_config.c` to assign an NVIC priority that satisfies the FreeRTOS ISR-safe API boundary.
-5. **Regression Verification:**
-   Run `make check` to verify that the interrupt priority contract is satisfied.
+5. **Verify Artifact & Build Integrity:**
+   Rebuild the firmware and run `make check` to confirm valid compilation, symbol exports, and artifact generation. (Note: `make check` validates generic artifact integrity; technical evaluation of the interrupt priority contract is performed by reviewer-isolated testing).
 
 ---
 
@@ -48,10 +48,10 @@ However, during execution under real-time event traffic, the system abruptly hal
    ```bash
    make clean && make
    ```
-2. Run `make check` to observe the automated priority contract failure:
+2. Run `make check` to verify initial build integrity:
    ```bash
    make check
    ```
 3. Inspect `fixtures/pendsv_gdb_trace.txt` and compare against ST PM0056 Section 4.3 (NVIC) and FreeRTOS `FreeRTOSConfig.h`.
 4. Record your answers and derivations in Section 6 of `../SUBMISSION_TEMPLATE.md`.
-5. Apply the minimal fix in `src/interrupt_config.c` and verify with `make check`.
+5. Apply the minimal fix in `src/interrupt_config.c` and verify build integrity with `make check`.

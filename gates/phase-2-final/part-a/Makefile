@@ -71,14 +71,8 @@ clean:
 	rm -rf $(BUILD_DIR)
 
 check: $(TARGET).elf
-	@echo "=== Verifying Part A Firmware Linker Contract ==="
-	@if [ ! -f "$(TARGET).elf" ]; then \
-		echo "[FAIL] $(TARGET).elf does not exist"; exit 1; \
-	fi
-	@if ! $(NM) $(TARGET).elf | grep -q "_sdata"; then \
-		echo "[FAIL] Missing symbol '_sdata'"; exit 1; \
-	fi
-	@python3 scripts/check_linker.py $(TARGET).elf $(NM) $(READELF)
+	@echo "=== Verifying Part A Firmware Artifact Integrity ==="
+	@python3 scripts/check_artifact.py $(TARGET).elf $(READELF) $(NM)
 	@echo "=== Part A Verification Complete ==="
 
 -include $(DEPS)

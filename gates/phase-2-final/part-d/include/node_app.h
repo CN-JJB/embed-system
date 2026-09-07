@@ -6,6 +6,7 @@
 #include "semphr.h"
 
 extern SemaphoreHandle_t xSensorBusLock;
+extern SemaphoreHandle_t xLogBufferLock;
 
 void node_app_init(void);
 __attribute__((noinline)) void iwdg_init(void);

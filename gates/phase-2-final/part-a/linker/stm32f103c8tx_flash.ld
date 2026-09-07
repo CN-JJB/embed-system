@@ -1,9 +1,7 @@
 /*
  * =============================================================================
  * Linker Script for STM32F103C8T6 (64 KB Flash, 20 KB RAM)
- * =============================================================================
- * Part A: Bare-Metal Startup & Linker Reasoning Fixture
- * Target Silicon: STM32F103C8T6
+ * Reference Solution for Part A Linker Reasoning
  * =============================================================================
  */
 
@@ -78,16 +76,20 @@ SECTIONS
         . = ALIGN(4);
     } > FLASH
 
-    _sidata = LOADADDR(.data);
+    /*
+     * Linker configuration for initialized data relocation.
+     * Note: Section load and virtual memory addresses must align with C runtime startup copy loop.
+     */
+    _sidata = _etext;
 
     .data :
     {
         . = ALIGN(4);
         _sdata = .;
-        _edata = .;
         *(.data)
         *(.data*)
         . = ALIGN(4);
+        _edata = .;
     } > RAM AT > FLASH
 
     .bss :
@@ -103,11 +105,11 @@ SECTIONS
 
     ._user_heap_stack :
     {
-        . = ALIGN(4);
+        . = ALIGN(8);
         PROVIDE ( end = . );
         PROVIDE ( _end = . );
         . = . + _min_stack_size;
-        . = ALIGN(4);
+        . = ALIGN(8);
     } > RAM
 
     /DISCARD/ :
@@ -116,4 +118,6 @@ SECTIONS
         libm.a ( * )
         libgcc.a ( * )
     }
+
+    .ARM.attributes 0 : { *(.ARM.attributes) }
 }

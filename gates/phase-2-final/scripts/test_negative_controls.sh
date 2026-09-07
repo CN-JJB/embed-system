@@ -101,10 +101,10 @@ assert_mutation_fails "NC-8" "Source pin ownership swap between FreeRTOS and CMS
 cp "$GATE_DIR/SOURCE_LEDGER.md" "$NC_GATE_DIR/SOURCE_LEDGER.md"
 
 # ------------------------------------------------------------------------------
-# NC 9: Wrong Part D floor with decoy '17.5' inside the exact same table cell
+# NC 9: Correct threshold appears first as decoy, wrong active threshold second in same cell
 # ------------------------------------------------------------------------------
-sed -i 's/\\ge \\mathbf{17.5 \/ 25} (70%)/\\ge \\mathbf{15.0 \/ 25} (historical bar 17.5)/g' "$NC_GATE_DIR/SCORE.md"
-assert_mutation_fails "NC-9" "Wrong active Part D floor (15.0) with decoy 17.5 inside same cell" "bash '$NC_GATE_DIR/scripts/verify_gate.sh'"
+sed -i 's/\\ge \\mathbf{17.5 \/ 25} (70%)/\\ge \\mathbf{17.5 \/ 25} (decoy, actual active \\ge 15.0 \/ 25)/g' "$NC_GATE_DIR/SCORE.md"
+assert_mutation_fails "NC-9" "Correct threshold first as decoy, wrong active threshold later in same cell" "bash '$NC_GATE_DIR/scripts/verify_gate.sh'"
 cp "$GATE_DIR/SCORE.md" "$NC_GATE_DIR/SCORE.md"
 
 # ------------------------------------------------------------------------------

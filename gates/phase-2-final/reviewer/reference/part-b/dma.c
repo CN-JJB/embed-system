@@ -27,14 +27,8 @@ void dma1_channel1_init(void)
 
     /*
      * 6. Configure Channel 1 Control Register (CCR):
-     *    - DIR   = 0   (Peripheral-to-Memory transfer)
-     *    - CIRC  = 1   (Circular mode)
-     *    - MINC  = 1   (Memory increment enabled: step across buffer elements)
-     *    - PSIZE = 01  (16-bit peripheral data width)
-     *    - MSIZE = 01  (16-bit memory data width)
-     *    - HTIE  = 1   (Half-Transfer Interrupt Enable)
-     *    - TCIE  = 1   (Transfer Complete Interrupt Enable)
-     *    - TEIE  = 1   (Transfer Error Interrupt Enable)
+     *    Reference fix: Continuous double-buffering requires circular mode (DMA_CCR_CIRC),
+     *    along with memory increment (DMA_CCR_MINC), 16-bit transfer size, and interrupts.
      */
     DMA1_Channel1->CCR = DMA_CCR_CIRC |
                          DMA_CCR_MINC |

@@ -7,10 +7,10 @@ QueueHandle_t g_event_queue = NULL;
 void interrupt_config_init(void)
 {
     /*
-     * Configure NVIC priority for external interrupt line 0.
-     * Must be numerically >= configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY (5)
-     * so that its priority byte (0x60) is lower or equal hardware urgency
-     * than configMAX_SYSCALL_INTERRUPT_PRIORITY (0x50).
+     * Reference fix: EXTI0 calls FreeRTOS FromISR APIs (xQueueSendFromISR).
+     * In Cortex-M3, interrupt numerical priority must be logically >= 5
+     * (hardware byte >= 0x50, configMAX_SYSCALL_INTERRUPT_PRIORITY).
+     * Setting logical priority 6 (hardware byte 0x60 = 96) satisfies the syscall boundary.
      */
     NVIC_SetPriority(EXTI0_IRQn, 6);
     NVIC_EnableIRQ(EXTI0_IRQn);

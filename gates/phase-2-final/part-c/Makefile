@@ -99,21 +99,8 @@ clean:
 	rm -rf $(BUILD_DIR)
 
 check: $(TARGET).elf $(TARGET).asm
-	@echo "=== Verifying Part C FreeRTOS Scheduling & Priority Boundary ==="
-	@if [ ! -f "$(TARGET).elf" ]; then \
-		echo "[FAIL] $(TARGET).elf does not exist"; exit 1; \
-	fi
-	@if ! $(NM) $(TARGET).elf | grep -q "xTaskCreate"; then \
-		echo "[FAIL] Missing symbol 'xTaskCreate'"; exit 1; \
-	fi
-	@if ! $(NM) $(TARGET).elf | grep -q "xQueueGenericSendFromISR"; then \
-		echo "[FAIL] Missing symbol 'xQueueGenericSendFromISR'"; exit 1; \
-	fi
-	@if ! $(NM) $(TARGET).elf | grep -qE "PendSV_Handler|xPortPendSVHandler"; then \
-		echo "[FAIL] Missing symbol 'PendSV_Handler'"; exit 1; \
-	fi
-	@# Audit EXTI0 priority in interrupt_config_init disassembly
-	@python3 scripts/check_priority.py $(TARGET).elf $(OBJDUMP)
+	@echo "=== Verifying Part C Firmware Artifact Integrity ==="
+	@python3 scripts/check_artifact.py $(TARGET).elf $(READELF) $(NM)
 	@echo "=== Part C Verification Complete ==="
 
 -include $(DEPS)

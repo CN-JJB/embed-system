@@ -39,12 +39,12 @@ run_staged_part_regression() {
     fi
     echo "PASS: Seeded fixture for $part compiled and linked cleanly (COMPILE PASS)."
 
-    # Verify learner-visible make check emits neutral failure
-    if make -C "$GATE_DIR/$part" check > /dev/null 2>&1; then
-        echo "ERROR: Seeded fixture for $part unexpectedly passed learner check!"
+    # Verify learner-visible make check passes generic artifact verification
+    if ! make -C "$GATE_DIR/$part" check > /dev/null 2>&1; then
+        echo "ERROR: Seeded fixture for $part failed generic artifact check!"
         exit 1
     fi
-    echo "PASS: Learner check for $part failed neutrally as expected."
+    echo "PASS: Learner check for $part passed generic artifact check as expected."
 
     # Stage 2: Intended semantic defect rejection via Reviewer Oracle
     echo "--> [2/4] Verifying seeded fixture exhibits intended defect (INTENDED ORACLE REJECT)..."
