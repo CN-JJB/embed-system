@@ -1,0 +1,85 @@
+# ==============================================================================
+# SEEDED FIXTURE / ASSESSMENT INPUT (NOT LIVE HARDWARE EVIDENCE)
+# Context: Live GDB Breakpoint Session captured at entry of xPortPendSVHandler
+# Core: Arm Cortex-M3 (STM32F103C8T6) running FreeRTOS V11.3.0
+# ==============================================================================
+
+Breakpoint 1, xPortPendSVHandler () at port.c:285
+285	    __asm volatile
+(gdb) info registers
+r0             0x20001210	536875536
+r1             0x20000048	536870984
+r2             0x200000c0	536871104
+r3             0x00000000	0
+r4             0x44444444	1145324612
+r5             0x55555555	1431655765
+r6             0x66666666	1717986918
+r7             0x77777777	2004318071
+r8             0x88888888	2290649224
+r9             0x99999999	2576980377
+r10            0xaaaaaaaa	2863311530
+r11            0xbbbbbbbb	3149642683
+r12            0x00000000	0
+sp             0x20004ff8	0x20004ff8 <_estack-8>
+lr             0xfffffffd	-3
+pc             0x80016a0	0x80016a0 <xPortPendSVHandler>
+xpsr           0x0100000e	16777230
+control        0x2		2
+
+(gdb) print /x $psp
+$1 = 0x20001210
+
+(gdb) print /x $msp
+$2 = 0x20004ff8
+
+(gdb) print /x pxCurrentTCB
+$3 = 0x20000048
+
+(gdb) print *(TCB_t *)pxCurrentTCB
+$4 = {
+  pxTopOfStack = 0x20001210,
+  xStateListItem = {
+    xItemValue = 3,
+    pxNext = 0x200000c0,
+    pxPrevious = 0x200000c0,
+    pvOwner = 0x20000048,
+    pxContainer = 0x200001a8
+  },
+  xEventListItem = {
+    xItemValue = 0,
+    pxNext = 0x0,
+    pxPrevious = 0x0,
+    pvOwner = 0x20000048,
+    pxContainer = 0x0
+  },
+  uxPriority = 3,
+  pxStack = 0x20001000,
+  pcTaskName = "Task_Worker\000\000\000\000\000"
+}
+
+# ------------------------------------------------------------------------------
+# PSP Memory Dump: Hardware-Pushed Exception Frame (r0-r3, r12, lr, pc, xpsr)
+# Saved automatically by Cortex-M3 core upon exception entry from Thread mode:
+# ------------------------------------------------------------------------------
+(gdb) x/8wx 0x20001210
+0x20001210:	0x00000001	0x00000002	0x00000003	0x00000004
+0x20001220:	0x12121212	0x08000851	0x080007d4	0x21000000
+
+# Mapping of Hardware Exception Frame:
+# 0x20001210: saved r0   = 0x00000001
+# 0x20001214: saved r1   = 0x00000002
+# 0x20001218: saved r2   = 0x00000003
+# 0x2000121c: saved r3   = 0x00000004
+# 0x20001220: saved r12  = 0x12121212
+# 0x20001224: saved lr   = 0x08000851 (return address inside caller task)
+# 0x20001228: saved pc   = 0x080007d4 (interrupted instruction address)
+# 0x2000122c: saved xpsr = 0x21000000 (Thumb mode bit 24 = 1)
+
+# ------------------------------------------------------------------------------
+# NVIC Interrupt Priority Configuration Readback
+# ------------------------------------------------------------------------------
+(gdb) x/1bx (0xE000E400 + 6)   # NVIC->IP[EXTI0_IRQn] (IRQn = 6)
+0xe000e406:	0x40
+
+(gdb) x/1wx 0xE000ED0C          # SCB->AIRCR (Priority Grouping bits [10:8])
+0xe000ed0c:	0xfa050000       # Priority Group 0 (all 4 bits are preemption priority)

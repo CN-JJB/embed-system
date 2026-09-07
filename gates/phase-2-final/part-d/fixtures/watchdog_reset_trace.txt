@@ -1,0 +1,48 @@
+# ==============================================================================
+# SEEDED FIXTURE / ASSESSMENT INPUT (NOT LIVE HARDWARE EVIDENCE)
+# Context: OpenOCD / GDB Reset Inspection & Logic Analyzer Timing Trace
+# Target: STM32F103C8T6 (72 MHz SYSCLK, IWDG timeout nominal 500 ms @ LSI 40 kHz)
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# Channel 2 Evidence: Hardware Reset Status Register Readout upon System Reboot
+# ------------------------------------------------------------------------------
+(gdb) monitor reset init
+target halted due to debug-request, current mode: Thread 
+xPSR: 0x01000000 pc: 0x080001f1 msp: 0x20005000
+
+(gdb) x/1wx 0x40021024          # Read RCC->CSR (Reset Control and Status Register)
+0x40021024:	0x24000000
+
+# Bit Decoding of RCC->CSR (RM0008 Section 6.3.11):
+# Bit 29: IWDGRSTF = 1 (Independent Watchdog Reset Flag!)
+# Bit 26: PINRSTF  = 1 (PIN Reset Flag)
+# Conclusion: The system abruptly halted and restarted due to hardware IWDG watchdog reset.
+
+# ------------------------------------------------------------------------------
+# Oscilloscope / Logic Analyzer Timing Trace Summary
+# Probes:
+#   CH1 (PA1): Task_Telemetry execution window (Priority 3, period: 50 ms)
+#   CH2 (PA2): Task_Compute execution window (Priority 2, bursts: 250 ms)
+#   CH3 (PA3): Task_Storage execution & IWDG refresh window (Priority 1, nominal: 100 ms)
+# ------------------------------------------------------------------------------
+Timeline:
+t = 0.000 s: Task_Storage takes xSharedResourceLock (PA3 HIGH).
+t = 0.010 s: Task_Compute unblocks and preempts Task_Storage (PA2 HIGH, PA3 preempted).
+t = 0.050 s: Task_Telemetry activates (PA1 requests lock -> BLOCKS).
+             PA2 remains HIGH continuously (Task_Compute is executing long math kernel).
+             PA3 remains LOW (Task_Storage is starved of CPU time).
+t = 0.100 s: Task_Telemetry deadline 1 MISSED!
+t = 0.150 s: Task_Telemetry deadline 2 MISSED!
+t = 0.200 s: Task_Telemetry deadline 3 MISSED!
+t = 0.260 s: Task_Compute finishes burst (PA2 LOW).
+             Task_Storage resumes, completes logging, releases lock.
+             Task_Telemetry immediately runs (PA1 HIGH) -> Observed Jitter: 210 ms!
+...
+Second cycle:
+t = 1.000 s: Task_Storage takes lock (PA3 HIGH).
+t = 1.010 s: Task_Compute preempts Task_Storage (PA2 HIGH).
+             Concurrent sensor event triggers prolonged compute loop (> 550 ms).
+t = 1.050 s: Task_Telemetry blocks waiting for lock.
+             Task_Storage cannot execute to refresh IWDG (IWDG reload window = 500 ms).
+t = 1.512 s: Hardware IWDG counter decrements to 0 -> SYSTEM HARD RESET ASSERTED.

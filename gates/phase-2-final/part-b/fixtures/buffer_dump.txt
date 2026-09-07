@@ -1,0 +1,21 @@
+# ==============================================================================
+# SEEDED FIXTURE / ASSESSMENT INPUT (NOT LIVE HARDWARE EVIDENCE)
+# Context: GDB Memory Dump of g_adc_buffer (128 x 16-bit elements at 0x20000200)
+# Captured after 500 Half-Transfer and Transfer-Complete interrupt events
+# ==============================================================================
+
+(gdb) x/16hx &g_adc_buffer[0]
+0x20000200 <g_adc_buffer>:      0x073a  0x0000  0x0000  0x0000  0x0000  0x0000  0x0000  0x0000
+0x20000210 <g_adc_buffer+16>:   0x0000  0x0000  0x0000  0x0000  0x0000  0x0000  0x0000  0x0000
+
+(gdb) x/16hx &g_adc_buffer[16]
+0x20000220 <g_adc_buffer+32>:   0x0000  0x0000  0x0000  0x0000  0x0000  0x0000  0x0000  0x0000
+0x20000230 <g_adc_buffer+48>:   0x0000  0x0000  0x0000  0x0000  0x0000  0x0000  0x0000  0x0000
+
+(gdb) x/16hx &g_adc_buffer[64]  # Start of second half-buffer
+0x20000280 <g_adc_buffer+128>:  0x0000  0x0000  0x0000  0x0000  0x0000  0x0000  0x0000  0x0000
+0x20000290 <g_adc_buffer+144>:  0x0000  0x0000  0x0000  0x0000  0x0000  0x0000  0x0000  0x0000
+
+# Observation Note:
+# g_adc_buffer[0] continuously tracks the most recent conversion value (0x073A).
+# g_adc_buffer[1..127] remain static at 0x0000 despite hundreds of HT/TC interrupts.
