@@ -1,7 +1,7 @@
 /*
  * =============================================================================
  * Linker Script for STM32F103C8T6 (64 KB Flash, 20 KB RAM)
- * Reference Solution for Part A Linker Reasoning
+ * Assessment Fixture for Part A Linker Reasoning
  * =============================================================================
  */
 
