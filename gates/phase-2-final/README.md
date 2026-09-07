@@ -26,7 +26,7 @@ $$\mathbf{Technical\ Correctness} > \mathbf{Observable\ Evidence} > \mathbf{Ment
 | **Part A** | Bare-Metal Startup & Linker Reasoning | 25 pts | 45 min | Startup path reconstruction; Binutils ELF/section audit; minimal linker fix; regression proof. |
 | **Part B** | Peripheral Register & DMA Data-Path Diagnosis | 25 pts | 50 min | Clock & trigger rate calculation; GDB register & DMA buffer audit; circular path repair; regression proof. |
 | **Part C** | FreeRTOS Scheduling & Context Switch Mechanics | 25 pts | 50 min | Cortex-M3 exception frame analysis; PSP/MSP calculation; TCB list audit; NVIC priority & BASEPRI safety audit. |
-| **Part D** | Concurrency, Priority Inversion & HW/SW Debugging | 25 pts | 65 min | 8-step diagnostic report; 2 independent evidence channels; priority inheritance & watchdog starvation repair. |
+| **Part D** | Concurrency & HW/SW Debugging | 25 pts | 65 min | 8-step diagnostic report; 2 independent evidence channels; concurrency hazard resolution & regression proof. |
 | **Total** | | **100 pts** | **210 min** | Minimum passing score: **75 / 100** |
 
 ---
@@ -57,7 +57,7 @@ A submission passes if and only if **all eight** conditions are satisfied:
 3. **Part A (Startup & Linker):** Enter `part-a/`, investigate the seeded boot fault, collect ELF/symbol evidence, apply the minimal fix, and verify regression.
 4. **Part B (Peripheral & DMA):** Enter `part-b/`, inspect the clock/trigger configuration and DMA buffer evidence, identify the register defect, apply the fix, and verify.
 5. **Part C (Scheduler & Context Switch):** Enter `part-c/`, audit the exception stack frame, compute PSP/MSP and TCB pointers, and audit the NVIC priority configuration.
-6. **Part D (Concurrency & Debugging):** Enter `part-d/`, execute the 8-step diagnostic chain, collect multi-channel evidence, resolve the starvation/watchdog reset fault, and verify regression.
+6. **Part D (Concurrency & Debugging):** Enter `part-d/`, execute the 8-step diagnostic chain, collect multi-channel evidence, resolve the concurrency fault, and verify regression.
 7. **Stop Timer:** Record total elapsed time in `SUBMISSION_TEMPLATE.md`.
 8. **Package Submission:** Deliver your completed `SUBMISSION_TEMPLATE.md` to the reviewer. Do not inspect `reviewer/` until scoring is complete.
 

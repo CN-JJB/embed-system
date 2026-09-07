@@ -7,7 +7,7 @@ QueueHandle_t g_event_queue = NULL;
 void interrupt_config_init(void)
 {
     /* Configure NVIC priority for external interrupt line 0 */
-    NVIC_SetPriority(EXTI0_IRQn, 4);
+    NVIC_SetPriority(EXTI0_IRQn, 0x50);
     NVIC_EnableIRQ(EXTI0_IRQn);
 }
 

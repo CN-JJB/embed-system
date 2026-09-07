@@ -18,72 +18,63 @@ symptom
 ```
 
 ### 1. Symptom
-Firmware compiles and links cleanly with `-nostartfiles -Wl,--gc-sections` and zero warnings. However, upon booting, the core never enters the main operational loop; instead, it enters an infinite trap loop inside `main()` because the pre-main constructor token assertion fails (`g_boot_preinit_token == 0` instead of `0x5A5AA5A5`).
+Firmware compiles and links cleanly with `-nostartfiles -Wl,--gc-sections` and zero warnings. However, upon booting, the core never enters the main operational loop; instead, it enters an infinite fault loop inside `main()` because initialized configuration data in `.data` fails validation against its compile-time initializers (`g_boot_config_token != 0x5A5AA5A5U`, halting with `g_boot_status == 0xDEADBEEFU`).
 
 ### 2. Plausible Hypotheses
-1. `__libc_init_array()` is not invoked by `Reset_Handler` in `startup_stm32f103c8.s`.
-2. `.data` or `.bss` initialization loops overwrite `g_boot_preinit_token` after the constructor executes.
-3. Linker garbage collection (`--gc-sections`) discarded `.init_array` because the section input pattern lacked the `KEEP()` directive.
-4. The entry point symbol in the ELF header is pointing directly to `main()` rather than `Reset_Handler`.
+1. `.data` copy loop in `Reset_Handler` has an off-by-one boundary condition or loop termination defect.
+2. Linker script assigns the relocation source pointer `_sidata` incorrectly (e.g. to `_etext`), ignoring intervening sections in Flash such as `.rodata` and `.init_array`.
+3. Stack initialization placed `_estack` inside `.data`, causing stack frames to overwrite global variables.
+4. `.bss` zeroing loop executes after `.data` copy loop and accidentally clears `.data`.
 
 ### 3. Discriminative Evidence
-Inspect section headers in the compiled ELF:
+Inspect section and segment headers and symbols in the compiled ELF:
 ```bash
-arm-none-eabi-readelf -W -S build/firmware.elf | grep -E '\.init_array'
+arm-none-eabi-readelf -l build/firmware.elf
+arm-none-eabi-nm build/firmware.elf | grep -E '_si|_sd|_ed|_et'
 ```
-Observation:
+Observations:
 ```text
-  [ 5] .init_array       INIT_ARRAY      08000218 001218 000000 04  WA  0   0  1
+Program Headers:
+  Type           Offset   VirtAddr   PhysAddr   FileSiz MemSiz  Flg Align
+  LOAD           0x001000 0x08000000 0x08000000 0x0022c 0x0022c R E 0x1000
+  LOAD           0x000000 0x20000000 0x0800022c 0x00008 0x00008 RW  0x1000
 ```
-Section size is `000000` (0 bytes)!
-Inspect symbol table:
-```bash
-arm-none-eabi-nm build/firmware.elf | grep "system_peripheral_preinit"
-```
-Observation: Symbol `system_peripheral_preinit` is completely absent from the symbol table.
-Inspect linker map:
+- `.data` segment has `VirtAddr = 0x20000000` and `PhysAddr = 0x0800022C` (Flash LMA).
+- Inspect symbol table:
 ```text
-.init_array     0x08000218        0x0
- *(.init_array*)
+08000208 T _etext
+20000000 D _sdata
+08000208 A _sidata
 ```
-The constructor function was discarded as unreferenced during `--gc-sections`.
+Discriminative Finding:
+- `_sidata = 0x08000208` (equal to `_etext`).
+- However, the actual load address of `.data` is `0x0800022C`!
+- The 36-byte disparity (`0x0800022C - 0x08000208 = 0x24`) represents `.rodata` (constants and build metadata) and `.init_array` residing in Flash between `_etext` and `.data`.
+- Consequently, the startup copy loop copied `.rodata` bytes into `.data` in SRAM instead of initialized variable values!
 
 ### 4. Root Cause
-In `linker/stm32f103c8tx_flash.ld`, the `.init_array` section definition used:
+In `linker/stm32f103c8tx_flash.ld`, the linker script defined `_sidata` as:
 ```ld
-    .init_array :
-    {
-        . = ALIGN(4);
-        PROVIDE_HIDDEN (__init_array_start = .);
-        *(SORT(.init_array.*))
-        *(.init_array*)
-        PROVIDE_HIDDEN (__init_array_end = .);
-        . = ALIGN(4);
-    } > FLASH
+    _sidata = _etext;
 ```
-Because no C function explicitly calls `system_peripheral_preinit` by name (it is called solely via function pointer array in `__libc_init_array()`), the GNU linker's `--gc-sections` optimization considered the input section unused and discarded it. The GNU ld `KEEP()` directive is mandatory to mark these sections as non-discardable.
+Assigning `_sidata = _etext;` is an invalid shortcut that assumes `.data` immediately follows `.text` in Flash. Because `.rodata` and constructor arrays reside after `.text`, `_sidata` must be assigned using the linker builtin function `LOADADDR(.data)`:
+```ld
+    _sidata = LOADADDR(.data);
+```
 
 ### 5. Minimal Fix
-Enclose the input section wildcards in `KEEP()`:
+In `linker/stm32f103c8tx_flash.ld`, update the definition of `_sidata`:
 ```ld
-    .init_array :
-    {
-        . = ALIGN(4);
-        PROVIDE_HIDDEN (__init_array_start = .);
-        KEEP (*(SORT(.init_array.*)))
-        KEEP (*(.init_array*))
-        PROVIDE_HIDDEN (__init_array_end = .);
-        . = ALIGN(4);
-    } > FLASH
+    _sidata = LOADADDR(.data);
 ```
 
 ### 6. Regression
 Run `make clean && make check`:
-`readelf -W -S build/firmware.elf` confirms `.init_array` size is 4 bytes (`0x000004`).
-`nm build/firmware.elf` confirms `system_peripheral_preinit` is present in Flash.
+`python3 scripts/check_linker.py` confirms that `_sidata == LOADADDR(.data) == 0x0800022C`.
+Runtime initialized variables in `.data` match their initializers, and `main()` proceeds to operational execution.
 
 ### 7. Non-Proof Limits
-A non-zero `.init_array` section in the ELF proves the constructor pointers were retained in Flash by the linker. It does **not** prove that `__libc_init_array()` executed without faults on hardware or that peripheral hardware was properly configured.
+Proving `_sidata == LOADADDR(.data)` statically confirms the linker script exports the exact Flash load address. It does **not** prove that hardware Flash wait-states were configured correctly or that SRAM retention was verified across reset cycles.
 
 ---
 
@@ -100,35 +91,43 @@ symptom
 ```
 
 ### 1. Symptom
-TIM3 generates 10.0 kHz TRGO pulses, ADC1 performs regular conversions on PA0, and DMA1 Channel 1 generates Half-Transfer and Transfer-Complete interrupts. However, memory dump of destination buffer `g_adc_buffer` shows that only index `0` is updated; indices `1..127` remain static at `0x0000`.
+The autonomous acquisition pipeline initializes and captures an initial block of 128 samples. Half-Transfer and Transfer-Complete interrupt events fire once. However, continuous streaming subsequently halts: no further samples are transferred into `g_adc_buffer`, `DMA1_Channel1->CNDTR` remains locked at zero, and interrupt counters cease advancing despite TIM3 and ADC1 continuing to run.
 
 ### 2. Plausible Hypotheses
-1. `ADC1->CR2` lacks the `DMA` bit, failing to generate DMA request pulses after index 0.
-2. `DMA1_Channel1->CCR` lacks the `CIRC` bit, stopping after 1 single transfer.
-3. `DMA1_Channel1->CCR` lacks the memory increment enable bit (`MINC = 0`), causing every DMA transfer to overwrite destination address `CMAR` (slot 0) instead of incrementing.
-4. Destination buffer size in `CNDTR` was initialized to 1 instead of 128.
+1. ADC1 calibration failed or hung in a timeout loop.
+2. TIM3 TRGO master mode was misconfigured (MMS bits reset).
+3. DMA channel was configured in normal single-buffer mode (`CIRC = 0`) instead of circular mode (`CIRC = 1`), causing the DMA controller to halt permanently once `CNDTR` decremented to zero.
+4. Interrupt handler failed to clear DMA interrupt flags in `DMA1->IFCR`, causing interrupt starvation.
 
 ### 3. Discriminative Evidence
 Inspect `fixtures/register_dump.txt`:
 ```text
-DMA1_Channel1->CCR   = 0x00002527 (EN=1, TCIE=1, HTIE=1, DIR=0, CIRC=1, PSIZE=01, MSIZE=01, PL=10, MINC=0, PINC=0)
-DMA1_Channel1->CNDTR = 0x00000040 (64 transfers remaining in current buffer half)
-DMA1_Channel1->CMAR  = 0x20000200 (&g_adc_buffer[0])
+DMA1_Channel1->CCR   = 0x0000058F
+DMA1_Channel1->CNDTR = 0x00000000
+DMA1->ISR            = 0x00000002
 ```
-Observations:
-- Bit 5 (`CIRC`) is set (1).
-- `CNDTR` is actively decrementing (64 remaining).
-- Bit 7 (`MINC` / `0x80`) is cleared (0)!
-In disassembly of `dma1_channel1_init`:
-The constant loaded into `CCR` is `0x52e`.
-`0x52e` breakdown: `CIRC(0x20) | PSIZE_0(0x100) | MSIZE_0(0x400) | HTIE(0x04) | TCIE(0x02) | TEIE(0x08) = 0x52e`.
-Bit 7 (`0x80`) is absent.
+Decoding `DMA1_Channel1->CCR = 0x0000058F` against ST RM0008 Section 10.4.3:
+- Bit 0: `EN = 1` (Channel enabled)
+- Bit 1: `TCIE = 1` (Transfer complete interrupt enabled)
+- Bit 2: `HTIE = 1` (Half-transfer interrupt enabled)
+- Bit 3: `TEIE = 1` (Transfer error interrupt enabled)
+- Bit 4: `DIR = 0` (Peripheral to memory)
+- Bit 5: `CIRC = 0` (Circular mode DISABLED!)
+- Bit 7: `MINC = 1` (Memory increment enabled)
+- Bit 8: `PSIZE = 01` (16-bit peripheral data size)
+- Bit 10: `MSIZE = 01` (16-bit memory data size)
+
+Discriminative Finding:
+- Bit 5 (`CIRC`) is 0.
+- `CNDTR = 0x00000000`.
+- In normal mode (`CIRC = 0`), when `CNDTR` decrements to 0, the channel stops transferring data until software reloads `CNDTR`.
+- In circular mode (`CIRC = 1`), `CNDTR` is automatically reloaded with the initial buffer size on wrap, enabling continuous ping-pong double buffering.
 
 ### 4. Root Cause
-In `src/dma.c`, `DMA1_Channel1->CCR` configuration omitted `DMA_CCR_MINC`. Without `MINC`, the DMA controller keeps the memory pointer frozen at `CMAR` (`&g_adc_buffer[0]`). Each 16-bit ADC conversion is written to `g_adc_buffer[0]`, leaving the remaining 127 elements unpopulated.
+In `src/dma.c`, `DMA1_Channel1->CCR` configuration omitted the `DMA_CCR_CIRC` bitmask. Without circular mode enabled, the DMA controller executes a single 128-sample block transfer and permanently halts.
 
 ### 5. Minimal Fix
-In `src/dma.c`, add `DMA_CCR_MINC` to the `DMA1_Channel1->CCR` bitmask:
+In `src/dma.c`, add `DMA_CCR_CIRC` to `DMA1_Channel1->CCR`:
 ```c
     DMA1_Channel1->CCR = DMA_CCR_CIRC |
                          DMA_CCR_MINC |
@@ -140,10 +139,10 @@ In `src/dma.c`, add `DMA_CCR_MINC` to the `DMA1_Channel1->CCR` bitmask:
 ```
 
 ### 6. Regression
-`make check` disassembles `dma1_channel1_init` and confirms the constant loaded for `CCR` is `0x5ae` (`0x52e | 0x80`), confirming `MINC` is active.
+`make check` disassembles `dma1_channel1_init` and confirms the constant loaded for `CCR` is `0x5ae` (`#1454`), proving `DMA_CCR_CIRC` is enabled.
 
 ### 7. Non-Proof Limits
-Confirming `MINC=1` in `CCR` proves the DMA controller is configured to advance memory addresses. It does **not** prove analog signal accuracy, ADC calibration quality, or jitter-free timer triggering on physical silicon.
+Confirming `CIRC=1` in `CCR` proves the DMA controller is configured for continuous reload. It does **not** prove analog signal integrity, absence of DMA bus contention from other masters, or jitter-free timer update timing on physical silicon.
 
 ---
 
@@ -160,30 +159,27 @@ symptom
 ```
 
 ### 1. Symptom
-Integration testing halts inside `vPortValidateInterruptPriority()` assertion when external sensor interrupt `EXTI0_IRQHandler` executes.
+During execution under real-time event traffic, the system halts inside an unrecoverable FreeRTOS kernel assertion trap inside `vPortValidateInterruptPriority()` when external interrupt `EXTI0_IRQHandler` fires and calls `xQueueSendFromISR()`.
 
 ### 2. Plausible Hypotheses
-1. FreeRTOS priority grouping in `SCB->AIRCR` was configured with subpriorities rather than group priority 0.
+1. FreeRTOS priority grouping in `SCB->AIRCR` was configured with subpriorities rather than group priority 0 (all preemption bits).
 2. `EXTI0_IRQHandler` called a non-ISR FreeRTOS API (`xQueueSend` instead of `xQueueSendFromISR`).
-3. `EXTI0_IRQn` was assigned a logical priority numerically less than `configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY` (5), giving it higher hardware priority than `configMAX_SYSCALL_INTERRUPT_PRIORITY` (`0x50`).
+3. Developer confused `configMAX_SYSCALL_INTERRUPT_PRIORITY` (`0x50`) with unshifted logical priority, passing `0x50` to CMSIS `NVIC_SetPriority()`, which shifted the value to `0x00` (highest hardware priority), violating the FreeRTOS critical section boundary.
 
 ### 3. Discriminative Evidence
 Inspect `fixtures/pendsv_gdb_trace.txt`:
 ```text
-(gdb) x/1bx (0xE000E400 + 6)   # NVIC->IP[EXTI0_IRQn]
-0xe000e406:	0x40
+(gdb) x/1bx (0xE000E400 + 6)
+0xe000e406:	0x00
 ```
-Cortex-M3 hardware priority register byte is `0x40`.
-Calculate logical priority: `0x40 >> 4 = 4`.
-In `FreeRTOSConfig.h`:
-```c
-#define configLIBRARY_MAX_SYSCALL_INTERRUPT_PRIORITY 5
-#define configMAX_SYSCALL_INTERRUPT_PRIORITY (5 << 4) = 0x50
-```
-In Cortex-M3, priority 4 has higher preemption urgency than priority 5 (`0x40 < 0x50`).
-When FreeRTOS enters a critical section, it writes `0x50` into `BASEPRI`.
-Because `0x40 < 0x50`, `EXTI0_IRQn` is **not masked** by `BASEPRI`.
-If `EXTI0_IRQHandler` executes during a critical section and calls `xQueueSendFromISR()`, it concurrently mutates kernel list structures, causing kernel corruption. FreeRTOS traps this condition inside `vPortValidateInterruptPriority()`.
+- Hardware priority register for EXTI0 (`NVIC->IP[6]`) contains `0x00`.
+- In Cortex-M3, `0x00` is the highest possible interrupt preemption priority (Priority 0).
+- In `FreeRTOSConfig.h`:
+  `configMAX_SYSCALL_INTERRUPT_PRIORITY` is `0x50` (CMSIS logical priority 5).
+- Because `0x00 < 0x50`, EXTI0 has higher hardware priority than the `BASEPRI` masking threshold.
+- When FreeRTOS enters a critical section, it writes `0x50` into `BASEPRI`.
+- Because `0x00 < 0x50`, EXTI0 is **not masked** by `BASEPRI`.
+- When `EXTI0_IRQHandler` executes during a critical section and invokes `xQueueSendFromISR()`, it concurrently mutates kernel list structures, corrupting the scheduler. FreeRTOS guards against this using `configASSERT` in `vPortValidateInterruptPriority()`.
 
 Context Switch Derivation from `pendsv_gdb_trace.txt`:
 - Active mode at breakpoint: Handler mode (running `xPortPendSVHandler`). Active stack pointer: `MSP = 0x20004ff8`.
@@ -205,24 +201,30 @@ Context Switch Derivation from `pendsv_gdb_trace.txt`:
 
 ### 4. Root Cause
 In `src/interrupt_config.c`:
-`NVIC_SetPriority(EXTI0_IRQn, 4);`
-assigned logical priority 4 (`0x40`), which exceeds the maximum allowable system call priority boundary (`0x50` / logical 5).
+```c
+    NVIC_SetPriority(EXTI0_IRQn, 0x50);
+```
+The developer passed the 8-bit shifted priority constant `configMAX_SYSCALL_INTERRUPT_PRIORITY` (`0x50`) instead of unshifted logical priority (`5` or `6`).
+CMSIS `NVIC_SetPriority` shifts the input argument:
+`NVIC->IP[IRQn] = (uint8_t)((priority << 4) & 0xFF)`.
+Evaluating with `0x50`: `(0x50 << 4) & 0xFF == 0x500 & 0xFF == 0x00`.
+This set EXTI0 priority to `0x00`, violating the FreeRTOS syscall boundary.
 
 ### 5. Minimal Fix
-In `src/interrupt_config.c`, set logical priority $\ge 5$ (e.g. 5, 6, or 7):
+Pass unshifted logical priority $\ge 5$ (e.g. 5 or 6) to `NVIC_SetPriority`:
 ```c
-    NVIC_SetPriority(EXTI0_IRQn, 6);
+    NVIC_SetPriority(EXTI0_IRQn, 5);
 ```
 
 ### 6. Regression
-`make check` verifies that the priority byte loaded into `NVIC->IP[EXTI0_IRQn]` is $\ge 0x50$ (logical priority $\ge 5$).
+`make check` runs `scripts/check_priority.py`, confirming `EXTI0_IRQn` priority byte is $\ge 0x50$ (`0x50` or `0x60`).
 
 ### 7. Non-Proof Limits
 A static priority check proves the interrupt priority is compatible with `BASEPRI`. It does **not** prove that queue buffers will not overflow under extreme external interrupt rates or that context switches occur within bounded time.
 
 ---
 
-## Part D: Concurrency, Priority Inversion & HW/SW Debugging
+## Part D: Concurrency & HW/SW Debugging
 
 ```text
 symptom
@@ -235,39 +237,58 @@ symptom
 ```
 
 ### 1. Symptom
-Under concurrent workloads:
-- `Task_Telemetry` (Priority 3, period 50 ms) exhibits severe latency jitter (> 200 ms).
-- Microcontroller abruptly restarts.
-- `RCC->CSR` confirms watchdog reset (`IWDGRSTF = 1`).
+Under concurrent multi-task operation:
+- The system intermittently freezes during operation, halting telemetry transmission and logging.
+- Approximately 500 ms following the freeze, the MCU abruptly restarts.
+- Post-reset register examination reveals `RCC->CSR` has bit 29 (`IWDGRSTF`) set, confirming hardware watchdog reset.
 
 ### 2. Plausible Hypotheses
-1. `Task_Storage` has an unconstrained infinite loop, preventing all other tasks from running.
-2. `Task_Telemetry` stack overflowed, triggering `vApplicationStackOverflowHook()`.
-3. `xSharedResourceLock` was created as a binary semaphore without priority inheritance, causing `Task_Compute` (Priority 2) to starve `Task_Storage` (Priority 1) while `Task_Storage` holds the lock, blocking `Task_Telemetry` (Priority 3) and causing `Task_Storage` to miss its IWDG watchdog refresh deadline.
-4. IWDG timeout was miscalculated and expired under normal task execution.
+1. `task_telemetry` stack overflowed, triggering `vApplicationStackOverflowHook()`.
+2. A task entered an unbounded busy-wait loop, starving all lower-priority tasks and the watchdog refresh.
+3. Inverted lock acquisition hierarchy between `task_telemetry` and `task_storage` creates an AB-BA circular deadlock, permanently suspending both tasks and starving `iwdg_refresh()`.
+4. The IWDG prescaler/reload values were misconfigured, causing watchdog expiration under normal execution.
 
 ### 3. Discriminative Evidence
-- **Channel 1 (GDB Task State & Lock Inspection):**
+- **Channel 1 (GDB Task State & Synchronization Queue Audit):**
   Inspect `fixtures/task_state_dump.txt`:
-  * `Task_Compute` (Priority 2) is in `Running` state.
-  * `Task_Telemetry` (Priority 3) is `Blocked` on `xSharedResourceLock`.
-  * `Task_Storage` (Priority 1) holds the lock, but its `uxPriority` remains 1! No priority inheritance occurred.
-  * `xSharedResourceLock` has `uxItemSize = 0` and `xMutexHolder = NULL`, proving it is a Binary Semaphore, not a Mutex!
-- **Channel 2 (Reset Flag & Timing Trace):**
+  * `info threads` shows both `Task_Telemetry` and `Task_Storage` in `Blocked` state inside `vListInsert ()`.
+  * `Task_Telemetry` is blocked waiting on `xTelemetryBufferLock`. Its queue item container is `0x20000508`.
+    In `xTelemetryBufferLock`, `xMutexHolder` is `0x20000300` (`Task_Storage`)!
+  * `Task_Storage` is blocked waiting on `xSensorBusLock`. Its queue item container is `0x20000408`.
+    In `xSensorBusLock`, `xMutexHolder` is `0x20000240` (`Task_Telemetry`)!
+  * **Deadlock Observation:** `Task_Telemetry` holds `xSensorBusLock` and waits for `xTelemetryBufferLock`. `Task_Storage` holds `xTelemetryBufferLock` and waits for `xSensorBusLock`.
+  * Both tasks are permanently blocked waiting on each other (Coffman circular wait condition).
+- **Channel 2 (Hardware Reset Flag & Timing Trace):**
   Inspect `fixtures/watchdog_reset_trace.txt`:
-  * `RCC->CSR = 0x24000000`: Bit 29 (`IWDGRSTF`) is set, proving hardware watchdog reset.
-  * Timing trace shows `Task_Compute` ran for > 500 ms while `Task_Storage` was preempted, preventing `Task_Storage` from executing `iwdg_refresh()` before the 500 ms window expired.
+  * `RCC->CSR = 0x24000000`: Bit 29 (`IWDGRSTF`) is set, proving reset was triggered by IWDG timeout.
+  * Timing trace shows:
+    - t = 0.105 s: `Task_Storage` acquires `xTelemetryBufferLock`.
+    - t = 0.110 s: `Task_Telemetry` activates, acquires `xSensorBusLock`, then requests `xTelemetryBufferLock` and blocks.
+    - t = 0.110 s: `Task_Storage` resumes, requests `xSensorBusLock`, and blocks.
+    - t = 0.110 s .. 0.611 s: Both tasks suspended. No execution on PA1/PA2.
+    - t = 0.611 s (501 ms after last refresh at t = 0.100 s): Hardware IWDG counter decrements to 0 -> hardware reset asserted.
 
 ### 4. Root Cause
-In `src/node_app.c`, `xSharedResourceLock = xSemaphoreCreateBinary();` was used for mutual exclusion. Binary semaphores do not track the owner task (`xMutexHolder`) and do not implement priority inheritance. When `Task_Compute` (Priority 2) preempted `Task_Storage` (Priority 1) while it held the lock, `Task_Telemetry` (Priority 3) was blocked indefinitely. Unbounded priority inversion starved `Task_Storage`, which failed to refresh the independent watchdog (IWDG), triggering a hardware reset.
+In `src/node_app.c`, tasks acquired shared mutexes in inconsistent order:
+- `task_telemetry`: acquires `xSensorBusLock` first, then `xTelemetryBufferLock`.
+- `task_storage`: acquires `xTelemetryBufferLock` first, then `xSensorBusLock`.
+This inverted lock acquisition hierarchy violates total lock ordering. When `task_storage` held `xTelemetryBufferLock` and was preempted by `task_telemetry`, which held `xSensorBusLock`, a classic circular wait deadlock occurred. Neither task could advance, permanently starving `iwdg_refresh()` and causing hardware reset.
 
 ### 5. Minimal Fix
-In `src/node_app.c`:
-Change `xSharedResourceLock = xSemaphoreCreateBinary();` to `xSharedResourceLock = xSemaphoreCreateMutex();`.
-With a mutex, when `Task_Telemetry` (Priority 3) requests `xSharedResourceLock`, FreeRTOS elevates `Task_Storage`'s priority to 3, allowing it to finish its critical section without preemption from `Task_Compute` (Priority 2), release the lock, and refresh the IWDG.
+In `src/node_app.c`, enforce canonical lock acquisition order in `task_storage`:
+```c
+        /* Enforce canonical lock hierarchy: xSensorBusLock before xTelemetryBufferLock */
+        if (xSemaphoreTake(xSensorBusLock, portMAX_DELAY) == pdTRUE) {
+            if (xSemaphoreTake(xTelemetryBufferLock, portMAX_DELAY) == pdTRUE) {
+                g_storage_cycles++;
+                xSemaphoreGive(xTelemetryBufferLock);
+            }
+            xSemaphoreGive(xSensorBusLock);
+        }
+```
 
 ### 6. Regression
-`make check` verifies that `xQueueCreateMutex` is invoked during `node_app_init()`.
+`make check` executes `scripts/check_concurrency.py`, verifying that all tasks follow canonical lock acquisition hierarchy (`xSensorBusLock` before `xTelemetryBufferLock`).
 
 ### 7. Non-Proof Limits
-A clean compile and mutex creation prove that priority inheritance is enabled. It does **not** prove absence of deadlocks if multiple locks are acquired out-of-order, nor does it prove that the watchdog timeout cannot expire under extended compute starvation if priority inheritance is not properly maintained across all tasks.
+A static lock ordering check proves the absence of circular wait deadlock for the modeled tasks. It does **not** prove that third-party library calls cannot block or that hardware LSI clock drift (30 kHz to 60 kHz per DS5319) cannot reduce watchdog margins under extreme temperatures.

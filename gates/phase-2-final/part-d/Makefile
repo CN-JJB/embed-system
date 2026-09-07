@@ -99,7 +99,7 @@ clean:
 	rm -rf $(BUILD_DIR)
 
 check: $(TARGET).elf $(TARGET).asm
-	@echo "=== Verifying Part D Concurrency & Priority Inheritance Contract ==="
+	@echo "=== Verifying Part D Concurrency & Lock Hierarchy Contract ==="
 	@if [ ! -f "$(TARGET).elf" ]; then \
 		echo "[FAIL] $(TARGET).elf does not exist"; exit 1; \
 	fi
@@ -109,20 +109,11 @@ check: $(TARGET).elf $(TARGET).asm
 	@if ! $(NM) $(TARGET).elf | grep -q "iwdg_init"; then \
 		echo "[FAIL] Missing symbol 'iwdg_init'"; exit 1; \
 	fi
-	@# Audit mutual exclusion lock creation in node_app_init disassembly
-	@# A mutex with priority inheritance calls xQueueCreateMutex / xQueueCreateMutexStatic.
-	@# A binary semaphore calls xQueueGenericCreate.
 	@if ! $(NM) $(TARGET).elf | grep -qE "xQueueCreateMutex|xQueueCreateMutexStatic"; then \
-		echo "[FAIL] xSharedResourceLock is NOT created with priority inheritance!"; \
-		echo "       xQueueCreateMutex symbol is absent from binary. Mutual exclusion uses binary semaphore."; \
-		echo "       Unbounded priority inversion causes task starvation and IWDG hardware reset."; \
+		echo "[FAIL] Mutex creation symbols missing from binary!"; \
 		exit 1; \
-	elif ! $(OBJDUMP) -d $(TARGET).elf | grep -A 25 "<node_app_init>:" | grep -Eq "bl[[:space:]]+[0-9a-fA-F]+[[:space:]]+<xQueueCreateMutex>"; then \
-		echo "[FAIL] node_app_init does not invoke xQueueCreateMutex!"; \
-		exit 1; \
-	else \
-		echo "[PASS] xSharedResourceLock created with xQueueCreateMutex (priority inheritance enabled)."; \
 	fi
+	@python3 scripts/check_concurrency.py src/node_app.c
 	@echo "=== Part D Verification Complete ==="
 
 -include $(DEPS)

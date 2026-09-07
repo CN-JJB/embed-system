@@ -18,7 +18,7 @@ This document details the automated regression testing procedures used by the re
   make -C part-a check
   ```
   *Expected Output:* Exits with code 1:
-  `[FAIL] .init_array section size is 0! Pre-main constructor functions were discarded by linker --gc-sections.`
+  `[FAIL] Part A LMA mismatch: _sidata (0x080004c0) does not equal LOADADDR(.data) (0x080004d0)!`
 * **Reference Fixed Fixture:**
   ```bash
   cp reviewer/reference/part-a/stm32f103c8tx_flash.ld part-a/linker/stm32f103c8tx_flash.ld
@@ -26,8 +26,8 @@ This document details the automated regression testing procedures used by the re
   make -C part-a check
   ```
   *Expected Output:* Exits with code 0:
-  `[PASS] .init_array section size is 000004 bytes (constructors retained).`
-  `[PASS] Constructor symbol 'system_peripheral_preinit' present in ELF.`
+  `[PASS] Part A Linker LMA contract verified: _sidata matches LOADADDR(.data) (0x080004d0).`
+  `[PASS] .data symbol 'g_runtime_state' has non-zero initial value in image.`
 
 ---
 
@@ -38,7 +38,7 @@ This document details the automated regression testing procedures used by the re
   make -C part-b check
   ```
   *Expected Output:* Exits with code 1:
-  `[FAIL] DMA1_Channel1->CCR does not enable memory increment (MINC)!`
+  `[FAIL] DMA1_Channel1->CCR does not enable circular mode (DMA_CCR_CIRC)!`
 * **Reference Fixed Fixture:**
   ```bash
   cp reviewer/reference/part-b/dma.c part-b/src/dma.c
@@ -46,7 +46,7 @@ This document details the automated regression testing procedures used by the re
   make -C part-b check
   ```
   *Expected Output:* Exits with code 0:
-  `[PASS] DMA1_Channel1->CCR enables memory increment (MINC: 0x5ae) and circular mode.`
+  `[PASS] DMA1_Channel1->CCR enables circular mode (CIRC: 0x5bf) and memory increment (MINC).`
 
 ---
 
@@ -57,7 +57,7 @@ This document details the automated regression testing procedures used by the re
   make -C part-c check
   ```
   *Expected Output:* Exits with code 1:
-  `[FAIL] EXTI0_IRQn configured with priority byte < 0x50 (logical priority < 5)!`
+  `[FAIL] EXTI0_IRQn configured with priority byte 0x00 (logical priority 0) which is unmasked by BASEPRI 0x50!`
 * **Reference Fixed Fixture:**
   ```bash
   cp reviewer/reference/part-c/interrupt_config.c part-c/src/interrupt_config.c
@@ -65,7 +65,7 @@ This document details the automated regression testing procedures used by the re
   make -C part-c check
   ```
   *Expected Output:* Exits with code 0:
-  `[PASS] EXTI0_IRQn priority is safe (encoded byte >= 0x50, logical priority >= 5).`
+  `[PASS] EXTI0_IRQn configured with priority byte 0x50 (logical priority 5, safe for FreeRTOS).`
 
 ---
 
@@ -76,7 +76,7 @@ This document details the automated regression testing procedures used by the re
   make -C part-d check
   ```
   *Expected Output:* Exits with code 1:
-  `[FAIL] xSharedResourceLock is NOT created with priority inheritance!`
+  `[FAIL] Inverted lock acquisition hierarchy in task_storage! Lock ordering violation detected.`
 * **Reference Fixed Fixture:**
   ```bash
   cp reviewer/reference/part-d/node_app.c part-d/src/node_app.c
@@ -84,7 +84,7 @@ This document details the automated regression testing procedures used by the re
   make -C part-d check
   ```
   *Expected Output:* Exits with code 0:
-  `[PASS] xSharedResourceLock created with xQueueCreateMutex (priority inheritance enabled).`
+  `[PASS] Canonical lock hierarchy verified (task_storage acquires xSensorLock before xStorageLock).`
 
 ---
 

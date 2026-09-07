@@ -116,7 +116,7 @@ I hereby attest on my engineering honor that:
 * Interrupt IRQn inspected:
 * Encoded NVIC Priority Byte from `NVIC->IP[...]`:
 * CMSIS Logical Priority calculation:
-* Comparison with `configMAX_SYSCALL_INTERRUPT_PRIORITY` (`0x50` / logical 5):
+* Comparison with RTOS maximum syscall interrupt priority threshold:
 * Assessment of `BASEPRI` masking behavior and safety of calling `FromISR` API:
 
 ### 6.3 Minimal Correction & Verification Proof
@@ -125,7 +125,7 @@ I hereby attest on my engineering honor that:
 
 ---
 
-## 7. Part D — Concurrency, Priority Inversion & HW/SW Debugging (25 Points)
+## 7. Part D — Concurrency & HW/SW Debugging (25 Points)
 
 ### 7.1 Symptom & Own Description
 1. **Symptom:**
@@ -138,7 +138,7 @@ I hereby attest on my engineering honor that:
 * Hypothesis 4 (optional):
 
 ### 7.3 Multi-Channel Evidence Collection
-* **Channel 1 (GDB / RTOS Task State / Priority):**
+* **Channel 1 (GDB / RTOS Task State / Synchronization):**
   - Command / Action:
   - Verbatim Output:
   - *Observation:*
@@ -153,7 +153,7 @@ I hereby attest on my engineering honor that:
 
 ### 7.4 Narrow Scope & Root Cause
 * Scope Narrowing Reasoning:
-* Root Cause (Interaction between synchronization primitive, priority inversion, and watchdog):
+* Root Cause (Interaction between synchronization primitives, task scheduling, and watchdog refresh):
 
 ### 7.5 Minimal Principled Fix & Regression Proof
 * Code Diffs Applied:

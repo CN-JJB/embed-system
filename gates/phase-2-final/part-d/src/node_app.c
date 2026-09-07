@@ -4,10 +4,10 @@
 #include "task.h"
 #include "semphr.h"
 
-SemaphoreHandle_t xSharedResourceLock = NULL;
+SemaphoreHandle_t xSensorBusLock = NULL;
+SemaphoreHandle_t xTelemetryBufferLock = NULL;
 
 volatile uint32_t g_telemetry_cycles = 0;
-volatile uint32_t g_compute_cycles = 0;
 volatile uint32_t g_storage_cycles = 0;
 
 __attribute__((noinline))
@@ -38,25 +38,17 @@ static void task_telemetry(void *pvParameters)
     while (1) {
         vTaskDelayUntil(&xLastWakeTime, pdMS_TO_TICKS(50));
 
-        /* High-priority telemetry task acquires shared resource lock */
-        if (xSemaphoreTake(xSharedResourceLock, portMAX_DELAY) == pdTRUE) {
-            g_telemetry_cycles++;
-            xSemaphoreGive(xSharedResourceLock);
+        /* Telemetry task acquires Sensor Bus Lock then Telemetry Buffer Lock */
+        if (xSemaphoreTake(xSensorBusLock, portMAX_DELAY) == pdTRUE) {
+            if (xSemaphoreTake(xTelemetryBufferLock, portMAX_DELAY) == pdTRUE) {
+                g_telemetry_cycles++;
+                xSemaphoreGive(xTelemetryBufferLock);
+            }
+            xSemaphoreGive(xSensorBusLock);
         }
-    }
-}
 
-static void task_compute(void *pvParameters)
-{
-    (void)pvParameters;
-
-    while (1) {
-        vTaskDelay(pdMS_TO_TICKS(100));
-
-        /* Medium priority CPU-bound workload */
-        for (volatile uint32_t i = 0; i < 50000; i++) {
-            g_compute_cycles++;
-        }
+        /* Refresh hardware watchdog */
+        iwdg_refresh();
     }
 }
 
@@ -65,36 +57,32 @@ static void task_storage(void *pvParameters)
     (void)pvParameters;
 
     while (1) {
-        /* Low-priority storage logging task acquires shared resource lock */
-        if (xSemaphoreTake(xSharedResourceLock, portMAX_DELAY) == pdTRUE) {
-            /* Simulate data write and stack audit */
-            for (volatile uint32_t i = 0; i < 5000; i++) {
-                g_storage_cycles++;
-            }
-            xSemaphoreGive(xSharedResourceLock);
-        }
-
-        /* Refresh hardware watchdog and delay */
-        iwdg_refresh();
         vTaskDelay(pdMS_TO_TICKS(100));
+
+        /*
+         * Storage task logging cycle.
+         * Seeded Defect: Inverted lock acquisition order creates circular wait.
+         */
+        if (xSemaphoreTake(xTelemetryBufferLock, portMAX_DELAY) == pdTRUE) {
+            if (xSemaphoreTake(xSensorBusLock, portMAX_DELAY) == pdTRUE) {
+                g_storage_cycles++;
+                xSemaphoreGive(xSensorBusLock);
+            }
+            xSemaphoreGive(xTelemetryBufferLock);
+        }
     }
 }
 
 void node_app_init(void)
 {
-    /*
-     * Initialize shared resource mutual exclusion primitive.
-     */
-    xSharedResourceLock = xSemaphoreCreateBinary();
-    if (xSharedResourceLock != NULL) {
-        xSemaphoreGive(xSharedResourceLock);
-    }
+    /* Initialize mutual exclusion locks for shared resources */
+    xSensorBusLock = xSemaphoreCreateMutex();
+    xTelemetryBufferLock = xSemaphoreCreateMutex();
 
     /* Initialize hardware independent watchdog */
     iwdg_init();
 
-    /* Create tasks across 3 distinct priority levels */
-    xTaskCreate(task_telemetry, "Task_Telemetry", configMINIMAL_STACK_SIZE + 64, NULL, 3, NULL);
-    xTaskCreate(task_compute,   "Task_Compute",   configMINIMAL_STACK_SIZE + 64, NULL, 2, NULL);
+    /* Create real-time tasks across priority levels */
+    xTaskCreate(task_telemetry, "Task_Telemetry", configMINIMAL_STACK_SIZE + 64, NULL, 2, NULL);
     xTaskCreate(task_storage,   "Task_Storage",   configMINIMAL_STACK_SIZE + 64, NULL, 1, NULL);
 }

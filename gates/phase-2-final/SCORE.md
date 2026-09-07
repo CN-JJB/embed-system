@@ -26,10 +26,10 @@
 |         |                                    |        | Evidence Interpretation & Non-Proof (5)    |
 |         |                                    |        | Priority Repair & Calculation Proof (5)    |
 +---------+------------------------------------+--------+--------------------------------------------+
-| Part D  | Concurrency, Priority Inversion    | 25     | Independent 3–5 Hypotheses Formulation (4) |
-|         | & HW/SW Debugging                  |        | Two Independent Evidence Channels (6)      |
+| Part D  | Concurrency & HW/SW Debugging      | 25     | Independent 3–5 Hypotheses Formulation (4) |
+|         |                                    |        | Two Independent Evidence Channels (6)      |
 |         |                                    |        | Root Cause & Real-Time Interaction (5)     |
-|         |                                    |        | Principled Fix (Mutex & Watchdog) (5)      |
+|         |                                    |        | Principled Concurrency Remediation (5)     |
 |         |                                    |        | Multi-Cycle Clean Regression Proof (5)     |
 +=========+====================================+========+============================================+
 | Total   |                                    | 100    | Hard Pass Threshold: >= 75 / 100           |
@@ -48,7 +48,7 @@ A submission is awarded **PASS** if and only if **all eight** mandatory criteria
 | **Part A Floor** | Bare-Metal Startup & Linker Reasoning | $\ge \mathbf{15.0 / 25}$ (60%) |
 | **Part B Floor** | Peripheral Register & DMA Data-Path Diagnosis | $\ge \mathbf{15.0 / 25}$ (60%) |
 | **Part C Floor** | FreeRTOS Scheduling & Context Switch Mechanics | $\ge \mathbf{15.0 / 25}$ (60%) |
-| **Part D Floor (Mastery Bar)** | Concurrency, Priority Inversion & Debugging | $\ge \mathbf{17.5 / 25}$ (70%) |
+| **Part D Floor (Mastery Bar)** | Concurrency & HW/SW Debugging | $\ge \mathbf{17.5 / 25}$ (70%) |
 | **Zero Memory Corruption** | No stack smash, pointer corruption, or wild writes | **Required (Zero Tolerance)** |
 | **Evidence Quality** | Verifiable register/ELF/trace evidence for every fix | **Required** |
 | **Integrity Attestation** | Signed AI-Free Attestation | **Required** |

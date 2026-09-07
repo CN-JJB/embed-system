@@ -75,20 +75,10 @@ check: $(TARGET).elf
 	@if [ ! -f "$(TARGET).elf" ]; then \
 		echo "[FAIL] $(TARGET).elf does not exist"; exit 1; \
 	fi
-	@INIT_SIZE=$$($(READELF) -W -S $(TARGET).elf | grep -E '\.init_array' | awk '{print $$7}'); \
-	if [ -z "$$INIT_SIZE" ] || [ "$$INIT_SIZE" = "000000" ] || [ "$$INIT_SIZE" = "00000000" ]; then \
-		echo "[FAIL] .init_array section size is 0! Pre-main constructor functions were discarded by linker --gc-sections."; \
-		echo "       Inspect linker/stm32f103c8tx_flash.ld and section retention directives."; \
-		exit 1; \
-	else \
-		echo "[PASS] .init_array section size is $$INIT_SIZE bytes (constructors retained)."; \
+	@if ! $(NM) $(TARGET).elf | grep -q "_sdata"; then \
+		echo "[FAIL] Missing symbol '_sdata'"; exit 1; \
 	fi
-	@if ! $(NM) $(TARGET).elf | grep -q "system_peripheral_preinit"; then \
-		echo "[FAIL] Symbol 'system_peripheral_preinit' was discarded from ELF!"; \
-		exit 1; \
-	else \
-		echo "[PASS] Constructor symbol 'system_peripheral_preinit' present in ELF."; \
-	fi
+	@python3 scripts/check_linker.py $(TARGET).elf $(NM) $(READELF)
 	@echo "=== Part A Verification Complete ==="
 
 -include $(DEPS)

@@ -1,78 +1,84 @@
 # ==============================================================================
 # SEEDED FIXTURE / ASSESSMENT INPUT (NOT LIVE HARDWARE EVIDENCE)
-# Context: Live GDB Task State Inspection captured during priority inversion event
+# Context: Live GDB Task State Inspection captured during system freeze
 # Target: STM32F103C8T6 running FreeRTOS V11.3.0
 # ==============================================================================
 
 (gdb) info threads
-* 1 Thread 536871104 (Task_Compute : Running) 0x08000452 in compute_heavy_workload ()
+  Id   Target Id         Frame 
+* 1    Thread 536871104 (Task_Storage : Blocked) 0x08000620 in vListInsert ()
+  2    Thread 536870984 (Task_Telemetry : Blocked) 0x08000620 in vListInsert ()
 
-(gdb) print pxCurrentTCB->pcTaskName
-$1 = "Task_Compute\000\000\000\000"
-(gdb) print pxCurrentTCB->uxPriority
-$2 = 2
-
-# ------------------------------------------------------------------------------
-# High Priority Task Inspection: Task_Telemetry (Priority 3)
-# ------------------------------------------------------------------------------
 (gdb) print *xTaskGetHandle("Task_Telemetry")
-$3 = {
+$1 = {
   pxTopOfStack = 0x20000a40,
   xStateListItem = {
     xItemValue = 0,
     pxNext = 0x200001a8,
     pxPrevious = 0x200001a8,
     pvOwner = 0x20000240,
-    pxContainer = 0x20000508    # Blocked on xSharedResourceLock wait list!
+    pxContainer = 0x20000508
   },
-  uxPriority = 3,
-  uxBasePriority = 3,
+  uxPriority = 2,
+  uxBasePriority = 2,
   pcTaskName = "Task_Telemetry\000"
 }
 
-# ------------------------------------------------------------------------------
-# Low Priority Task Inspection: Task_Storage (Priority 1, Lock Holder)
-# ------------------------------------------------------------------------------
 (gdb) print *xTaskGetHandle("Task_Storage")
-$4 = {
+$2 = {
   pxTopOfStack = 0x20000e10,
   xStateListItem = {
-    xItemValue = 1,
+    xItemValue = 0,
     pxNext = 0x20000120,
     pxPrevious = 0x20000120,
     pvOwner = 0x20000300,
-    pxContainer = 0x20000150    # In Ready List for Priority 1
+    pxContainer = 0x20000408
   },
-  uxPriority = 1,               # CRITICAL OBSERVATION: Priority remained at 1!
-  uxBasePriority = 1,           # No priority inheritance occurred!
+  uxPriority = 1,
+  uxBasePriority = 1,
   pcTaskName = "Task_Storage\000\000"
 }
 
-# ------------------------------------------------------------------------------
-# Shared Resource Lock Inspection: xSharedResourceLock
-# ------------------------------------------------------------------------------
-(gdb) print *(Queue_t *)xSharedResourceLock
-$5 = {
+(gdb) print *(Queue_t *)xSensorBusLock
+$3 = {
   pcHead = 0x0,
   pcWriteTo = 0x0,
   u = {
-    xQueue = {
-      pcReadFrom = 0x0,
-      uxRecursiveCallCount = 0
-    },
     xSemaphore = {
-      xMutexHolder = 0x0,       # CRITICAL OBSERVATION: xMutexHolder is NULL!
+      xMutexHolder = 0x20000240,
       uxRecursiveCallCount = 0
     }
   },
   xTasksWaitingToSend = { ... },
   xTasksWaitingToReceive = {
-    uxNumberOfItems = 1,        # Task_Telemetry is waiting
+    uxNumberOfItems = 1,
+    pxIndex = 0x20000408
+  },
+  uxMessagesWaiting = 0,
+  uxLength = 1,
+  uxItemSize = 0,
+  cRxLock = -1,
+  cTxLock = -1
+}
+
+(gdb) print *(Queue_t *)xTelemetryBufferLock
+$4 = {
+  pcHead = 0x0,
+  pcWriteTo = 0x0,
+  u = {
+    xSemaphore = {
+      xMutexHolder = 0x20000300,
+      uxRecursiveCallCount = 0
+    }
+  },
+  xTasksWaitingToSend = { ... },
+  xTasksWaitingToReceive = {
+    uxNumberOfItems = 1,
     pxIndex = 0x20000508
   },
-  uxMessagesWaiting = 0,        # Semaphore is taken by Task_Storage
+  uxMessagesWaiting = 0,
   uxLength = 1,
-  uxItemSize = 0,               # Item size is 0: Created as a Binary Semaphore!
+  uxItemSize = 0,
   cRxLock = -1,
   cTxLock = -1
 }

@@ -21,9 +21,10 @@ The firmware builds cleanly with zero warnings (`-Wall -Wextra -Werror`).
 When flashed to hardware (or simulated), the following symptom is reported:
 * TIM3 is running and generating update events.
 * ADC1 receives triggers and executes conversions.
-* DMA1 Channel 1 generates Half-Transfer and Transfer-Complete interrupts as expected.
-* **HOWEVER, upon inspecting the destination buffer (`g_adc_buffer`), only slot index `0` updates with live data; all other elements (`g_adc_buffer[1..127]`) remain stubbornly zero!**
-* As a result, batch calculation algorithms reading the double buffer fail with zero-data / corrupted acquisition assertions.
+* The acquisition stream initializes cleanly and captures an initial block of 128 samples.
+* Half-Transfer and Transfer-Complete interrupt events fire once upon buffer fill.
+* **HOWEVER, continuous streaming immediately halts thereafter:** no subsequent samples are transferred into `g_adc_buffer`, `DMA1_Channel1->CNDTR` remains locked at zero, and interrupt counters cease advancing despite TIM3 and ADC1 continuing to run!
+* Downstream signal-processing threads stall waiting for continuous double-buffer ping-pong replenishment.
 
 ---
 
@@ -42,7 +43,7 @@ When flashed to hardware (or simulated), the following symptom is reported:
 3. **Observation, Interpretation & Non-Proof:**
    Provide a disciplined breakdown of what the register bits prove and do **not** prove.
 4. **Root Cause Analysis:**
-   Identify the specific bit in the peripheral configuration register responsible for preventing data progression through the buffer.
+   Identify the specific bit in the peripheral configuration register responsible for preventing continuous automatic buffer reload.
 5. **Minimal Principled Correction:**
    Modify `src/dma.c` to resolve the defect.
 6. **Regression Verification:**

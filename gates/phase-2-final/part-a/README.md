@@ -15,25 +15,25 @@ The build system compiles and links cleanly with strict flags:
 
 However, upon executing the firmware, the processor fails the startup health contract:
 * Target execution never reaches the operational loop in `main()`.
-* Instead, execution traps in an infinite loop inside `main()` due to an unfulfilled hardware pre-initialization invariant.
-* Specifically, a mandatory constructor registered via the standard GNU C runtime constructor mechanism (`__attribute__((constructor))`) failed to execute prior to `main()`.
+* Instead, execution traps in an infinite fault loop inside `main()` (`g_boot_status == 0xDEADBEEFU`).
+* System self-checks reveal that initialized global configuration variables residing in `.data` (such as `g_boot_config_token`) fail validation against their compile-time initializers.
 
 ---
 
 ## 2. Deliverables & Investigation Tasks
 
 1. **Annotated Startup Path:**
-   Trace and document the 7 discrete phases of the startup sequence from hardware reset vector fetch to `main()`.
+   Trace and document the discrete phases of the startup sequence from hardware reset vector fetch to `main()`.
 2. **Binary / Section Header Evidence:**
-   Use GNU Binutils (`arm-none-eabi-readelf -S`, `readelf -s`, and the linker map `build/firmware.map`) to examine the ELF binary. Capture verbatim evidence showing why the constructor was not invoked.
+   Use GNU Binutils (`arm-none-eabi-readelf -S`, `readelf -l`, `nm`, and the linker map `build/firmware.map`) to examine the ELF binary. Capture verbatim evidence demonstrating the relationship between Flash load memory addresses (LMA) and SRAM virtual memory addresses (VMA).
 3. **Formulate Hypotheses:**
-   Write 3–5 competing hypotheses explaining why the constructor function was omitted or failed to execute despite compiling without error.
+   Write 3–5 competing hypotheses explaining why initialized data in SRAM fails to match its compile-time initializers despite compiling without error.
 4. **Identify Root Cause:**
-   Determine the precise root cause in the linker script section definition and linker garbage collection interactions.
+   Determine the precise root cause in the linker script memory allocation, section definitions, and startup symbol exports.
 5. **Apply Minimal Principled Correction:**
    Apply the minimal correction to the linker script.
 6. **Verify Regression Resolution:**
-   Rebuild the binary and prove that `make check` passes, confirming that the constructor section is properly preserved and executed.
+   Rebuild the binary and prove that `make check` passes, confirming that the runtime data relocation contract is fulfilled.
 
 ---
 
@@ -47,10 +47,10 @@ However, upon executing the firmware, the processor fails the startup health con
    ```bash
    make check
    ```
-3. Inspect the ELF binary section headers and map file:
+3. Inspect the ELF binary section and segment headers and map file:
    ```bash
-   arm-none-eabi-readelf -S build/firmware.elf
-   grep -A 10 "init_array" build/firmware.map
+   arm-none-eabi-readelf -l build/firmware.elf
+   arm-none-eabi-nm build/firmware.elf | grep -E '_si|_sd|_ed|_et'
    ```
 4. Record your findings in Section 4 of `../SUBMISSION_TEMPLATE.md`.
 5. Apply the fix and run `make check` to confirm resolution.

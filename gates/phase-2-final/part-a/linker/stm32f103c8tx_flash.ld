@@ -62,8 +62,8 @@ SECTIONS
     {
         . = ALIGN(4);
         PROVIDE_HIDDEN (__init_array_start = .);
-        *(SORT(.init_array.*))
-        *(.init_array*)
+        KEEP (*(SORT(.init_array.*)))
+        KEEP (*(.init_array*))
         PROVIDE_HIDDEN (__init_array_end = .);
         . = ALIGN(4);
     } > FLASH
@@ -78,7 +78,8 @@ SECTIONS
         . = ALIGN(4);
     } > FLASH
 
-    _sidata = LOADADDR(.data);
+    /* Seeded defect: assigning _sidata to _etext ignores intervening .rodata and .init_array in Flash */
+    _sidata = _etext;
 
     .data :
     {

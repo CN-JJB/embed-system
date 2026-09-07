@@ -8,18 +8,14 @@
 
 ## 1. System Context & Observed Symptom
 
-You are auditing an unfamiliar FreeRTOS V11.3.0 real-time system on the STM32F103C8T6.
+You are auditing an unfamiliar FreeRTOS V11.3.0 real-time firmware package on the STM32F103C8T6.
 The system features:
-* Preemptive multitasking with `configMAX_SYSCALL_INTERRUPT_PRIORITY = 0x50` (CMSIS logical priority 5).
+* Preemptive multitasking with FreeRTOS kernel memory management and syscall boundary protection enabled.
 * Assembly context switching via `xPortPendSVHandler` on the Cortex-M3.
-* External sensor event capture via `EXTI0_IRQHandler` posting event tokens to a worker task queue using `xQueueSendFromISR()`.
+* External event signaling via `EXTI0_IRQHandler` posting event tokens to a worker task queue using `xQueueSendFromISR()`.
 
-The firmware compiles cleanly with zero warnings.
-However, under integration testing on hardware with FreeRTOS assertion checks enabled (`configASSERT` active), the system periodically halts inside `vPortValidateInterruptPriority()` immediately when an external event occurs:
-```text
-/* In FreeRTOS portable/GCC/ARM_CM3/port.c */
-configASSERT( ucCurrentPriority >= ucMaxSysCallPriority );
-```
+The firmware compiles cleanly with zero warnings (`-Wall -Wextra -Werror`).
+However, during execution under real-time event traffic, the system abruptly halts inside an unrecoverable FreeRTOS kernel assertion trap during interrupt service execution.
 
 ---
 
@@ -28,14 +24,15 @@ configASSERT( ucCurrentPriority >= ucMaxSysCallPriority );
 1. **Context Switch Stack Frame Derivation:**
    Inspect the pre-recorded GDB trace fixture in `fixtures/pendsv_gdb_trace.txt` (labeled `SEEDED FIXTURE / ASSESSMENT INPUT`).
    - Identify active stack pointers: Which stack pointer (MSP vs PSP) is active in Handler mode? Which in Thread mode?
-   - Derive the exact memory addresses and contents of the 8-word hardware-pushed exception frame (`r0-r3, r12, lr, pc, xpsr`) on the PSP.
+   - Derive the exact memory addresses and contents of the 8-word hardware-pushed exception frame (`r0-r3, r12, lr, pc, xpsr`) on the PSP using the ARMv7-M Architecture Manual (DDI 0403E.e Section B1.5).
    - Trace the software stack push executed by `xPortPendSVHandler` (`stmdb r0!, {r4-r11}`). Calculate the resulting value of `pxCurrentTCB->pxTopOfStack`.
    - Explain the architectural meaning of the exception return code `0xFFFFFFFD`.
-2. **NVIC Priority vs BASEPRI Safety Audit:**
-   Inspect `src/interrupt_config.c` and `fixtures/pendsv_gdb_trace.txt`:
-   - Determine the numerical priority argument passed to `NVIC_SetPriority(EXTI0_IRQn, ...)`.
-   - Calculate how this logical priority is encoded into the Cortex-M3 NVIC hardware register byte (`NVIC->IP[EXTI0_IRQn]`).
-   - Explain why this priority setting violates the `configMAX_SYSCALL_INTERRUPT_PRIORITY` threshold and why `BASEPRI` fails to protect FreeRTOS critical sections when this ISR executes.
+2. **Interrupt Priority & Kernel Boundary Audit:**
+   Inspect `src/interrupt_config.c`, `include/FreeRTOSConfig.h`, and the raw NVIC register readback in `fixtures/pendsv_gdb_trace.txt`:
+   - Determine how the interrupt priority for EXTI0 was configured in software.
+   - Decode how this value maps to the physical Cortex-M3 NVIC priority byte (`NVIC->IP[EXTI0_IRQn]`) under ST PM0056 Section 4.3.
+   - Audit the configured priority against the FreeRTOS maximum syscall interrupt priority threshold.
+   - Explain why this configuration triggers the kernel assertion trap when calling `FromISR` API functions.
 3. **Observation, Interpretation & Non-Proof:**
    Provide a disciplined analysis of what the register and stack evidence proves and does not prove.
 4. **Minimal Principled Correction:**
