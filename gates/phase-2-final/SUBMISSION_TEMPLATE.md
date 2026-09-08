@@ -195,6 +195,11 @@ List all items where live hardware or instrumentation could not be confirmed:
 | [ ] Evidence Quality & Non-Proof Confirmed                                  |
 | [ ] Signed AI-Free Attestation Present                                      |
 +-----------------------------------------------------------------------------+
+| Canonical Performance Tier Classification:                                  |
+| [ ] <70     : Unsatisfactory (Fail / Remediation)                           |
+| [ ] 70-84   : Proficient (Pass / Core Roadmap)                              |
+| [ ] 85-100  : Mastery (High Pass / Fast Track)                              |
++-----------------------------------------------------------------------------+
 | FINAL RESULT: [ PASS / FAIL ]                                               |
 | Reviewer Signature: _______________________ Date: _________________________ |
 +=============================================================================+

@@ -80,7 +80,7 @@ SECTIONS
      * Linker configuration for initialized data relocation.
      * Note: Section load and virtual memory addresses must align with C runtime startup copy loop.
      */
-    _sidata = _etext;
+    _sidata = ADDR(.data);
 
     .data :
     {

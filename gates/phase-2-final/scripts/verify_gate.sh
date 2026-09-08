@@ -130,7 +130,26 @@ parse_single_threshold(table_rows.get('Part A Floor', ''), 15.0, 25)
 parse_single_threshold(table_rows.get('Part B Floor', ''), 15.0, 25)
 parse_single_threshold(table_rows.get('Part C Floor', ''), 15.0, 25)
 parse_single_threshold(table_rows.get('Part D Floor (Mastery Bar)', ''), 17.5, 25)
-" && report_pass "Canonical floors structurally verified: Total>=75.0/100, A>=15.0/25 (60%), B>=15.0/25 (60%), C>=15.0/25 (60%), D>=17.5/25 (70%)" || report_fail "Canonical floors structural check failed in SCORE.md"
+
+# Check canonical evaluation outcome tiers in SCORE.md
+score_cells = [line.split('|')[1].strip().replace('\x60', '') for line in text.splitlines() if '|' in line and len(line.split('|')) >= 4]
+assert '<70' in score_cells, 'Canonical score threshold cell <70 missing from SCORE.md'
+assert '70-84' in score_cells, 'Canonical score threshold cell 70-84 missing from SCORE.md'
+assert '85-100' in score_cells, 'Canonical score threshold cell 85-100 missing from SCORE.md'
+
+# Check scoring_anchors.md
+with open('$GATE_DIR/reviewer/scoring_anchors.md') as f:
+    anchors_text = f.read()
+anchor_cells = [line.split('|')[1].strip().replace('\x60', '') for line in anchors_text.splitlines() if '|' in line and len(line.split('|')) >= 4]
+assert '<70' in anchor_cells, 'Canonical score threshold cell <70 missing from scoring_anchors.md'
+assert '70-84' in anchor_cells, 'Canonical score threshold cell 70-84 missing from scoring_anchors.md'
+assert '85-100' in anchor_cells, 'Canonical score threshold cell 85-100 missing from scoring_anchors.md'
+
+# Reject contradictory or overlapping threshold grammar across Gate documentation
+for doc in [text, anchors_text]:
+    for prohibited in ['70-85', '85-100 and', '80-100', '>= 80']:
+        assert prohibited not in doc, f'Prohibited or contradictory threshold phrasing found: {prohibited}'
+" && report_pass "Canonical floors & outcome tiers structurally verified: Total>=75.0/100, A>=15.0/25 (60%), B>=15.0/25 (60%), C>=15.0/25 (60%), D>=17.5/25 (70%), tiers=<70|70-84|85-100" || report_fail "Canonical floors or outcome tiers structural check failed in SCORE.md"
 
 # ------------------------------------------------------------------------------
 # Check 4: Total time budget is 210 minutes (3.5 h) with exact per-part budgets

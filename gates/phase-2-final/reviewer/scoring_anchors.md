@@ -118,3 +118,15 @@ This document establishes concrete, point-by-point scoring anchors for each of t
 ### Dimension D.5: Multi-Cycle Clean Regression Proof (5.0 pts)
 * **5.0 pts:** Provides `make check` output confirming mutex release pairing is verified and binary satisfies all concurrency contracts.
 * **0.0 pts:** No regression proof.
+
+---
+
+## 5. Canonical Evaluation Outcome Tiers
+
+Candidate final scores are classified using strict, non-overlapping threshold grammar:
+
+| Score Threshold Cell | Performance Tier | Evaluation Outcome & Roadmap Progression |
+|:---:|---|---|
+| `<70` | **Unsatisfactory** | **FAIL**. Cumulative score falls below the competency bar. Mandatory targeted remediation on deficient modules before attempting a fresh assessment variant. |
+| `70-84` | **Proficient** | **PASS** (subject to satisfying all mandatory Hard Pass Floors: Overall Total $\ge 75.0$, Part A $\ge 15.0$, Part B $\ge 15.0$, Part C $\ge 15.0$, Part D $\ge 17.5$). Demonstrates solid core competency; advances along the normal Phase 3 roadmap. |
+| `85-100` | **Mastery** | **HIGH PASS / MASTERY**. Demonstrates exceptional technical depth and disciplined observable evidence across all bare-metal and concurrency dimensions. Recommended for Fast Track progression. |
