@@ -3,7 +3,7 @@
 > **AI Policy:** Strict AI-Free. Official man-pages and Binutils docs allowed.
 
 ## Instructions
-1. Run `make all` inside `gate/` to generate the three blind candidate binaries:
+1. Run `make all` inside `gate/` to verify that the three provisioned blind candidate binaries are in place:
    - `fixtures/candidate_alpha`
    - `fixtures/candidate_beta`
    - `fixtures/candidate_gamma`

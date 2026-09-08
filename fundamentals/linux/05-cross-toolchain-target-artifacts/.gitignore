@@ -1,4 +1,4 @@
-# Ignore generated binaries and fixtures
+# Ignore generated lab/fault binaries
 hello_target
 hello_host
 dynamic_app
@@ -7,7 +7,5 @@ app_faulty
 app_fixed
 audit_tool
 rootfs_fixture/
-fixtures/
-mutations/
 *.o
 *.elf

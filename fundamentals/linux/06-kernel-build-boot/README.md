@@ -58,7 +58,8 @@ The assembly boot stub in `arch/arm/kernel/head.S` must initialize CPU registers
            |          | 3. Kernel Entry: stext (arch/arm/kernel/head.S)         |
            |          |    - MMU OFF, D-cache OFF, r2 = DTB pointer             |
            |          |    - __create_page_tables (build initial PGD in RAM)    |
-           |          |    - __enable_mmu (turn on MMU bit in CP15 SCTLR)       |
+           |          |    - processor-specific setup / MMU enable transition   |
+           |          |      (__enable_mmu / __turn_mmu_on -> SCTLR, see 3.1)   |
            |          |    - __mmap_switched (switch to virtual memory 0xC0..)  |
            |          | 4. C Entry: start_kernel() (init/main.c)                |
            |          |    - setup_arch() / earlycon=pl011 / console_init()     |
@@ -111,12 +112,10 @@ stext (MMU off)
    - Identity-maps the physical RAM range containing the turn-on code;
    - Maps the kernel code/data into the high virtual memory region starting at `PAGE_OFFSET` (`0xC0000000`);
    - **UART MMIO Note**: Early page tables map serial debug IO **only if `CONFIG_DEBUG_LL=y`** is compiled in. Standard runtime `earlycon=pl011` does not rely on `__create_page_tables` mapping UART; `earlycon` uses early fixmap mappings established during early C architecture initialization (`setup_arch`).
-5. **Processor Setup & MMU Turn-On**: Invokes processor-specific initialization (e.g. `v7_setup`), then branches to `__enable_mmu` / `__turn_mmu_on`. In `__turn_mmu_on`:
-   - Configures Domain Access Control (`DACR`);
-   - Translation Table Base Register (`TTBR0`) is loaded with the physical base address of the page table;
-   - Memory barriers are issued (`dsb`, `isb`);
-   - The MMU enable bit (`CR_M`, bit 0) in CP15 `SCTLR` is set;
-   - Execution branches to `__mmap_switched` in virtual address space.
+5. **Processor Setup & MMU Enable Transition**: Invokes processor-specific initialization (`__v7_setup` in `arch/arm/mm/proc-v7.S`, which among other things programs the TTBCR/TTBR translation-table base), then passes through `__enable_mmu` to `__turn_mmu_on` in `arch/arm/kernel/head.S`. The transition spans several helpers:
+   - `__enable_mmu` loads the domain access register (CP15 `c3`) and the translation table base register (CP15 `c2`, `TTBR0`) from values prepared by the page-table and processor-setup code, then branches to `__turn_mmu_on`;
+   - `__turn_mmu_on` writes the CP15 system control register (`SCTLR`) with the MMU enable bit and issues instruction-sync barriers, then returns to `__mmap_switched` in the virtual address space.
+   > Do not memorize a fixed register-by-register order from this summary. For exact register-level details, read the pinned source: `arch/arm/kernel/head.S` (`__enable_mmu`, `__turn_mmu_on`) and `arch/arm/mm/proc-v7.S` (`__v7_setup`).
 6. **`__mmap_switched`**: Now running with MMU enabled in virtual memory (`0xC0000000+`):
    - Sets up initial C runtime kernel stack (`sp`);
    - Clears kernel `.bss` section;
@@ -215,12 +214,12 @@ Location: [`faults/F03-stale-system-map/`](faults/F03-stale-system-map/)
 
 ### Challenge: Effective Config & Symbol Address Audit
 Location: [`challenge/`](challenge/)
-Given a candidate `.config` and built kernel artifacts, verify whether all Phase 3 required configurations are active in the effective configuration, extract the virtual address of `rest_init`, and prove that `System.map` matches `vmlinux`.
+Given an unfamiliar candidate `.config` and built kernel artifacts from a vendor delivery, independently audit the effective configuration against the canonical Phase 3 platform rules, report every deviation with evidence, verify the artifact/`PAGE_OFFSET` consistency, and determine whether `System.map` strictly synchronizes with `vmlinux`.
 
 ### Gate: Clean Build & Boot Contract Verification
 Location: [`gate/`](gate/)
 From isolated configuration and kernel artifacts, evaluate:
-1. Effective configuration compliance (`CONFIG_ARCH_VIRT=y`, `CONFIG_ARM_LPAE=n`, `CONFIG_VMSPLIT_3G=y`, `CONFIG_SERIAL_AMBA_PL011=y`, `CONFIG_PRINTK=y`);
+1. Effective configuration compliance with the full canonical Phase 3 delta (report every deviation);
 2. Symbol address consistency between `vmlinux` and `System.map`;
 3. Canonical QEMU command syntax verification (`-machine virt,highmem=off,gic-version=2 -cpu cortex-a7 -m 512M -smp 1 -nographic`).
 

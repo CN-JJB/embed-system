@@ -8,10 +8,16 @@ endif
 
 FIXTURES_DIR := fixtures
 
-.PHONY: all clean
+.PHONY: all clean provisioned
 
-all:
-	bash ../reviewer/scripts/generate_m01_gate_fixtures.sh $(FIXTURES_DIR) $(CROSS_COMPILE)
+# Assessment fixtures are pre-provisioned opaque artifacts committed with the
+# module. Learner workflows never generate fixtures themselves.
+all: provisioned
+
+provisioned:
+	@for f in $(FIXTURES_DIR)/candidate_alpha $(FIXTURES_DIR)/candidate_beta $(FIXTURES_DIR)/candidate_gamma; do \
+		test -f $$f || { echo "ERROR: Assessment fixture $$f is not provisioned in the repository."; exit 1; }; \
+	done
 
 clean:
-	rm -rf $(FIXTURES_DIR)
+	@echo "Gate assessment fixtures are version-controlled; nothing to clean."

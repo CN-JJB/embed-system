@@ -16,8 +16,9 @@
  *   -> processor / platform validation (__lookup_processor_type, __vet_atags)
  *   -> __create_page_tables (builds initial 16 KB L1 Translation Table in RAM)
  *        [Note: UART mapped here ONLY if CONFIG_DEBUG_LL=y, NOT standard earlycon]
- *   -> processor-specific setup (e.g., __v7_setup)
- *   -> __enable_mmu / __turn_mmu_on (loads TTBR0, DACR, SCTLR CR_M bit, isb)
+ *   -> processor-specific setup (e.g., __v7_setup in proc-v7.S: TTBCR/TTBR preparation)
+ *   -> MMU enable transition: __enable_mmu loads DACR (CP15 c3) + TTBR0 (CP15 c2),
+ *      then __turn_mmu_on writes SCTLR and issues instr_sync (see pinned head.S)
  *   -> __mmap_switched (sp, BSS zeroing, branches to start_kernel in virtual space)
  * ============================================================================
  */
@@ -58,13 +59,16 @@ __create_page_tables:
 ENDPROC(__create_page_tables)
 
 /*
- * Pedagogical summary of MMU enable
+ * Pedagogical summary of the MMU enable transition
  */
 __enable_mmu:
 	@ In real upstream source:
-	@ inv_all_tlb, configure domain access control (DACR),
-	@ load TTBR0 with physical page table base, issue dsb/isb,
-	@ set SCTLR CR_M bit (bit 0) to enable MMU, and branch to r13 (__mmap_switched).
+	@ __enable_mmu loads the domain access register (CP15 c3) and TTBR0 (CP15 c2)
+	@ from values prepared by the page-table / processor-setup code, then
+	@ branches to __turn_mmu_on. __turn_mmu_on writes the SCTLR control register
+	@ with the MMU enable bit, issues instruction-sync barriers, and returns to
+	@ the virtual-space address in r13 (__mmap_switched). Read the exact register
+	@ sequence in arch/arm/kernel/head.S and arch/arm/mm/proc-v7.S.
 	mov	pc, r13
 ENDPROC(__enable_mmu)
 

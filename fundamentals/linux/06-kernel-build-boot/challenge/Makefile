@@ -8,10 +8,16 @@ endif
 
 FIXTURES_DIR := fixtures
 
-.PHONY: all clean
+.PHONY: all clean provisioned
 
-all:
-	bash ../reviewer/scripts/generate_m02_challenge_fixtures.sh $(FIXTURES_DIR) $(CROSS_COMPILE)
+# Assessment fixtures are pre-provisioned opaque artifacts committed with the
+# module. Learner workflows never generate fixtures themselves.
+all: provisioned
+
+provisioned:
+	@for f in $(FIXTURES_DIR)/candidate_effective.config $(FIXTURES_DIR)/candidate_vmlinux $(FIXTURES_DIR)/candidate_System.map; do \
+		test -f $$f || { echo "ERROR: Assessment fixture $$f is not provisioned in the repository."; exit 1; }; \
+	done
 
 clean:
-	rm -rf $(FIXTURES_DIR)
+	@echo "Challenge assessment fixtures are version-controlled; nothing to clean."

@@ -11,16 +11,19 @@ CFLAGS ?= -Wall -Wextra -O2
 
 FIXTURES_DIR := fixtures
 
-.PHONY: all clean fixtures
+.PHONY: all clean provisioned
 
-all: audit_tool fixtures
+all: audit_tool provisioned
 
 audit_tool: audit_tool.c
 	$(HOST_CC) $(CFLAGS) $< -o $@
 
-fixtures:
-	bash ../reviewer/scripts/generate_m01_challenge_fixtures.sh $(FIXTURES_DIR) $(CROSS_COMPILE)
+# Assessment fixtures are pre-provisioned opaque artifacts committed with the
+# module. Learner workflows never generate fixtures themselves.
+provisioned:
+	@for f in $(FIXTURES_DIR)/unknown_1 $(FIXTURES_DIR)/unknown_2 $(FIXTURES_DIR)/unknown_3; do \
+		test -f $$f || { echo "ERROR: Assessment fixture $$f is not provisioned in the repository."; exit 1; }; \
+	done
 
 clean:
 	rm -f audit_tool
-	rm -rf $(FIXTURES_DIR)

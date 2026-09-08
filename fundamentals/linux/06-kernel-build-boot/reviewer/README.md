@@ -2,18 +2,19 @@
 
 > **Reviewer Only** — Keep isolated from learner-facing directories.
 
-## Assessment Matrix
+## Assessment Matrix (fresh variant)
 
 | Area | Passing Criteria | Scoring Anchors |
 |---|---|---|
-| **Effective Kernel Config** | `CONFIG_ARCH_VIRT=y`, `CONFIG_ARM_LPAE=n`, `CONFIG_VMSPLIT_3G=y`, `PAGE_OFFSET=0xC0000000` | 30 pts. Deduct full points if learner only inspects fragment instead of effective config. |
-| **Artifact Inspection** | `vmlinux` Machine is `ARM`, Entry is `0xC0008024` (or `0xC0008000`), `System.map` matches `vmlinux` | 35 pts. Deduct full points if learner fails to prove symbol synchronization. |
+| **Effective Kernel Config** | Full audit against the canonical Phase 3 delta; every seeded deviation detected with exact config-line evidence | 30 pts. Deduct full points if learner only inspects the fragment instead of the effective config. |
+| **Artifact Inspection** | `vmlinux` Machine is `ARM`, entry consistent with the configured `PAGE_OFFSET`, `System.map` synchronization verdict correct | 35 pts. Deduct full points if learner fails to prove symbol synchronization or drift with evidence. |
 | **Canonical QEMU Contract** | Exact command line with `virt`, `highmem=off`, `gic-version=2`, `cortex-a7`, `512M`, `1`, `nographic` | 35 pts. Deduct 15 pts if `highmem=off` explanation misses LPAE constraint. |
 
-## Negative Control Mutations
-The reviewer maintains five adversarial mutations in `mutations/` to test validator integrity:
-1. `mut1_vexpress_decoy`: Config using `CONFIG_ARCH_VEXPRESS=y` instead of `CONFIG_ARCH_VIRT=y`.
-2. `mut2_lpae_enabled`: Config with `CONFIG_ARM_LPAE=y` active.
-3. `mut3_vmsplit_wrong`: Config with `CONFIG_VMSPLIT_2G=y` (PAGE_OFFSET = 0x80000000) instead of 3G.
-4. `mut4_stale_map_unmatched`: System.map with shifted symbol addresses tested against semantic validator.
-5. `mut5_qemu_missing_virt_args`: QEMU launch command omitting `highmem=off` or `-cpu cortex-a7`.
+## Assessment Oracle & Regression
+- Grading oracle: `reviewer/oracle_m02.sh` (single source of truth for the seeded assessment design).
+- Oracle reference + mutation regression: `reviewer/test_m02_oracle_mutations.sh`.
+- Fixture generators: `reviewer/scripts/generate_m02_challenge_fixtures.sh`, `reviewer/scripts/generate_m02_gate_fixtures.sh`.
+  Materialized opaque fixtures are committed under `challenge/fixtures/` and `gate/fixtures/` for learner consumption.
+
+## Component Negative Control Mutations
+`test_m02_mutations.sh` maintains production-validator negative controls (platform decoy, LPAE enabled, wrong memory split, console disabled, stale System.map drift, wrong/truncated/offset zImage magic).

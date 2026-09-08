@@ -1,8 +1,12 @@
 #!/bin/bash
 set -euo pipefail
 
-# Real Linux 6.18.50 Kernel Build & Artifact Audit
+# Real Linux 6.18.50 Kernel Build & Artifact Audit (BUILD-ONLY TARGET)
 # Pinned Commit: 7cfc41f8e80f11ffa8382ed1a505154ceffb79c7
+#
+# This target verifies source identity, configuration, compilation and
+# artifact integrity only. It performs NO QEMU runtime validation; runtime
+# evidence is produced exclusively by scripts/run_real_qemu.sh (strict).
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 M02_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
@@ -122,46 +126,8 @@ echo "SHA-256 (vmlinux):   $(sha256sum "$REAL_VMLINUX" | awk '{print $1}')"
 echo "SHA-256 (zImage):    $(sha256sum "$REAL_ZIMAGE" | awk '{print $1}')"
 echo "SHA-256 (System.map): $(sha256sum "$REAL_SYSMAP" | awk '{print $1}')"
 
-# 7. Actual-Host QEMU Boot Validation
 echo ""
-echo "=== Step 7: Calibrating Boot under Actual-Host QEMU Profile ==="
-QEMU_BIN="${QEMU_BIN:-qemu-system-arm}"
-if command -v "$QEMU_BIN" >/dev/null 2>&1; then
-    QEMU_VER=$("$QEMU_BIN" --version | head -n 1)
-    echo "Host QEMU detected: $QEMU_VER"
-    echo "Launching real zImage under actual host QEMU..."
-    
-    BOOT_LOG="/tmp/real_kernel_qemu_boot.log"
-    rm -f "$BOOT_LOG"
-    
-    # Run with 15s timeout
-    set +e
-    timeout 15s "$QEMU_BIN" \
-        -machine virt,highmem=off,gic-version=2 \
-        -cpu cortex-a7 \
-        -m 512M \
-        -smp 1 \
-        -nographic \
-        -kernel "$REAL_ZIMAGE" \
-        -append "console=ttyAMA0 earlycon=pl011,0x09000000" \
-        > "$BOOT_LOG" 2>&1
-    set -e
-
-    echo "--- Observed QEMU Boot Log Extract ---"
-    grep -E "Booting Linux|Linux version|CPU: ARMv7|Kernel command line|Mountpoint-cache|Kernel panic.*VFS" "$BOOT_LOG" | head -n 15 || true
-
-    if grep -q "Kernel panic" "$BOOT_LOG" && grep -q "VFS: Unable to mount root fs" "$BOOT_LOG"; then
-        echo "[PASS] Real kernel booted to expected VFS root mount panic milestone!"
-        echo "       actual-host QEMU run ($QEMU_VER): VERIFIED"
-        echo "       canonical QEMU 11.1.1 runtime: UNVERIFIED (canonical platform contract)"
-    else
-        echo "[NOTE] Boot log captured at $BOOT_LOG. Did not observe full VFS panic within timeout."
-        tail -n 20 "$BOOT_LOG"
-    fi
-else
-    echo "[NOTE] Host qemu-system-arm not found. QEMU runtime UNVERIFIED."
-fi
-
-echo "=================================================================="
 echo "=== REAL LINUX 6.18.50 BUILD & ARTIFACT AUDIT PASSED (VERIFIED) ==="
+echo "=== QEMU runtime status: NOT EVALUATED BY THIS TARGET           ==="
+echo "=== (run scripts/run_real_qemu.sh for strict runtime evidence) ==="
 echo "=================================================================="

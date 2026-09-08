@@ -3,6 +3,8 @@ set -euo pipefail
 
 # Reviewer-isolated fixture generator for P3-M01 Gate
 # Kept strictly under reviewer/ to prevent candidate mapping exposure.
+# Materialized opaque fixtures are committed to the repo by the reviewer;
+# learner workflows never execute this script.
 
 OUT_DIR="${1:-fixtures}"
 CROSS_COMPILE="${2:-arm-none-linux-gnueabihf-}"
@@ -11,7 +13,7 @@ CC="${CROSS_COMPILE}gcc"
 
 mkdir -p "$OUT_DIR"
 
-# Rotated candidate set:
-echo 'int main(void){return 201;}' | "$HOST_CC" -x c - -O2 -o "$OUT_DIR/candidate_alpha"
-echo 'int main(void){return 202;}' | "$CC" -x c - -static -O2 -o "$OUT_DIR/candidate_beta"
-echo 'int main(void){return 203;}' | "$CC" -x c - -O2 -o "$OUT_DIR/candidate_gamma"
+# Opaque candidate set (fresh variant; mapping is reviewer-only):
+printf '#include <stdio.h>\nint main(void){puts("gate-probe");return 211;}\n' | "$CC" -x c - -O2 -o "$OUT_DIR/candidate_alpha"
+echo 'int main(void){return 222;}' | "$CC" -x c - -static -O2 -o "$OUT_DIR/candidate_beta"
+echo 'int main(void){return 233;}' | "$HOST_CC" -x c - -O2 -o "$OUT_DIR/candidate_gamma"

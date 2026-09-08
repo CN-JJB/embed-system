@@ -39,9 +39,9 @@ if ! command -v "${CROSS_COMPILE}gcc" >/dev/null 2>&1; then
     exit 1
 fi
 
-echo "=== Step 2: Building Kernel Static Fixtures & Artifacts ==="
+echo "=== Step 2: Building Kernel Static Fixtures & Verifying Provisioned Artifacts ==="
 make all CROSS_COMPILE="${CROSS_COMPILE}" >/dev/null
-echo "[PASS] Fixtures, challenge, and gate targets built cleanly"
+echo "[PASS] Static fixtures built; challenge/gate provisioned artifacts verified"
 
 # 3. Effective Kernel Configuration Validation
 echo "=== Step 3: Auditing Effective Kernel Configuration ==="
@@ -121,10 +121,20 @@ echo "=== Step 8: Verifying Canonical QEMU Command Contract ==="
 bash labs/04-qemu-kernel-boot/boot_qemu.sh "$ZIMAGE" >/dev/null
 echo "[PASS] Canonical QEMU launch command syntax verified"
 
-# 9. Reviewer Negative Control Mutations
-echo "=== Step 9: Running Reviewer Negative Control Mutations ==="
-CROSS_COMPILE="${CROSS_COMPILE}" bash reviewer/test_m02_mutations.sh
+# 9. Challenge & Gate Assessment Fixture Provisioning
+echo "=== Step 9: Verifying Assessment Fixture Provisioning ==="
+CHALLENGE_FIXTURES="challenge/fixtures/candidate_effective.config challenge/fixtures/candidate_vmlinux challenge/fixtures/candidate_System.map"
+for fx in $CHALLENGE_FIXTURES; do
+    [ -f "$fx" ] || { echo "ERROR: Challenge assessment fixture $fx is not provisioned."; exit 1; }
+done
+GATE_FIXTURES="gate/fixtures/gate_effective.config gate/fixtures/gate_vmlinux gate/fixtures/gate_zImage gate/fixtures/gate_System.map"
+for fx in $GATE_FIXTURES; do
+    [ -f "$fx" ] || { echo "ERROR: Gate assessment fixture $fx is not provisioned."; exit 1; }
+done
+echo "[PASS] Challenge and Gate assessment fixtures provisioned"
+echo "       (Assessment auditing is learner work; this check does not grade the seeded design)"
 
 echo "================================================================"
-echo "=== ALL P3-M02 SEMANTIC CHECKS & MUTATION TESTS PASSED (9/9) ==="
+echo "=== ALL P3-M02 LEARNER-SAFE SEMANTIC CHECKS PASSED (9/9)     ==="
+echo "=== (Assessment grading runs separately during review)       ==="
 echo "================================================================"

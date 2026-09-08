@@ -217,8 +217,10 @@ Fill out [`gate/gate_manifest.template`](gate/gate_manifest.template) with verif
 
 ---
 
-## 7. Reviewer & Verification Reference
-Reviewer materials and reference solutions are isolated under [`reviewer/`](reviewer/):
-- Reference solutions: [`reviewer/M01_SOLUTION.md`](reviewer/M01_SOLUTION.md)
-- Negative control mutations: [`reviewer/mutations/`](reviewer/mutations/)
-- Automated test suite: [`scripts/verify_m01.sh`](scripts/verify_m01.sh)
+## 7. Verification & Assessment
+- Learner-safe automated verification: [`scripts/verify_m01.sh`](scripts/verify_m01.sh) (`make check`).
+  It validates lab/fault artifacts and confirms the assessment fixtures are provisioned and readable.
+  It deliberately does **not** grade Challenge/Gate classifications — that is your analysis work.
+- Assessment grading is performed separately during review; learner workflows are fully self-contained.
+- Assessment fixtures under `challenge/fixtures/` and `gate/fixtures/` are pre-provisioned opaque artifacts.
+  Do not try to regenerate them; analyze them with GNU Binutils.

@@ -11,7 +11,7 @@ endif
 
 LINUX_SRC ?= /tmp/linux-6.18.50
 
-.PHONY: all clean check mutations fixtures challenge-build gate-build real-kernel-check
+.PHONY: all clean check fixtures challenge-build gate-build real-kernel-build-check real-qemu-check
 
 all: fixtures challenge-build gate-build
 
@@ -34,8 +34,15 @@ clean:
 check: all
 	CROSS_COMPILE=$(CROSS_COMPILE) bash scripts/verify_m02.sh
 
-mutations:
-	CROSS_COMPILE=$(CROSS_COMPILE) bash reviewer/test_m02_mutations.sh
+# Authoring-only assessment regression (isolation / mutations / grading oracle)
+# lives in the parent fundamentals/linux Makefile. This module Makefile is
+# learner-facing and deliberately contains no assessment tooling.
 
-real-kernel-check:
+# Real Linux 6.18.50 build + artifact audit (no QEMU requirement).
+real-kernel-build-check:
 	CROSS_COMPILE=$(CROSS_COMPILE) bash scripts/build_real_kernel.sh $(LINUX_SRC)
+
+# Strict actual-host QEMU runtime regression (requires QEMU and the expected
+# boot milestone; any shortfall is FAIL, not a note).
+real-qemu-check:
+	bash scripts/run_real_qemu.sh $(LINUX_SRC)

@@ -129,32 +129,27 @@ if bash faults/F02-missing-loader/diagnose_f02.sh "$F02_ROOTFS" >/dev/null 2>&1;
 fi
 echo "[PASS] F02 diagnostic script accurately isolated missing dynamic loader"
 
-# 7. Verify Gate Artifacts
-echo "=== Step 7: Verifying Gate Candidates ==="
-GATE_ALPHA="gate/fixtures/candidate_alpha"
-GATE_BETA="gate/fixtures/candidate_beta"
-GATE_GAMMA="gate/fixtures/candidate_gamma"
+# 7. Verify Challenge Assessment Fixture Provisioning
+echo "=== Step 7: Verifying Challenge Fixture Provisioning ==="
+CHALLENGE_FIXTURES="challenge/fixtures/unknown_1 challenge/fixtures/unknown_2 challenge/fixtures/unknown_3"
+for fx in $CHALLENGE_FIXTURES; do
+    [ -f "$fx" ] || { echo "ERROR: Challenge assessment fixture $fx is not provisioned."; exit 1; }
+    "$READELF" -h "$fx" >/dev/null 2>&1 || { echo "ERROR: $fx is not a readable ELF artifact."; exit 1; }
+done
+echo "[PASS] Challenge assessment fixtures provisioned and readable"
+echo "       (Classification is learner work; this check does not grade the mapping)"
 
-[ -f "$GATE_ALPHA" ] && [ -f "$GATE_BETA" ] && [ -f "$GATE_GAMMA" ]
-
-ALPHA_MACH=$("$READELF" -h "$GATE_ALPHA" | awk -F: '/Machine:/ {print $2}' | xargs)
-BETA_MACH=$("$READELF" -h "$GATE_BETA" | awk -F: '/Machine:/ {print $2}' | xargs)
-GAMMA_MACH=$("$READELF" -h "$GATE_GAMMA" | awk -F: '/Machine:/ {print $2}' | xargs)
-
-[[ "$ALPHA_MACH" != *"ARM"* ]] || { echo "ERROR: Alpha machine check failed (expected non-ARM host)"; exit 1; }
-[[ "$BETA_MACH" == *"ARM"* ]]  || { echo "ERROR: Beta machine check failed (expected ARM target)"; exit 1; }
-[[ "$GAMMA_MACH" == *"ARM"* ]] || { echo "ERROR: Gamma machine check failed (expected ARM target)"; exit 1; }
-
-# Beta is static (no INTERP)
-! ("$READELF" -l "$GATE_BETA" 2>/dev/null | grep -q "INTERP") || { echo "ERROR: Beta should be static without INTERP"; exit 1; }
-# Gamma is dynamic (requests INTERP)
-"$READELF" -l "$GATE_GAMMA" | grep -q "INTERP" || { echo "ERROR: Gamma missing INTERP"; exit 1; }
-echo "[PASS] Gate blind candidates strictly match reference classification"
-
-# 8. Run Negative Control Mutations
-echo "=== Step 8: Running Reviewer Negative Control Mutations ==="
-CROSS_COMPILE="${CROSS_COMPILE}" bash reviewer/test_m01_mutations.sh
+# 8. Verify Gate Assessment Fixture Provisioning
+echo "=== Step 8: Verifying Gate Fixture Provisioning ==="
+GATE_FIXTURES="gate/fixtures/candidate_alpha gate/fixtures/candidate_beta gate/fixtures/candidate_gamma"
+for fx in $GATE_FIXTURES; do
+    [ -f "$fx" ] || { echo "ERROR: Gate assessment fixture $fx is not provisioned."; exit 1; }
+    "$READELF" -h "$fx" >/dev/null 2>&1 || { echo "ERROR: $fx is not a readable ELF artifact."; exit 1; }
+done
+echo "[PASS] Gate assessment fixtures provisioned and readable"
+echo "       (Classification is learner work; this check does not grade the mapping)"
 
 echo "================================================================"
-echo "=== ALL P3-M01 SEMANTIC CHECKS & MUTATION TESTS PASSED (8/8) ==="
+echo "=== ALL P3-M01 LEARNER-SAFE SEMANTIC CHECKS PASSED (8/8)     ==="
+echo "=== (Assessment grading runs separately during review)       ==="
 echo "================================================================"

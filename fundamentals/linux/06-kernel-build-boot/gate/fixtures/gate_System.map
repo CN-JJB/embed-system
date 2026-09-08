@@ -1,0 +1,9 @@
+c0008000 T stext
+c0008004 T __create_page_tables
+c0008008 T __enable_mmu
+c000800c T __mmap_switched
+c0800000 T start_kernel
+c080000c T setup_arch
+c0800010 T console_init
+c0800014 T rest_init
+c0809000 T kernel_init

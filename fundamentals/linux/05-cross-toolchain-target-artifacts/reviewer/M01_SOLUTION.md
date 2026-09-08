@@ -2,42 +2,35 @@
 
 > Reviewer Reference Only. Keep strictly isolated from learner files.
 
-## 1. Rotated Challenge Solutions
+## 1. Challenge Reference (`challenge/fixtures`)
 
-### `fixtures/unknown_1`
-- `readelf -h unknown_1`:
-  `Machine: ARM`, `Flags: 0x5000400, Version5 EABI, hard-float ABI`
-- `readelf -l unknown_1`:
-  No `INTERP` segment present.
-- `readelf -d unknown_1`:
-  "There is no dynamic section in this file."
+### `unknown_1`
+- `readelf -h unknown_1`: non-ARM machine identity (host architecture).
+- Classification: `HOST_OR_NON_ARM`
+- Root Cause: Compiled with the host compiler.
+- Error on Target: `cannot execute binary file: Exec format error` (`-ENOEXEC`).
+
+### `unknown_2`
+- `readelf -h unknown_2`: `Machine: ARM`, `Flags: 0x5000400, Version5 EABI, hard-float ABI`.
+- `readelf -l unknown_2`: `INTERP ... [Requesting program interpreter: /lib/ld-linux-armhf.so.3]`.
+- `readelf -d unknown_2`: `(NEEDED) Shared library: [libc.so.6]`.
+- Classification: `TARGET_DYNAMIC`
+- Behavior on target: Fails with `sh: ./unknown_2: not found` (`-ENOENT`) if `/lib/ld-linux-armhf.so.3` is absent.
+
+### `unknown_3`
+- `readelf -h unknown_3`: `Machine: ARM`, `Flags: 0x5000400, Version5 EABI, hard-float ABI`.
+- `readelf -l unknown_3`: No `INTERP` segment present.
+- `readelf -d unknown_3`: "There is no dynamic section in this file."
 - Classification: `TARGET_STATIC`
 - Behavior on target: Self-contained binary without dynamic loader requirements; executes on compatible ARMv7-A Linux even with empty `/lib`.
 
-### `fixtures/unknown_2`
-- `readelf -h unknown_2` output:
-  `Machine: Advanced Micro Devices X86-64` (or host arch)
-- Classification: `HOST_OR_NON_ARM`
-- Root Cause: Compiled with host `gcc`.
-- Error on Target: `cannot execute binary file: Exec format error` (`-ENOEXEC`).
-
-### `fixtures/unknown_3`
-- `readelf -h unknown_3` output:
-  `Machine: ARM`, `Flags: 0x5000400, Version5 EABI, hard-float ABI`
-- `readelf -l unknown_3`:
-  `INTERP ... [Requesting program interpreter: /lib/ld-linux-armhf.so.3]`
-- `readelf -d unknown_3`:
-  `(NEEDED) Shared library: [libc.so.6]`
-- Classification: `TARGET_DYNAMIC`
-- Behavior on target: Fails with `sh: ./unknown_3: not found` (`-ENOENT`) if `/lib/ld-linux-armhf.so.3` is absent.
-
 ---
 
-## 2. Rotated Gate Candidate Solutions
+## 2. Gate Reference (`gate/fixtures`)
 
-- `candidate_alpha`: Host binary (`Machine: Advanced Micro Devices X86-64`, `-ENOEXEC`).
+- `candidate_alpha`: Dynamic ARM target binary (`Machine: ARM`, `PT_INTERP: /lib/ld-linux-armhf.so.3`, `NEEDED: libc.so.6`).
 - `candidate_beta`: Static ARM target binary (`Machine: ARM`, No `PT_INTERP`, No `PT_DYNAMIC`, safe for minimal rootfs).
-- `candidate_gamma`: Dynamic ARM target binary (`Machine: ARM`, `PT_INTERP: /lib/ld-linux-armhf.so.3`, `NEEDED: libc.so.6`).
+- `candidate_gamma`: Host binary (non-ARM machine identity, `-ENOEXEC` on target).
 
 ---
 
@@ -50,3 +43,4 @@ gcc reviewer/reference/audit_tool_reference.c -o reviewer/reference/audit_tool_r
 ./reviewer/reference/audit_tool_reference challenge/fixtures/unknown_2
 ./reviewer/reference/audit_tool_reference challenge/fixtures/unknown_3
 ```
+The authoritative grading oracle is `reviewer/oracle_m01.sh`; run `reviewer/test_m01_oracle_mutations.sh` for oracle regression.

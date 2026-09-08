@@ -10,19 +10,23 @@ The delivery contains:
 - `fixtures/candidate_System.map`
 
 The vendor claims this build is ready for direct boot on `qemu-system-arm -machine virt,highmem=off,gic-version=2 -cpu cortex-a7`.
-Before loading this kernel into test automation, you must audit its configuration and verify artifact synchronization.
+Before loading this kernel into test automation, you must independently audit the delivered configuration and artifacts against the canonical Phase 3 platform rules.
 
 ## Your Tasks
-1. Run `make all` in `challenge/` to generate the evaluation artifacts.
+1. Run `make all` in `challenge/` to verify the provisioned evaluation artifacts are in place.
 2. **Configuration Audit (`candidate_effective.config`)**:
-   - Audit the platform target (`CONFIG_ARCH_VIRT`).
-   - Audit the translation architecture: inspect the virtual memory split (`CONFIG_VMSPLIT_*`) and `CONFIG_PAGE_OFFSET`. Does this match standard 3G/1G or does it configure a 2G/2G split?
-   - Audit the serial console drivers: are both `CONFIG_SERIAL_AMBA_PL011` and `CONFIG_SERIAL_AMBA_PL011_CONSOLE` enabled? What is the consequence if the console driver is disabled?
+   - Audit the full effective configuration against the canonical Phase 3 platform rules documented in the module README (platform target, translation architecture, memory split / `PAGE_OFFSET`, serial console chain, early console, devtmpfs, virtio block, filesystem, printk).
+   - Report **every deviation** from the canonical baseline with the exact config line as evidence.
+   - Do not assume the config is correct: treat it as an unknown vendor delivery.
 3. **vmlinux Artifact Inspection (`candidate_vmlinux`)**:
    - Run `readelf -h` to extract the machine architecture and ELF entry point.
-   - Run `readelf -s` or `nm` to extract the virtual addresses of `stext`, `start_kernel`, `console_init`, and `rest_init`.
-   - Confirm whether the entry point and symbols match the `PAGE_OFFSET` configured in the `.config`.
+   - Run `readelf -s` or `nm` to extract the virtual addresses of the core boot symbols.
+   - Confirm whether the entry point and symbol layout are consistent with the `PAGE_OFFSET` configured in the delivered `.config`.
 4. **Symbol Synchronization Audit (`candidate_System.map`)**:
-   - Run `faults/F03-stale-system-map/diagnose_f03.sh candidate_vmlinux candidate_System.map` or manually cross-check `start_kernel`.
-   - State whether the symbol map strictly synchronizes with the binary or exhibits address drift.
+   - Cross-check **every core boot symbol** (`stext`, `start_kernel`, `setup_arch`, `console_init`, `rest_init`, `kernel_init`) between `candidate_vmlinux` (via `readelf -s` or `nm`) and `candidate_System.map`.
+   - `diagnose_f03.sh` checks only a fixed subset of symbols — do not treat it as a complete synchronization proof.
+   - State whether the symbol map strictly synchronizes with the binary or exhibits address drift, with per-symbol evidence.
 5. Provide your answers and command evidence in a clean diagnostic report.
+
+> [!NOTE]
+> Ground every conclusion in exact configuration lines and ELF/symbol-table evidence. A synthetic fixture proves only what the artifact files themselves contain — never infer runtime behavior from it.

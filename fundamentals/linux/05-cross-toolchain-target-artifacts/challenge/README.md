@@ -13,7 +13,7 @@ Another fails with `No such file or directory` (missing interpreter).
 The third runs successfully even in a bare chroot rootfs with zero shared libraries.
 
 ## Your Task
-1. Build the challenge workspace with `make all`.
+1. Build the challenge workspace with `make all` (compiles your local `audit_tool` and verifies the provisioned fixtures are in place).
 2. Inspect each binary artifact in `fixtures/` using GNU Binutils (`readelf -h`, `readelf -l`, `readelf -d`) or your compiled `audit_tool`.
 3. For each file, classify its status:
    - Is it built for the target machine architecture (`ARM`) or host machine?

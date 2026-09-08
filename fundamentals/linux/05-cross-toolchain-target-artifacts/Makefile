@@ -18,7 +18,7 @@ endif
 
 CFLAGS ?= -Wall -Wextra -O2 -g
 
-.PHONY: all clean check mutations
+.PHONY: all clean check
 
 all: labs-build faults-build challenge-build gate-build
 
@@ -49,5 +49,6 @@ clean:
 check: all
 	CROSS_COMPILE=$(CROSS_COMPILE) bash scripts/verify_m01.sh
 
-mutations:
-	CROSS_COMPILE=$(CROSS_COMPILE) bash reviewer/test_m01_mutations.sh
+# Authoring-only assessment regression (isolation / mutations / grading oracle)
+# lives in the parent fundamentals/linux Makefile. This module Makefile is
+# learner-facing and deliberately contains no assessment tooling.
