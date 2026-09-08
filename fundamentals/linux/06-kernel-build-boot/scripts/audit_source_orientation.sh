@@ -56,6 +56,7 @@ else
     }
 
     echo "[PASS] Pedagogical pseudocode verified with prominent non-upstream disclaimers."
-    echo "       Evidence Status: EXPECTED / ILLUSTRATIVE — TARGET RUN UNVERIFIED (Supply LINUX_SRC for real audit)"
+    echo "       Source-reading against real upstream tree: UNVERIFIED (supply LINUX_SRC for real audit)"
+echo "       Pedagogical pseudocode disclaimer check: VERIFIED"
     exit 0
 fi
