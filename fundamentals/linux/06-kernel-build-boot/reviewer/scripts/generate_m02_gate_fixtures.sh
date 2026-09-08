@@ -97,7 +97,11 @@ SECTIONS
 }
 EOF
 
-"$CC" -nostdlib -static -Wl,--build-id=none -T "$OUT_DIR/gate_vmlinux.lds" -g "$OUT_DIR/gate_symbols.S" -o "$OUT_DIR/gate_vmlinux"
+# Two-step compile with a FIXED object name and no -g: keeps the committed
+# opaque fixture byte-for-byte deterministic across regeneration (single-step
+# gcc embeds a random ccXXXXXX.o temp name in the symtab STT_FILE entry).
+"$CC" -c "$OUT_DIR/gate_symbols.S" -o "$OUT_DIR/.gate_symbols.o"
+"$CC" -nostdlib -static -Wl,--build-id=none -T "$OUT_DIR/gate_vmlinux.lds" "$OUT_DIR/.gate_symbols.o" -o "$OUT_DIR/gate_vmlinux"
 
 # 3. Gate zImage (with valid magic 0x016f2818)
 python3 -c "import struct; hdr = bytearray(0x40); struct.pack_into('<I', hdr, 0x24, 0x016f2818); open('$OUT_DIR/gate_zImage', 'wb').write(hdr + b'\x00' * 4096)"
@@ -106,4 +110,4 @@ python3 -c "import struct; hdr = bytearray(0x40); struct.pack_into('<I', hdr, 0x
 "$NM" -n "$OUT_DIR/gate_vmlinux" | awk '{if ($3 == "kernel_init") print "c0809000", $2, $3; else print $1, $2, $3}' > "$OUT_DIR/gate_System.map"
 
 # Clean temporary intermediate files
-rm -f "$OUT_DIR/gate_symbols.S" "$OUT_DIR/gate_vmlinux.lds"
+rm -f "$OUT_DIR/gate_symbols.S" "$OUT_DIR/gate_vmlinux.lds" "$OUT_DIR/.gate_symbols.o"

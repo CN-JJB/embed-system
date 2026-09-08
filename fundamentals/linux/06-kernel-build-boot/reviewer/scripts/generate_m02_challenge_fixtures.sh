@@ -97,10 +97,14 @@ SECTIONS
 }
 EOF
 
-"$CC" -nostdlib -static -Wl,--build-id=none -T "$OUT_DIR/candidate_vmlinux.lds" -g "$OUT_DIR/candidate_symbols.S" -o "$OUT_DIR/candidate_vmlinux"
+# Two-step compile with a FIXED object name and no -g: keeps the committed
+# opaque fixture byte-for-byte deterministic across regeneration (single-step
+# gcc embeds a random ccXXXXXX.o temp name in the symtab STT_FILE entry).
+"$CC" -c "$OUT_DIR/candidate_symbols.S" -o "$OUT_DIR/.candidate_symbols.o"
+"$CC" -nostdlib -static -Wl,--build-id=none -T "$OUT_DIR/candidate_vmlinux.lds" "$OUT_DIR/.candidate_symbols.o" -o "$OUT_DIR/candidate_vmlinux"
 
 # 3. Generate candidate_System.map with a subtle address drift on one symbol
 "$NM" -n "$OUT_DIR/candidate_vmlinux" | awk '{if ($3 == "console_init") print "c0807000", $2, $3; else print $1, $2, $3}' > "$OUT_DIR/candidate_System.map"
 
 # Clean temporary intermediate files
-rm -f "$OUT_DIR/candidate_symbols.S" "$OUT_DIR/candidate_vmlinux.lds"
+rm -f "$OUT_DIR/candidate_symbols.S" "$OUT_DIR/candidate_vmlinux.lds" "$OUT_DIR/.candidate_symbols.o"
