@@ -655,7 +655,7 @@ The Linux root filesystem is the environment in which the first userspace proces
 ### 8. Expected Evidence
 - Terminal transcript of the interactive BusyBox shell running inside QEMU.
 - Output of `cat /proc/cpuinfo` and `cat /proc/uptime` captured inside the QEMU guest.
-- Proof of static BusyBox compilation from `readelf -h`.
+- Proof of static BusyBox linkage by showing no `PT_INTERP` program header and no dynamic `NEEDED` entries (for example, `readelf -l` plus `readelf -d`; `readelf -h` alone is not sufficient).
 
 ### 9. Challenge
 Replace the simple `rdinit=/bin/sh` with a full BusyBox `/sbin/init` configuration. Write an `/etc/inittab` that executes `/etc/init.d/rcS` upon boot (`::sysinit:/etc/init.d/rcS`) and spawns an interactive askfirst shell on the serial console (`ttyAMA0::askfirst:-/bin/sh`). Boot in QEMU and verify that pressing Enter activates the shell prompt.
