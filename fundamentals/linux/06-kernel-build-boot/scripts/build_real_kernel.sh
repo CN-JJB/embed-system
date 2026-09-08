@@ -19,7 +19,7 @@ echo "=== Step 1: Auditing Upstream Source Identity ==="
 if [ ! -d "$LINUX_SRC" ] || [ ! -d "$LINUX_SRC/.git" ]; then
     echo "ERROR: Linux kernel source tree not found at: $LINUX_SRC" >&2
     echo "To clone the pinned kernel tree, run:" >&2
-    echo "  git clone --depth 1 -b linux-6.18.y https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git $LINUX_SRC" >&2
+    echo "  git clone --depth 1 --branch v6.18.50 https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git $LINUX_SRC" >&2
     exit 1
 fi
 
@@ -152,7 +152,7 @@ if command -v "$QEMU_BIN" >/dev/null 2>&1; then
 
     if grep -q "Kernel panic" "$BOOT_LOG" && grep -q "VFS: Unable to mount root fs" "$BOOT_LOG"; then
         echo "[PASS] Real kernel booted to expected VFS root mount panic milestone!"
-        echo "       actual-host QEMU 8.2.2 run: VERIFIED"
+        echo "       actual-host QEMU run ($QEMU_VER): VERIFIED"
         echo "       canonical QEMU 11.1.1 runtime: UNVERIFIED (canonical platform contract)"
     else
         echo "[NOTE] Boot log captured at $BOOT_LOG. Did not observe full VFS panic within timeout."
