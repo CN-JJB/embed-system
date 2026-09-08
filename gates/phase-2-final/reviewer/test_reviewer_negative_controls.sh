@@ -19,7 +19,7 @@ echo "Running Phase 2 Gate Reviewer-Isolated Negative Controls (Round 4)"
 echo "=============================================================================="
 
 NC_PASSED=0
-NC_TOTAL=16
+NC_TOTAL=18
 
 TEMP_TEST_DIR=$(mktemp -d /tmp/p2_reviewer_nc_XXXXXX)
 trap 'rm -rf "$TEMP_TEST_DIR"' EXIT
@@ -141,6 +141,42 @@ assert_trace_decoy_rejected() {
         NC_PASSED=$((NC_PASSED + 1))
     else
         echo "FAIL: Trace Decoy $nc_id did not produce dedicated trace-consistency rejection! Output: $oracle_out"
+        exit 1
+    fi
+}
+
+assert_evidence_contradiction_rejected() {
+    local nc_id="$1"
+    local desc="$2"
+    local oracle_cmd="$3"
+
+    echo "------------------------------------------------------------"
+    echo "Running Evidence Contradiction Negative Control $nc_id: $desc"
+    local oracle_out
+    oracle_out=$(eval "$oracle_cmd" 2>&1)
+
+    # Step 1: ORACLE EXECUTION PASS (Must not crash, raise SyntaxError, or return parser ERROR / UNEXPECTED_FAILURE)
+    if echo "$oracle_out" | grep -q -E "\[ERROR\]|\[UNEXPECTED_FAILURE\]|Traceback|SyntaxError"; then
+        echo "FAIL: Evidence Contradiction $nc_id caused oracle execution failure:"
+        echo "$oracle_out"
+        exit 1
+    fi
+    echo "  -> [ORACLE EXECUTION PASS]"
+
+    # Step 2: Must never falsely award REFERENCE_PASS
+    if echo "$oracle_out" | grep -q "\[REFERENCE_PASS\]"; then
+        echo "FAIL: Evidence Contradiction $nc_id received [REFERENCE_PASS] unexpectedly!"
+        echo "$oracle_out"
+        exit 1
+    fi
+
+    # Step 3: Must produce dedicated, identifiable evidence cross-consistency rejection
+    if echo "$oracle_out" | grep -q "Evidence cross-consistency check failed:"; then
+        echo "  -> [INTENDED ORACLE REJECT]: $oracle_out"
+        echo "PASS: Evidence Contradiction $nc_id verified: dedicated evidence-consistency reject confirmed."
+        NC_PASSED=$((NC_PASSED + 1))
+    else
+        echo "FAIL: Evidence Contradiction $nc_id did not produce dedicated evidence-consistency rejection! Output: $oracle_out"
         exit 1
     fi
 }
@@ -291,6 +327,35 @@ sed -i 's/t = 0.050 s/t = 0.150 s/g' "$GATE_DIR/part-d/fixtures/watchdog_reset_t
 assert_trace_decoy_rejected "RNC-16" "Part D isolated trace: reference source paired with non-monotonic trace" \
     "python3 '$GATE_DIR/reviewer/regression_oracle.py' part-d '$GATE_DIR/reviewer/reference/part-d/node_app.c' '$GATE_DIR/part-d/fixtures/watchdog_reset_trace.txt'"
 cp "$TEMP_TEST_DIR/trace.txt.bak" "$GATE_DIR/part-d/fixtures/watchdog_reset_trace.txt"
+
+# ------------------------------------------------------------------------------
+# RNC 17: Part D Decoy Mutation — reachable early exit before later cleanup
+# ------------------------------------------------------------------------------
+cp "$GATE_DIR/part-d/src/node_app.c" "$TEMP_TEST_DIR/part-d-rnc17.c.bak"
+cp "$GATE_DIR/reviewer/reference/part-d/node_app.c" "$GATE_DIR/part-d/src/node_app.c"
+python3 -c "
+with open('$GATE_DIR/part-d/src/node_app.c', 'r') as f:
+    c = f.read()
+c = c.replace('g_storage_cycles++;\n            /*', 'if (g_storage_cycles > 10) { return; }\n            g_storage_cycles++;\n            /*')
+with open('$GATE_DIR/part-d/src/node_app.c', 'w') as f:
+    f.write(c)
+"
+assert_reviewer_decoy_rejected "RNC-17" "Part D decoy: reachable early exit before later cleanup leaves acquire path leaked" \
+    "make -C '$GATE_DIR/part-d' clean all" \
+    "python3 '$GATE_DIR/reviewer/regression_oracle.py' part-d '$GATE_DIR/part-d/src/node_app.c' '$GATE_DIR/part-d/fixtures/watchdog_reset_trace.txt' '$GATE_DIR/part-d/fixtures/task_state_dump.txt'"
+cp "$TEMP_TEST_DIR/part-d-rnc17.c.bak" "$GATE_DIR/part-d/src/node_app.c"
+make -C "$GATE_DIR/part-d" clean all > /dev/null 2>&1
+
+# ------------------------------------------------------------------------------
+# RNC 18: Part D Evidence Contradiction Mutation — timing trace intact, mutated task state dump
+# ------------------------------------------------------------------------------
+cp "$GATE_DIR/part-d/fixtures/task_state_dump.txt" "$TEMP_TEST_DIR/task_state_dump.txt.bak"
+# Mutate task state dump: claim xMutexHolder is unheld (0x0) while timing trace proves Task_Storage holds and leaks it
+sed -i 's/xMutexHolder = 0x20000300,/xMutexHolder = 0x00000000,/g' "$GATE_DIR/part-d/fixtures/task_state_dump.txt"
+# Run against reference node_app.c (which otherwise achieves REFERENCE_PASS)
+assert_evidence_contradiction_rejected "RNC-18" "Part D evidence contradiction: intact timing trace paired with unheld mutex in state dump" \
+    "python3 '$GATE_DIR/reviewer/regression_oracle.py' part-d '$GATE_DIR/reviewer/reference/part-d/node_app.c' '$GATE_DIR/part-d/fixtures/watchdog_reset_trace.txt' '$GATE_DIR/part-d/fixtures/task_state_dump.txt'"
+cp "$TEMP_TEST_DIR/task_state_dump.txt.bak" "$GATE_DIR/part-d/fixtures/task_state_dump.txt"
 
 echo "=============================================================================="
 echo ">>> ALL $NC_PASSED / $NC_TOTAL REVIEWER NEGATIVE CONTROLS SUCCESSFULLY REJECTED <<<"

@@ -386,18 +386,261 @@ def validate_watchdog_trace(trace_path):
     return True, "Trace validated: monotonic timeline, causal priority/wake ordering, and valid RLR+1 IWDG model"
 
 
-def verify_part_d(src_path, trace_path=None):
+def _parse_c_statements(code_str):
+    clean = re.sub(r'/\*.*?\*/', '', code_str, flags=re.DOTALL)
+    clean = re.sub(r'//.*', '', clean)
+    clean = re.sub(r'".*?"', '""', clean)
+    clean = re.sub(r"'.*?'", "''", clean)
+
+    nodes = []
+    i = 0
+    n = len(clean)
+
+    while i < n:
+        while i < n and clean[i].isspace():
+            i += 1
+        if i >= n:
+            break
+
+        if clean[i:i+2] == 'if' and (i+2 == n or not (clean[i+2].isalnum() or clean[i+2] == '_')):
+            i += 2
+            while i < n and clean[i].isspace():
+                i += 1
+            if i < n and clean[i] == '(':
+                paren_depth = 1
+                cond_start = i + 1
+                i += 1
+                while i < n and paren_depth > 0:
+                    if clean[i] == '(':
+                        paren_depth += 1
+                    elif clean[i] == ')':
+                        paren_depth -= 1
+                    i += 1
+                cond_str = clean[cond_start : i - 1].strip()
+
+                while i < n and clean[i].isspace():
+                    i += 1
+                then_stmts = []
+                if i < n and clean[i] == '{':
+                    brace_depth = 1
+                    block_start = i + 1
+                    i += 1
+                    while i < n and brace_depth > 0:
+                        if clean[i] == '{':
+                            brace_depth += 1
+                        elif clean[i] == '}':
+                            brace_depth -= 1
+                        i += 1
+                    then_code = clean[block_start : i - 1]
+                    then_stmts = _parse_c_statements(then_code)
+                else:
+                    stmt_start = i
+                    while i < n and clean[i] != ';':
+                        i += 1
+                    if i < n:
+                        i += 1
+                    then_stmts = [('SIMPLE', clean[stmt_start:i].strip())]
+
+                save_i = i
+                while i < n and clean[i].isspace():
+                    i += 1
+                else_stmts = []
+                if clean[i:i+4] == 'else' and (i+4 == n or not (clean[i+4].isalnum() or clean[i+4] == '_')):
+                    i += 4
+                    while i < n and clean[i].isspace():
+                        i += 1
+                    if i < n and clean[i] == '{':
+                        brace_depth = 1
+                        block_start = i + 1
+                        i += 1
+                        while i < n and brace_depth > 0:
+                            if clean[i] == '{':
+                                brace_depth += 1
+                            elif clean[i] == '}':
+                                brace_depth -= 1
+                            i += 1
+                        else_code = clean[block_start : i - 1]
+                        else_stmts = _parse_c_statements(else_code)
+                else:
+                    i = save_i
+
+                nodes.append(('IF', cond_str, then_stmts, else_stmts))
+                continue
+
+        stmt_start = i
+        brace_depth = 0
+        while i < n:
+            if clean[i] == '{':
+                brace_depth += 1
+            elif clean[i] == '}':
+                brace_depth -= 1
+            elif clean[i] == ';' and brace_depth == 0:
+                i += 1
+                break
+            i += 1
+        stmt_str = clean[stmt_start:i].strip()
+        if stmt_str:
+            nodes.append(('SIMPLE', stmt_str))
+
+    return nodes
+
+
+def _evaluate_all_paths(nodes, state):
+    current_paths = [state]
+
+    for node in nodes:
+        next_paths = []
+        for p in current_paths:
+            if p.get("exited"):
+                next_paths.append(p)
+                continue
+
+            node_type = node[0]
+            if node_type == 'SIMPLE':
+                stmt = node[1]
+                new_p = dict(p)
+                new_p["path_desc"] = list(p["path_desc"]) + [stmt]
+
+                if re.search(r"xSemaphoreGive\s*\(\s*xSensorBusLock\s*\)", stmt):
+                    new_p["released"] = True
+                    new_p["locked"] = False
+                elif re.search(r"xSemaphoreGive\s*\(\s*xLogBufferLock\s*\)", stmt):
+                    new_p["wrong_release"] = "xLogBufferLock"
+
+                if re.search(r"\b(return|break|goto)\b", stmt):
+                    new_p["exited"] = True
+                    new_p["exit_type"] = re.search(r"\b(return|break|goto)\b", stmt).group(1)
+
+                next_paths.append(new_p)
+
+            elif node_type == 'IF':
+                cond_str, then_stmts, else_stmts = node[1], node[2], node[3]
+                is_dead_cond = bool(re.match(r"^(?:0|false|0\s*==\s*1)$", cond_str.strip()))
+
+                if is_dead_cond:
+                    dead_eval = _evaluate_all_paths(then_stmts, dict(p))
+                    if any(dp.get("released") for dp in dead_eval):
+                        p["dead_release"] = True
+                    if else_stmts:
+                        else_res = _evaluate_all_paths(else_stmts, dict(p))
+                        next_paths.extend(else_res)
+                    else:
+                        next_paths.append(p)
+                else:
+                    p_then = dict(p)
+                    p_then["path_desc"] = list(p["path_desc"]) + [f"if ({cond_str})"]
+                    then_res = _evaluate_all_paths(then_stmts, p_then)
+
+                    p_else = dict(p)
+                    p_else["path_desc"] = list(p["path_desc"]) + [f"else [from if ({cond_str})]"]
+                    if else_stmts:
+                        else_res = _evaluate_all_paths(else_stmts, p_else)
+                    else:
+                        else_res = [p_else]
+
+                    next_paths.extend(then_res)
+                    next_paths.extend(else_res)
+
+        current_paths = next_paths
+
+    return current_paths
+
+
+def validate_evidence_cross_consistency(trace_path, state_dump_path):
+    """
+    Cross-validates scripted timing evidence with task/synchronization state evidence.
+    Ensures:
+    - Task priority & priority inheritance match (Telemetry priority 2, Storage base 1 promoted to 2)
+    - Thread blocking states match trace starvation (both Task_Telemetry & Task_Storage in Blocked state)
+    - Mutex holder causality (xSensorBusLock held by Task_Storage, waiters waiting on it)
+    - Released lock status (xLogBufferLock unheld and available)
+    """
+    if not trace_path or not os.path.exists(trace_path):
+        return False, f"Trace file not found: {trace_path}"
+    if not state_dump_path or not os.path.exists(state_dump_path):
+        return False, f"Task state dump file not found: {state_dump_path}"
+
+    valid_trace, trace_msg = validate_watchdog_trace(trace_path)
+    if not valid_trace:
+        return False, f"Watchdog trace consistency check failed: {trace_msg}"
+
+    with open(state_dump_path, "r", encoding="utf-8", errors="replace") as f:
+        dump_content = f.read()
+
+    # 1. Cross-validate thread blocking states
+    if not re.search(r"Thread\s+[0-9]+\s*\(\s*Task_Telemetry\s*:\s*Blocked\s*\)", dump_content):
+        return False, "Task_Telemetry thread state is not Blocked in task dump; contradicts timing trace starvation causality"
+
+    if not re.search(r"Thread\s+[0-9]+\s*\(\s*Task_Storage\s*:\s*Blocked\s*\)", dump_content):
+        return False, "Task_Storage thread state is not Blocked in task dump; contradicts periodic timing state"
+
+    # 2. Cross-validate task priority and priority inheritance
+    telemetry_match = re.search(r'xTaskGetHandle\("Task_Telemetry"\).*?uxPriority\s*=\s*([0-9]+).*?uxBasePriority\s*=\s*([0-9]+)', dump_content, re.DOTALL)
+    if not telemetry_match:
+        return False, "Task_Telemetry task attributes not found in dump"
+    telemetry_prio = int(telemetry_match.group(1))
+    telemetry_base = int(telemetry_match.group(2))
+    if telemetry_prio != 2 or telemetry_base != 2:
+        return False, f"Task_Telemetry priority mismatch in dump: prio={telemetry_prio}, base={telemetry_base} (expected 2/2)"
+
+    storage_match = re.search(r'xTaskGetHandle\("Task_Storage"\).*?pvOwner\s*=\s*(0x[0-9a-fA-F]+).*?uxPriority\s*=\s*([0-9]+).*?uxBasePriority\s*=\s*([0-9]+)', dump_content, re.DOTALL)
+    if not storage_match:
+        return False, "Task_Storage task attributes not found in dump"
+    storage_tcb = storage_match.group(1).lower()
+    storage_prio = int(storage_match.group(2))
+    storage_base = int(storage_match.group(3))
+
+    if storage_base != 1:
+        return False, f"Task_Storage uxBasePriority={storage_base} (expected 1)"
+    if storage_prio != 2:
+        return False, f"Task_Storage uxPriority={storage_prio} does not reflect priority inheritance from Task_Telemetry (expected uxPriority=2 inherited from priority-2 waiter)"
+
+    # 3. Cross-validate mutex holder and waiter causality
+    sensor_lock_match = re.search(r'xSensorBusLock.*?xMutexHolder\s*=\s*(0x[0-9a-fA-F]+).*?uxNumberOfItems\s*=\s*([0-9]+)', dump_content, re.DOTALL)
+    if not sensor_lock_match:
+        return False, "xSensorBusLock attributes not found in dump"
+    sensor_holder = sensor_lock_match.group(1).lower()
+    sensor_waiters = int(sensor_lock_match.group(2))
+
+    if sensor_holder == "0x0" or sensor_holder == "0x00000000":
+        return False, "xSensorBusLock xMutexHolder is 0x0 (unheld); contradicts timing trace where Task_Storage leaks the lock"
+
+    if sensor_holder != storage_tcb:
+        return False, f"xSensorBusLock xMutexHolder ({sensor_holder}) does not match Task_Storage TCB ({storage_tcb})"
+
+    if sensor_waiters < 1:
+        return False, f"xSensorBusLock uxNumberOfItems={sensor_waiters}; contradicts timing trace where Task_Telemetry waits on lock"
+
+    # xLogBufferLock must NOT be held (holder == 0x0, messages waiting == 1)
+    log_lock_match = re.search(r'xLogBufferLock.*?xMutexHolder\s*=\s*(0x[0-9a-fA-F]+).*?uxMessagesWaiting\s*=\s*([0-9]+)', dump_content, re.DOTALL)
+    if not log_lock_match:
+        return False, "xLogBufferLock attributes not found in dump"
+    log_holder = log_lock_match.group(1).lower()
+    log_avail = int(log_lock_match.group(2))
+
+    if log_holder != "0x0" and log_holder != "0x00000000":
+        return False, f"xLogBufferLock xMutexHolder is {log_holder} (expected unheld 0x0); contradicts symptom where Task_Storage gave xLogBufferLock"
+
+    if log_avail != 1:
+        return False, f"xLogBufferLock uxMessagesWaiting={log_avail} (expected 1 available)"
+
+    return True, "Evidence cross-consistency confirmed: timing trace starvation matches task dump ownership, priority inheritance, and blocked waiter state."
+
+
+def verify_part_d(src_path, trace_path=None, state_dump_path=None):
     """
     Part D Oracle:
-    - Control-flow reachable exit-path analysis on task_storage.
+    - Control-flow reachable all-path lifecycle analysis on task_storage.
+    - Preserves exact lexical/control-flow order across statements and branches.
     - Intended Seed Defect: task_storage acquires xSensorBusLock but releases xLogBufferLock,
       leaving xSensorBusLock permanently held. When task_telemetry wakes, it blocks on
       xSensorBusLock and is starved of watchdog refresh, triggering IWDG reset.
     - Reference Pass: task_storage properly pairs xSemaphoreTake(xSensorBusLock) with
       xSemaphoreGive(xSensorBusLock) on all reachable exit paths of the critical section.
-    - Rejects in-function dead-branch decoys (e.g. if (0) { give(xSensorBusLock); }).
-    - Rejects runtime-conditional release decoys (e.g. if (flag) { give(xSensorBusLock); }).
-    - Rejects premature jump exits (return/break/goto) before resource release.
+    - Rejects reachable early exits before later cleanup (return/break/goto).
+    - Rejects runtime-conditional release decoys (e.g. if (flag) { give; }).
+    - Rejects in-function dead-branch release decoys (e.g. if (0) { give; }).
+    - Cross-validates timing trace with task/synchronization state dump.
     """
     if not os.path.exists(src_path):
         return "ERROR", f"File not found: {src_path}"
@@ -411,17 +654,14 @@ def verify_part_d(src_path, trace_path=None):
 
     body = storage_match.group(1)
 
-    # Locate critical section under xSemaphoreTake(xSensorBusLock, ...)
     take_idx = body.find("xSemaphoreTake")
     if take_idx == -1 or "xSensorBusLock" not in body[take_idx:take_idx+100]:
         return "ERROR", "xSemaphoreTake(xSensorBusLock) not found in task_storage"
 
-    # Find the opening '{' of the take block
     brace_start = body.find("{", take_idx)
     if brace_start == -1:
         return "ERROR", "Opening brace for xSemaphoreTake block not found in task_storage"
 
-    # Match closing brace for the take block
     depth = 0
     brace_end = -1
     for i in range(brace_start, len(body)):
@@ -438,114 +678,80 @@ def verify_part_d(src_path, trace_path=None):
 
     cs_body = body[brace_start + 1 : brace_end]
 
-    # Clean comments and string literals
-    cleaned = re.sub(r"/\*.*?\*/", "", cs_body, flags=re.DOTALL)
-    cleaned = re.sub(r"//.*", "", cleaned)
-    cleaned = re.sub(r'".*?"', '""', cleaned)
+    # Parse statements in exact lexical order into an AST
+    ast_nodes = _parse_c_statements(cs_body)
 
-    # Detect if release of xLogBufferLock is present anywhere in critical section
-    has_give_log = bool(re.search(r"xSemaphoreGive\s*\(\s*xLogBufferLock\s*\)", cleaned))
+    # Evaluate all control-flow paths through the critical section
+    init_state = {
+        "locked": True,
+        "released": False,
+        "wrong_release": None,
+        "dead_release": False,
+        "path_desc": ["entry"]
+    }
+    paths = _evaluate_all_paths(ast_nodes, init_state)
 
-    # Detect if xSemaphoreGive(xSensorBusLock) is present in dead branch
-    has_give_bus_dead = bool(re.search(r"if\s*\(\s*(?:0|false|0\s*==\s*1)\s*\)\s*\{[^}]*xSemaphoreGive\s*\(\s*xSensorBusLock\s*\)", cleaned))
+    has_dead_release = any(p.get("dead_release") for p in paths)
+    wrong_releases = [p.get("wrong_release") for p in paths if p.get("wrong_release")]
+    early_exits = [p for p in paths if p.get("exited") and p.get("locked")]
+    unreleased_fallthrough = [p for p in paths if not p.get("exited") and p.get("locked")]
+    clean_paths = [p for p in paths if p.get("released") and not p.get("locked")]
 
-    # Analyze statements and depth inside the critical section:
-    # Scan tokens tracking nested brace depth inside cs_body
-    curr_depth = 0
-    top_level_stmts = []
-    nested_stmts = []
-    buf = []
-
-    for ch in cleaned:
-        if ch == '{':
-            curr_depth += 1
-            buf.append(ch)
-        elif ch == '}':
-            curr_depth -= 1
-            buf.append(ch)
-            if curr_depth == 0:
-                nested_stmts.append("".join(buf).strip())
-                buf = []
-        elif ch == ';' and curr_depth == 0:
-            buf.append(ch)
-            top_level_stmts.append("".join(buf).strip())
-            buf = []
-        else:
-            buf.append(ch)
-    if buf:
-        rest = "".join(buf).strip()
-        if rest:
-            if curr_depth == 0:
-                top_level_stmts.append(rest)
-            else:
-                nested_stmts.append(rest)
-
-    # Check if xSemaphoreGive(xSensorBusLock) is called at top level (depth 0)
-    has_top_level_give_bus = any(
-        re.search(r"xSemaphoreGive\s*\(\s*xSensorBusLock\s*\)", s) for s in top_level_stmts
-    )
-
-    # Check if xSemaphoreGive(xSensorBusLock) is called inside a nested conditional
-    has_nested_give_bus = any(
-        re.search(r"xSemaphoreGive\s*\(\s*xSensorBusLock\s*\)", s) for s in nested_stmts
-    )
-
-    # Check for early exits before give
-    has_early_exit = False
-    give_seen = False
-    for s in top_level_stmts:
-        if re.search(r"xSemaphoreGive\s*\(\s*xSensorBusLock\s*\)", s):
-            give_seen = True
-            break
-        if re.search(r"\b(return|break|goto)\b", s):
-            has_early_exit = True
-            break
-    for n in nested_stmts:
-        if not give_seen and re.search(r"\b(return|break|goto)\b", n):
-            has_early_exit = True
-            break
-
-    # Optional trace validation
-    if trace_path:
-        valid_trace, trace_msg = validate_watchdog_trace(trace_path)
-        if not valid_trace:
-            return "SEEDED_DEFECT_REJECT", f"Watchdog trace consistency check failed: {trace_msg}"
-
-    # Decision logic:
-    if has_early_exit:
+    # Decision logic based on control-flow all-path verification:
+    if early_exits:
         return "SEEDED_DEFECT_REJECT", (
-            "Intended defect confirmed: premature exit path in task_storage leaves xSensorBusLock leaked."
+            f"Intended defect confirmed: reachable early exit path (via {early_exits[0].get('exit_type')}) "
+            f"in task_storage exits before xSemaphoreGive(xSensorBusLock), leaking the acquired mutex."
         )
 
-    if has_give_bus_dead:
+    if has_dead_release:
         return "SEEDED_DEFECT_REJECT", (
             "Intended defect confirmed: xSemaphoreGive(xSensorBusLock) is placed in an unreachable dead branch "
             "while the active reachable path leaks xSensorBusLock."
         )
 
-    if has_nested_give_bus and not has_top_level_give_bus:
+    if unreleased_fallthrough:
+        if clean_paths:
+            return "SEEDED_DEFECT_REJECT", (
+                "Intended defect confirmed: xSemaphoreGive(xSensorBusLock) is placed on a runtime-conditional path "
+                "within task_storage, leaving at least one reachable exit path that leaks the acquired mutex."
+            )
+        elif wrong_releases:
+            return "SEEDED_DEFECT_REJECT", (
+                f"Intended defect confirmed: task_storage acquires xSensorBusLock but releases {wrong_releases[0]}. "
+                f"Leaked mutex starves task_telemetry and triggers independent watchdog reset."
+            )
+        else:
+            return "SEEDED_DEFECT_REJECT", (
+                "Intended defect confirmed: task_storage acquires xSensorBusLock but does not release it on all reachable exit paths."
+            )
+
+    if wrong_releases:
         return "SEEDED_DEFECT_REJECT", (
-            "Intended defect confirmed: xSemaphoreGive(xSensorBusLock) is placed on a runtime-conditional path "
-            "within task_storage, leaving at least one reachable exit path that leaks the acquired mutex."
+            f"Intended defect confirmed: task_storage releases wrong synchronization object {wrong_releases[0]} alongside xSensorBusLock."
         )
 
-    if has_give_log and not has_top_level_give_bus:
-        return "SEEDED_DEFECT_REJECT", (
-            "Intended defect confirmed: task_storage acquires xSensorBusLock but releases xLogBufferLock. "
-            "Leaked mutex starves task_telemetry and triggers independent watchdog reset."
-        )
+    # Cross-bind evidence: timing trace and task/synchronization state dump
+    if trace_path:
+        dump_target = state_dump_path
+        if not dump_target:
+            candidate = os.path.join(os.path.dirname(trace_path), "task_state_dump.txt")
+            if os.path.exists(candidate):
+                dump_target = candidate
 
-    if not has_top_level_give_bus:
-        return "SEEDED_DEFECT_REJECT", (
-            "Intended defect confirmed: task_storage acquires xSensorBusLock but does not release it on all reachable exit paths."
-        )
+        if dump_target and os.path.exists(dump_target):
+            valid_cross, cross_msg = validate_evidence_cross_consistency(trace_path, dump_target)
+            if not valid_cross:
+                if "Watchdog trace consistency check failed:" in cross_msg:
+                    return "SEEDED_DEFECT_REJECT", cross_msg
+                return "SEEDED_DEFECT_REJECT", f"Evidence cross-consistency check failed: {cross_msg}"
+        else:
+            valid_trace, trace_msg = validate_watchdog_trace(trace_path)
+            if not valid_trace:
+                return "SEEDED_DEFECT_REJECT", f"Watchdog trace consistency check failed: {trace_msg}"
+    elif state_dump_path:
+        pass
 
-    if has_give_log:
-        return "SEEDED_DEFECT_REJECT", (
-            "Intended defect confirmed: task_storage releases wrong synchronization object xLogBufferLock alongside xSensorBusLock."
-        )
-
-    # Reference pass:
     return "REFERENCE_PASS", (
         "Reference fix verified: task_storage properly acquires and releases xSensorBusLock "
         "on all reachable exit paths of the critical section, preserving synchronization safety."
@@ -568,7 +774,8 @@ if __name__ == "__main__":
         status, msg = verify_part_c(target, *sys.argv[3:])
     elif part == "part-d":
         trace = sys.argv[3] if len(sys.argv) > 3 else None
-        status, msg = verify_part_d(target, trace)
+        state_dump = sys.argv[4] if len(sys.argv) > 4 else None
+        status, msg = verify_part_d(target, trace, state_dump)
     else:
         print(f"Unknown part: {part}")
         sys.exit(1)
