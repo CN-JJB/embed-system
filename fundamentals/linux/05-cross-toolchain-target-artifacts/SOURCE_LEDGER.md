@@ -27,5 +27,6 @@
    - All MUST scripts, Makefiles, and student documentation default to `CROSS_COMPILE ?= arm-none-linux-gnueabihf-`.
    - Toolchain sysroot points to the glibc multiarch sysroot containing `/lib/ld-linux-armhf.so.3` and `/usr/lib/libc.so.6`.
 2. **Alternate Distro Profile (`arm-linux-gnueabihf-`)**:
-   - Supported transparently via fallback: if `arm-none-linux-gnueabihf-gcc` is absent from PATH, Makefiles and scripts fall back to `arm-linux-gnueabihf-` with an explicit diagnostic note.
-   - Preserves ABI compatibility (ARMv7-A, EABI5, hard-float, glibc 2.39).
+   - Never selected automatically. It is an explicit authoring/calibration profile and must be requested with `CROSS_COMPILE=arm-linux-gnueabihf-`.
+   - Its actual compiler/binutils/sysroot identity must be reported separately from the canonical Arm GNU Toolchain profile.
+   - It targets the same broad ARM GNU/Linux hard-float ABI family, but artifact/runtime parity with the canonical Arm package is not assumed without verification.
