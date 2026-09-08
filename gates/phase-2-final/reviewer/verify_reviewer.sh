@@ -131,6 +131,30 @@ run_staged_part_regression "part-d" \
     "src/node_app.c"
 
 echo "------------------------------------------------------------"
+echo "Verifying positive Part D scripted evidence cross-consistency..."
+echo "------------------------------------------------------------"
+python3 - "$GATE_DIR" <<'PY'
+import importlib.util
+import pathlib
+import sys
+
+gate = pathlib.Path(sys.argv[1])
+oracle_path = gate / "reviewer" / "regression_oracle.py"
+spec = importlib.util.spec_from_file_location("p2_gate_oracle", oracle_path)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+ok, msg = module.validate_evidence_cross_consistency(
+    str(gate / "part-d" / "fixtures" / "watchdog_reset_trace.txt"),
+    str(gate / "part-d" / "fixtures" / "task_state_dump.txt"),
+)
+if not ok:
+    print(f"ERROR: Positive Part D evidence pair failed cross-consistency: {msg}")
+    raise SystemExit(1)
+print(f"PASS: Positive Part D evidence pair cross-consistent: {msg}")
+PY
+
+echo "------------------------------------------------------------"
 echo "Running Reviewer Secrecy & Isolation Audit..."
 echo "------------------------------------------------------------"
 python3 "$GATE_DIR/reviewer/verify_isolation.py"
