@@ -35,7 +35,7 @@ echo ""
 if ! command -v "$QEMU_BIN" >/dev/null 2>&1; then
     echo "[NOTE] Host qemu-system-arm not found in PATH."
     echo "       Canonical command line verified syntactically."
-    echo "       Evidence Status: EXPECTED / ILLUSTRATIVE — TARGET RUN UNVERIFIED"
+    echo "       QEMU virtual execution: UNVERIFIED"
     exit 0
 fi
 
