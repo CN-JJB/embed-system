@@ -91,32 +91,33 @@ Debugging begins in Module 1. There is no isolated "debugging week"; every modul
 
 All curriculum content, source-reading tasks, and lab exercises must derive from authoritative upstream sources and primary specifications. Every canonical component is pinned to exactly one version without alternatives:
 
-- **Linux Kernel Source Tree** (Upstream git: `git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git`, Canonical Baseline: **Linux 6.18.50 LTS**, tag `v6.18.50`, commit `6be83efaa5dc4cb733737fafe94685ffcb79339e`, released 2026-09-07, EOL projected Dec 2028; GPL-2.0-only):
+- **Linux Kernel Source Tree** (Upstream git: `git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git`, Canonical Baseline: **Linux 6.18.50 LTS**, tag `v6.18.50` [annotated tag object `7995d95093f421fc173190b2f7551d8e8b0ff86f`, peeled commit `7cfc41f8e80f11ffa8382ed1a505154ceffb79c7`], released 2026-09-07, EOL projected Dec 2028; GPL-2.0-only):
   - Canonical config baseline: `arch/arm/configs/multi_v7_defconfig` (enabling `CONFIG_ARCH_VIRT=y`) combined with a bounded Phase 3 configuration fragment (`CONFIG_ARM_LPAE=n`, `CONFIG_VMSPLIT_3G=y`, `CONFIG_SERIAL_AMBA_PL011=y`, `CONFIG_DEVTMPFS=y`, `CONFIG_DEVTMPFS_MOUNT=y`, `CONFIG_VIRTIO_MMIO=y`, `CONFIG_VIRTIO_BLK=y`, `CONFIG_EXT4_FS=y`);
   - Boot assembly: `arch/arm/kernel/head.S` (`stext`, `__create_page_tables`, `__enable_mmu`, `__mmap_switched`);
   - Boot initialization entry points: `init/main.c` (`start_kernel()`, `console_init()`, `rest_init()`, `kernel_init()`, `try_to_run_init_process()`);
   - Command-line documentation: `Documentation/admin-guide/kernel-parameters.rst`;
   - Device Tree usage documentation: `Documentation/devicetree/usage-model.rst`;
   - Ramfs/initramfs documentation: `Documentation/filesystems/ramfs-rootfs-initramfs.rst`.
-- **QEMU System Emulator** (Upstream git: `https://gitlab.com/qemu-project/qemu.git`, Canonical Baseline: **QEMU 11.1.1**, tag `v11.1.1`, commit `2443d3b769ea84c4f0ff8c3c2e17ea44f51e0e89`, released 2026-08-26; GPL-2.0):
-  - Canonical launch contract: `qemu-system-arm -M virt -cpu cortex-a7 -m 512M -smp 1 -nographic`;
+- **QEMU System Emulator** (Upstream git: `https://gitlab.com/qemu-project/qemu.git`, Canonical Baseline: **QEMU 11.1.1**, tag `v11.1.1` [annotated tag object `5e35f26695645b20931e10d8567c7e0169e62c07`, peeled commit `c3d48b7d1e89604920e5b81b91140c2ad39a1943`], released 2026-08-26; GPL-2.0):
+  - Canonical launch contract: `qemu-system-arm -machine virt,highmem=off,gic-version=2 -cpu cortex-a7 -m 512M -smp 1 -nographic`;
   - CPU model: Explicit `cortex-a7` (32-bit ARMv7-A); without `-cpu cortex-a7`, QEMU `virt` defaults to `cortex-a15`;
-  - Interrupt controller contract: ARM Generic Interrupt Controller v2 (GICv2 at `0x08000000`);
+  - Highmem non-LPAE contract: Because the curriculum freezes `CONFIG_ARM_LPAE=n` on an LPAE-capable CPU (Cortex-A7), QEMU `virt` defaults `highmem=on`, mapping devices and RAM above 4 GB out of range of a 32-bit short-descriptor kernel. Passing `highmem=off` is mandatory for deterministic bring-up;
+  - Interrupt controller contract: Explicit `gic-version=2` (ARM Generic Interrupt Controller v2 at `0x08000000`);
   - Hardware model reference: PL011 UART (`0x09000000`, IRQ 1), DRAM base (`0x40000000`), virtio-mmio bus (`0x0a000000`);
   - Official documentation: `docs/system/arm/virt.rst`.
-- **BusyBox Multi-Call Binary** (Upstream git: `https://git.busybox.net/busybox/`, Canonical Baseline: **BusyBox 1.36.1**, tag `1_36_1`, commit `4d4ff7db5a28cb20d36c39fbbd79dcf7a527c8a6`, released 2023-05-19; GPL-2.0-only):
+- **BusyBox Multi-Call Binary** (Upstream git: `https://git.busybox.net/busybox/`, Canonical Baseline: **BusyBox 1.36.1**, tag `1_36_1` [lightweight tag, commit `1a64f6a20aaf6ea4dbba68bbfa8cc1ab7e5c57c4`], released 2023-05-18; GPL-2.0-only):
   - Multi-call dispatcher: `applets/applets.c` and `libbb/appletlib.c`;
   - Init implementation: `init/init.c` (signal handling, `/etc/inittab` parsing, respawn/sysinit actions, console redirection).
-- **Buildroot Automated Build System** (Upstream git: `https://gitlab.com/buildroot.org/buildroot.git`, Canonical Baseline: **Buildroot 2026.05.2**, tag `2026.05.2`, commit `3a1f8e6c4e09b24b89812df93f6c3821045b85a3`, released 2026-07-10, stable bugfix release [non-LTS; Buildroot LTS releases occur only on odd-numbered years: 2025.02, 2027.02]; GPL-2.0-or-later):
+- **Buildroot Automated Build System** (Upstream git: `https://gitlab.com/buildroot.org/buildroot.git`, Canonical Baseline: **Buildroot 2026.05.2**, tag `2026.05.2` [annotated tag object `d5774f1666c406402abc46c94aa1517775dd61af`, peeled commit `72d9d4fa636a371ef9eb99c92a735ce9f6d829d5`], released 2026-08-23, stable bugfix release [non-LTS; Buildroot LTS releases occur only on odd-numbered years: 2025.02, 2027.02]; GPL-2.0-or-later):
   - Target configuration: Generic ARM Cortex-A7 (`BR2_arm=y`, `BR2_cortex_a7=y`) targeting QEMU `virt`;
   - Official manual: `docs/manual/manual.html`;
   - Target skeleton: `system/skeleton/`;
   - Package infrastructure reference: `package/busybox/busybox.mk`.
-- **Device Tree Compiler (DTC)** (Upstream git: `https://git.kernel.org/pub/scm/utils/dtc/dtc.git`, Canonical Baseline: **DTC v1.7.0**, tag `v1.7.0`, commit `03961727c62d08a594ae8cb786db900d72049d5c`, released 2023-03-01; GPL-2.0-or-later / BSD-2-Clause):
-  - Specification: *Devicetree Specification Release v0.4* (tag `v0.4`, released 2021-12-08, CC-BY-4.0).
+- **Device Tree Compiler (DTC)** (Upstream git: `https://git.kernel.org/pub/scm/utils/dtc/dtc.git`, Canonical Baseline: **DTC v1.7.0**, tag `v1.7.0` [annotated tag object `66dbfc5bbbbc2aade889881a2b4358eab6b4fac7`, peeled commit `039a99414e778332d8f9c04cbd3072e1dcc62798`], released 2023-02-09; GPL-2.0-or-later / BSD-2-Clause):
+  - Specification: *Devicetree Specification Release v0.4* (tag `v0.4` [annotated tag object `3bd573063e4d8c8e20879f935674516b87364243`, peeled commit `112f53cc57e5931f1503dfcaa1644caf15362c30`], released 2023-06-28, CC-BY-4.0).
 - **Cross-Toolchain Baseline**:
-  - Canonical Baseline: **Arm GNU Toolchain 13.3.rel1** (`arm-none-linux-gnueabihf`), GCC 13.3.1 20240614, Binutils 2.42, Glibc 2.39, official target triple `arm-none-linux-gnueabihf-`, official sysroot `arm-none-linux-gnueabihf/libc/`; GPL-3.0-with-GCC-exception / LGPL-2.1;
-  - Actual Host Toolchain (distro authoring environment): Ubuntu 24.04 LTS package `gcc-arm-linux-gnueabihf` (GCC 13.3.0, target prefix `arm-linux-gnueabihf-`, sysroot `/usr/arm-linux-gnueabihf/`). Canonical and actual host environments are explicitly separated.
+  - Canonical Baseline: **Arm GNU Toolchain 13.3.rel1** (`arm-none-linux-gnueabihf`), package `arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-linux-gnueabihf.tar.xz` (SHA256: `560267bdecf966b7a48467d0af6c81a85b906ef7b0a9b9dd91f506184b940281`, released 2024-07-03), GCC 13.3.Rel1 (GCC 13.3.1 20240614), Binutils 2.42, Glibc 2.39, official target triple `arm-none-linux-gnueabihf-`, official sysroot `arm-none-linux-gnueabihf/libc/`; GPL-3.0-with-GCC-exception / LGPL-2.1;
+  - Alternate Host/Authoring Profile: Ubuntu distro cross-toolchain package `gcc-arm-linux-gnueabihf` (target prefix `arm-linux-gnueabihf-`, sysroot `/usr/arm-linux-gnueabihf/`). Host execution UNVERIFIED in the current environment.
 - **Architecture Reference Documentation**:
   - *ARM Architecture Reference Manual Armv7-A and Armv7-R edition* (ARM DDI 0406C.d) — Primary authority for ARMv7-A execution modes (PL0 User, PL1 Supervisor/System), CP15 system control registers, VMSA short-descriptor page tables, memory types (Normal vs Device), and barriers (`DMB`, `DSB`, `ISB`);
   - *Cortex-A Series Programmer's Guide for ARMv7-A* (ARM DEN 0013D) — MMU translation walkthrough, cache organization, and boot flow.
@@ -167,7 +168,7 @@ The curriculum organizes recurring Embedded Linux bring-up and configuration fai
 | Pseudo-filesystem unmounted (`/proc` missing $\rightarrow$ `ps` fails) | P3-M03 | Gate Part B: Userspace environment setup | Init Script / Pseudo-FS |
 | Device Tree node disabled (`status = "disabled"` on console UART) | P3-M05 | Gate Part C: DT resource representation | Device Tree / Node Status |
 | DT resource address typo (Wrong `reg` address $\rightarrow$ MMIO fault) | P3-M05 | Gate Part C: Hardware description binding | Device Tree / Resource Mapping |
-| Buildroot package configuration drift / unbuilt custom target | P3-M06 | Gate Part D: Build system reproducibility | Buildroot / Configuration Stamp |
+| Buildroot local package modified but stale binary packaged | P3-M06 | Gate Part D: Build system reproducibility | Buildroot / Package Build Stamp |
 | Userspace dereference of kernel address space (Virtual memory fault) | P3-M07 | Gate Part D: Architecture privilege & MMU | Memory Space / Privilege |
 | Device MMIO attribute mismatch diagnosis (Controlled page-table fixture) | P3-M07 | Gate Part D: Memory attributes & ordering | Architecture / Memory Attributes |
 
@@ -193,7 +194,7 @@ Cross-Compilation Pipeline (GNU Make / Buildroot Reproducible Recipe)
    v
 Automated QEMU Launch Harness (run_qemu.sh)
    |
-   +---> QEMU virt Machine (-cpu cortex-a7 -m 512M -smp 1)
+   +---> QEMU virt Machine (-machine virt,highmem=off,gic-version=2 -cpu cortex-a7 -m 512M -smp 1)
    +---> Earlycon PL011 UART (Bootlog capture to console.log)
    |
    v
@@ -205,10 +206,10 @@ PID 1 Initialization Sequence (/sbin/init -> /etc/init.d/rcS)
    +---> Spawn Interactive Root Shell
 ```
 
-- **Milestone 0 (Reproducible Build Inputs & Workspace Harness)**: Establish a hermetic build directory with pinned source revisions, verified cross-toolchain environment variables (`ARCH=arm`, `CROSS_COMPILE=arm-linux-gnueabihf-` or `arm-none-linux-gnueabihf-`), and a top-level Makefile capable of orchestrating kernel build, BusyBox build, rootfs generation, and QEMU execution.
+- **Milestone 0 (Reproducible Build Inputs & Workspace Harness)**: Establish a hermetic build directory with pinned source revisions, verified cross-toolchain environment variables (`ARCH=arm`, `CROSS_COMPILE=arm-none-linux-gnueabihf-`), and a top-level Makefile capable of orchestrating kernel build, BusyBox build, rootfs generation, and QEMU execution.
 - **Milestone 1 (Target Kernel & Device Tree Generation)**: Cross-compile the pinned Linux 6.18.50 kernel using `multi_v7_defconfig` with the Phase 3 config fragment (`CONFIG_ARCH_VIRT=y`, `CONFIG_ARM_LPAE=n`, `CONFIG_VMSPLIT_3G=y`, devtmpfs, virtio-blk, ext4, initramfs, and PL011 console); extract and compile `virt.dtb` matching the QEMU machine configuration.
 - **Milestone 2 (Minimal Rootfs & PID 1 Init Automation)**: Assemble the appliance rootfs containing static BusyBox utilities, essential directory skeleton, `/etc/inittab`, and `/etc/init.d/rcS` mounting `procfs`, `sysfs`, and `devtmpfs`. Cross-compile a C-based system diagnostic tool (`appliance_diag`) that queries kernel release (`uname()`), uptime (`/proc/uptime`), memory statistics (`/proc/meminfo`), and hardware device tree entries (`/sys/firmware/devicetree/base/model`).
-- **Milestone 3 (Automated Boot & Artifact Manifest Verification)**: Create a robust `run_qemu.sh` launch script that boots the system in non-interactive headless mode with explicit `-cpu cortex-a7`, logs serial output to `artifacts/boot.log`, executes automated userspace health verification commands via QEMU guest automation, and generates an `ARTIFACT_MANIFEST.sha256` hashing all inputs and outputs.
+- **Milestone 3 (Automated Boot & Artifact Manifest Verification)**: Create a robust `run_qemu.sh` launch script that boots the system in non-interactive headless mode with explicit `-machine virt,highmem=off,gic-version=2 -cpu cortex-a7`, logs serial output to `artifacts/boot.log`, executes automated userspace health verification commands via QEMU guest automation, and generates an `ARTIFACT_MANIFEST.sha256` hashing all inputs and outputs.
 - **Milestone 4 (Controlled Fault Injection & Diagnostic Postmortem)**: Inject two controlled boot-chain failures requiring the full diagnostic chain:
   1. *Boot Failure*: Deliberately corrupt the kernel command line (`root=/dev/null` or `init=/bin/badinit`), capture the kernel panic evidence in `boot.log`, articulate 3 hypotheses, execute discriminating experiment, identify root cause, and implement recovery;
   2. *Userspace Failure*: Deliberately omit `procfs` mounting in `/etc/init.d/rcS`, capture the resulting diagnostic failure in `appliance_diag`, isolate the missing filesystem dependency via error code inspection, and restore correct service behavior.
@@ -222,7 +223,7 @@ PID 1 Initialization Sequence (/sbin/init -> /etc/init.d/rcS)
 
 - **D+1:** 5–8 min closed-book architectural recall (e.g. draw the Embedded Linux boot sequence from reset to PID 1; write the minimal kernel command line for serial console on QEMU `virt`).
 - **D+3:** 10–15 min changed-context transfer question (e.g. given a specific `dmesg` snippet showing `Kernel panic - not syncing: Attempted to kill init! exitcode=0x00000004`, determine whether the problem is in the kernel, linker script, or userspace binary).
-- **D+7:** 20–30 min AI-Free reconstruction from a blank directory (e.g. write a complete `/etc/inittab` and `/etc/init.d/rcS` from memory; or construct a manual `qemu-system-arm -M virt -cpu cortex-a7` command line with proper kernel, dtb, initramfs, and append strings).
+- **D+7:** 20–30 min AI-Free reconstruction from a blank directory (e.g. write a complete `/etc/inittab` and `/etc/init.d/rcS` from memory; or construct a manual `qemu-system-arm -machine virt,highmem=off,gic-version=2 -cpu cortex-a7` command line with proper kernel, dtb, initramfs, and append strings).
 - **Phase End:** Complete Phase 3 Final Gate transfer assessment under isolated exam conditions.
 
 ---
@@ -274,7 +275,7 @@ The Phase 3 Final Gate is an **AI-Free**, hands-on, transfer-oriented assessment
 
 ## Leader decision points
 
-- **Emulation Architecture Standard**: Standardize on **ARMv7-A 32-bit (`cortex-a7`) on QEMU `-M virt`**. All invocations explicitly specify `-cpu cortex-a7` to override the QEMU default (`cortex-a15`). This provides direct, seamless conceptual bridge from Phase 2 32-bit registers and pointers to 32-bit virtual memory and two-level page tables, while maintaining lightning-fast build and emulation speeds. AArch64 is treated as an explicit comparative architectural extension note.
+- **Emulation Architecture Standard**: Standardize on **ARMv7-A 32-bit (`cortex-a7`) on QEMU `-machine virt,highmem=off,gic-version=2 -cpu cortex-a7`**. All invocations explicitly specify `-cpu cortex-a7` to override the QEMU default (`cortex-a15`), `highmem=off` to ensure memory and devices are mapped within the 32-bit address space accessible to a non-LPAE kernel, and `gic-version=2` to align with the GICv2 architecture taught in the curriculum. This provides direct, seamless conceptual bridge from Phase 2 32-bit registers and pointers to 32-bit virtual memory and two-level page tables, while maintaining lightning-fast build and emulation speeds. AArch64 is treated as an explicit comparative architectural extension note.
 - **Kernel Configuration Contract**: Reject `vexpress_defconfig` for QEMU `virt`. Standardize on **`multi_v7_defconfig` (which enables `CONFIG_ARCH_VIRT=y`) combined with a frozen Phase 3 config fragment** enforcing `CONFIG_ARM_LPAE=n` (freezing 2-level short-descriptor translation), `CONFIG_VMSPLIT_3G=y` (freezing 3G user / 1G kernel split with `PAGE_OFFSET=0xC0000000`), PL011 UART, GICv2, devtmpfs, virtio-blk, ext4, and initramfs.
 - **Kernel Version Pinning**: Standardize on **Linux 6.18.50 LTS** (longterm release, projected EOL Dec 2028), matching the Phase 0 canonical research baseline. Avoid bleeding-edge mainline (7.x) to protect curriculum stability.
 - **Rootfs Implementation Strategy**: Enforce a strict two-stage pedagogical sequence: learners MUST manually assemble a minimal rootfs with BusyBox in P3-M03/M04 *before* experiencing Buildroot automated image generation in P3-M06.

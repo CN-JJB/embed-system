@@ -4,9 +4,9 @@
 > Role: Phase Curriculum Designer + Systems Research Specialist  
 > Checked date: **2026-09-08**  
 > Scope: 4 weeks, **32.0 h mandatory planned work** (strictly bounded within the canonical ~31–33 h envelope; target ~32 h)  
-> Target Platform: **QEMU Virtual Machine (`-M virt`, Cortex-A7 32-bit ARMv7-A @ 512 MB RAM, PL011 UART, GICv2)**  
+> Target Platform: **QEMU Virtual Machine (`-machine virt,highmem=off,gic-version=2`, Cortex-A7 32-bit ARMv7-A @ 512 MB RAM, PL011 UART, GICv2)**  
 > Canonical Toolchain Baseline: **Arm GNU Toolchain 13.3.rel1** (`arm-none-linux-gnueabihf-`, GCC 13.3.1 20240614, Binutils 2.42, Glibc 2.39)  
-> Actual Host Toolchain (Distro Environment): **Ubuntu 24.04 LTS `gcc-arm-linux-gnueabihf`** (`arm-linux-gnueabihf-`, GCC 13.3.0)  
+> Alternate Host Toolchain Profile (Distro Environment): **Ubuntu 24.04 LTS `gcc-arm-linux-gnueabihf`** (`arm-linux-gnueabihf-`, GCC 13.3.0, execution UNVERIFIED in current environment)  
 > Upstream Software Baselines: **Linux Kernel 6.18.50 LTS**, **QEMU 11.1.1**, **BusyBox 1.36.1**, **Buildroot 2026.05.2 (Stable Non-LTS)**, **DTC v1.7.0**  
 > Verification: Curriculum, lab, and project designs are **UNVERIFIED** until executed by learner and automated test harnesses in QEMU; no physical hardware execution is claimed; QEMU virtual platform evidence is strictly distinguished from physical board evidence.  
 > Canonical authority: None. This document establishes the research and technical blueprint for Phase 3; the Leader decides canonical inclusion.
@@ -51,7 +51,7 @@ Phase 3 is strictly bounded to the **boot-chain, system bring-up, and architectu
 Upon completing Phase 3, the learner can independently:
 
 1. **Cross-Compilation Toolchains & Target Artifacts (L3 / L4-local artifact faults)**:
-   Explain the target tuple structure (`[arch]-[vendor]-[os]-[abi]`), configure cross-compilation environments (`ARCH=arm CROSS_COMPILE=arm-none-linux-gnueabihf-` or `arm-linux-gnueabihf-`), and audit target binaries using `readelf -h`, `file`, and `readelf -l`. Distinguish static binaries from dynamic binaries, inspect the `PT_INTERP` header segment, locate shared library dependencies (`NEEDED`), verify sysroot compatibility, and diagnose architecture mismatches (`Exec format error`) and missing dynamic linkers (`/lib/ld-linux-armhf.so.3: not found`).
+   Explain the target tuple structure (`[arch]-[vendor]-[os]-[abi]`), configure cross-compilation environments (`ARCH=arm CROSS_COMPILE=arm-none-linux-gnueabihf-`), and audit target binaries using `readelf -h`, `file`, and `readelf -l`. Distinguish static binaries from dynamic binaries, inspect the `PT_INTERP` header segment, locate shared library dependencies (`NEEDED`), verify sysroot compatibility, and diagnose architecture mismatches (`Exec format error`) and missing dynamic linkers (`/lib/ld-linux-armhf.so.3: not found`).
 2. **Linux Kernel Build & Boot Sequence (L2 build / L3 boot flow)**:
    Navigate the Linux kernel source tree (`arch/arm/`, `init/`, `drivers/`, `Documentation/`); configure the kernel using the canonical `multi_v7_defconfig` baseline (enabling `CONFIG_ARCH_VIRT=y`) combined with a frozen Phase 3 config delta (`CONFIG_ARM_LPAE=n`, `CONFIG_VMSPLIT_3G=y`, PL011 UART, GICv2, devtmpfs, virtio); cross-compile the kernel into uncompressed ELF (`vmlinux`), compressed bootable binary (`zImage`), and symbol map (`System.map`). Trace the execution sequence from `arch/arm/kernel/head.S` (`stext` entered with MMU off $\rightarrow$ `__create_page_tables` $\rightarrow$ `__enable_mmu` $\rightarrow$ `__mmap_switched`) into `init/main.c` (`start_kernel()` $\rightarrow$ `setup_arch()` $\rightarrow$ `mm_init()` $\rightarrow$ `trap_init()` $\rightarrow$ `console_init()` $\rightarrow$ `rest_init()` $\rightarrow$ `kernel_init()` $\rightarrow$ `try_to_run_init_process()`).
 3. **Bootargs, Console Handoff & Boot Diagnostics (L3 QEMU & bootargs / L4-local boot diagnosis)**:
@@ -336,12 +336,14 @@ The canonical QEMU `virt` machine instance is defined by the following hardware 
 
 ## 4.3 Canonical Execution Command Line Contracts
 
-All QEMU execution contracts must explicitly specify `-cpu cortex-a7` to override the QEMU `virt` default (`cortex-a15`):
+All QEMU execution contracts must explicitly specify `-machine virt,highmem=off,gic-version=2` and `-cpu cortex-a7`:
+- `-machine virt,highmem=off,gic-version=2`: Because the curriculum freezes `CONFIG_ARM_LPAE=n` on an LPAE-capable CPU (Cortex-A7), QEMU `virt` defaults `highmem=on`, mapping devices and RAM above the 4 GB boundary out of reach of a 32-bit short-descriptor kernel. Passing `highmem=off` is mandatory for deterministic bring-up. In addition, `gic-version=2` is explicitly specified to match the GICv2 interrupt architecture taught in the curriculum.
+- `-cpu cortex-a7`: Explicitly overrides QEMU's default CPU for `virt` (`cortex-a15`).
 
 ### Contract A: Direct Kernel Boot with Minimal Initramfs (P3-M02 to P3-M05)
 ```bash
 qemu-system-arm \
-    -M virt \
+    -machine virt,highmem=off,gic-version=2 \
     -cpu cortex-a7 \
     -m 512M \
     -smp 1 \
@@ -355,7 +357,7 @@ qemu-system-arm \
 ### Contract B: Persistent Block Storage Boot (Virtio Disk) (P3-M06 to P3-M08)
 ```bash
 qemu-system-arm \
-    -M virt \
+    -machine virt,highmem=off,gic-version=2 \
     -cpu cortex-a7 \
     -m 512M \
     -smp 1 \
@@ -374,19 +376,37 @@ qemu-system-arm \
 
 # Part 5 — Official Upstream Source & Version Ledger
 
-All source and toolchain baselines are pinned to official upstream releases checked as of **2026-09-08**. Every canonical component has exactly one pin:
+All source and toolchain baselines are pinned to official upstream releases checked as of **2026-09-08**. Every canonical component has exactly one pin without alternatives:
 
 | ID | Component / Document | Canonical Baseline Version / Pin | License | Upstream Source Repository / URL | Pedagogical Role & Selection Rationale |
 |---|---|---|---|---|---|
-| **L01** | **Linux Kernel** | **6.18.50 LTS** (tag `v6.18.50`, commit `6be83efaa5dc4cb733737fafe94685ffcb79339e`, released 2026-09-07, EOL Dec 2028) | GPL-2.0-only | `git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git` | Primary OS kernel; stable longterm release with active maintenance; multi_v7_defconfig enables CONFIG_ARCH_VIRT |
-| **L02** | **QEMU System Emulator** | **11.1.1** (tag `v11.1.1`, commit `2443d3b769ea84c4f0ff8c3c2e17ea44f51e0e89`, released 2026-08-26) | GPL-2.0 | `https://gitlab.com/qemu-project/qemu.git` | Canonical hardware emulator; provides actively maintained `-M virt` virtual machine platform with Cortex-A7 support |
-| **L03** | **BusyBox Multi-Call Binary** | **1.36.1** (tag `1_36_1`, commit `4d4ff7db5a28cb20d36c39fbbd79dcf7a527c8a6`, released 2023-05-19) | GPL-2.0-only | `https://git.busybox.net/busybox/` | Minimal userspace environment; `/sbin/init`, coreutils, shell (`sh`), multi-call dispatcher; chosen for rock-solid stability |
-| **L04** | **Buildroot System** | **2026.05.2** (tag `2026.05.2`, commit `3a1f8e6c4e09b24b89812df93f6c3821045b85a3`, released 2026-07-10, stable bugfix release [non-LTS]) | GPL-2.0-or-later | `https://gitlab.com/buildroot.org/buildroot.git` | Automated build system; packages toolchain, BusyBox, kernel, and ext4 rootfs; chosen as latest verified stable release |
-| **L05** | **Device Tree Compiler (DTC)** | **v1.7.0** (tag `v1.7.0`, commit `03961727c62d08a594ae8cb786db900d72049d5c`, released 2023-03-01) | GPL-2.0-or-later / BSD-2-Clause | `https://git.kernel.org/pub/scm/utils/dtc/dtc.git` | Device Tree decompiler and compiler; DTS $\leftrightarrow$ DTB conversion and validation |
-| **L06** | **Devicetree Specification** | **Release v0.4** (tag `v0.4`, released 2021-12-08) | Creative Commons Attribution (CC-BY-4.0) | `https://github.com/devicetree-org/devicetree-specification/releases/tag/v0.4` | Official specification for device tree syntax, standard properties (`compatible`, `reg`, `interrupts`) |
-| **L07** | **Arm GNU Toolchain (Canonical Package)** | **13.3.rel1** (`arm-none-linux-gnueabihf`), GCC 13.3.1 20240614, Binutils 2.42, Glibc 2.39 | GPL-3.0 / LGPL-2.1 | `https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads` | Canonical cross-compilation package baseline; target triple `arm-none-linux-gnueabihf-`, sysroot `arm-none-linux-gnueabihf/libc/` |
+| **L01** | **Linux Kernel** | **6.18.50 LTS** (tag `v6.18.50` [annotated tag object `7995d95093f421fc173190b2f7551d8e8b0ff86f`, peeled commit `7cfc41f8e80f11ffa8382ed1a505154ceffb79c7`], released 2026-09-07, EOL projected Dec 2028) | GPL-2.0-only | `git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git` | Primary OS kernel; stable longterm release with active maintenance; multi_v7_defconfig enables CONFIG_ARCH_VIRT |
+| **L02** | **QEMU System Emulator** | **11.1.1** (tag `v11.1.1` [annotated tag object `5e35f26695645b20931e10d8567c7e0169e62c07`, peeled commit `c3d48b7d1e89604920e5b81b91140c2ad39a1943`], released 2026-08-26) | GPL-2.0 | `https://gitlab.com/qemu-project/qemu.git` | Canonical hardware emulator; provides actively maintained `-machine virt,highmem=off,gic-version=2` virtual machine platform with Cortex-A7 support |
+| **L03** | **BusyBox Multi-Call Binary** | **1.36.1** (tag `1_36_1` [lightweight tag, commit `1a64f6a20aaf6ea4dbba68bbfa8cc1ab7e5c57c4`], released 2023-05-18) | GPL-2.0-only | `https://git.busybox.net/busybox/` | Minimal userspace environment; `/sbin/init`, coreutils, shell (`sh`), multi-call dispatcher; chosen for rock-solid stability |
+| **L04** | **Buildroot System** | **2026.05.2** (tag `2026.05.2` [annotated tag object `d5774f1666c406402abc46c94aa1517775dd61af`, peeled commit `72d9d4fa636a371ef9eb99c92a735ce9f6d829d5`], released 2026-08-23, stable bugfix release [non-LTS]) | GPL-2.0-or-later | `https://gitlab.com/buildroot.org/buildroot.git` | Automated build system; packages toolchain, BusyBox, kernel, and ext4 rootfs; chosen as latest verified stable release |
+| **L05** | **Device Tree Compiler (DTC)** | **v1.7.0** (tag `v1.7.0` [annotated tag object `66dbfc5bbbbc2aade889881a2b4358eab6b4fac7`, peeled commit `039a99414e778332d8f9c04cbd3072e1dcc62798`], released 2023-02-09) | GPL-2.0-or-later / BSD-2-Clause | `https://git.kernel.org/pub/scm/utils/dtc/dtc.git` | Device Tree decompiler and compiler; DTS $\leftrightarrow$ DTB conversion and validation |
+| **L06** | **Devicetree Specification** | **Release v0.4** (tag `v0.4` [annotated tag object `3bd573063e4d8c8e20879f935674516b87364243`, peeled commit `112f53cc57e5931f1503dfcaa1644caf15362c30`], released 2023-06-28) | Creative Commons Attribution (CC-BY-4.0) | `https://github.com/devicetree-org/devicetree-specification/releases/tag/v0.4` | Official specification for device tree syntax, standard properties (`compatible`, `reg`, `interrupts`) |
+| **L07** | **Arm GNU Toolchain (Canonical Package)** | **13.3.rel1** (`arm-none-linux-gnueabihf`), package `arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-linux-gnueabihf.tar.xz` (SHA256: `560267bdecf966b7a48467d0af6c81a85b906ef7b0a9b9dd91f506184b940281`, released 2024-07-03), GCC 13.3.1 20240614, Binutils 2.42, Glibc 2.39 | GPL-3.0 / LGPL-2.1 | `https://developer.arm.com/downloads/-/arm-gnu-toolchain-downloads` | Canonical cross-compilation package baseline; target triple `arm-none-linux-gnueabihf-`, sysroot `arm-none-linux-gnueabihf/libc/` |
 | **L08** | **ARM Architecture Reference** | **ARM DDI 0406C.d (Armv7-A/R)** | Proprietary / Arm Reference | Arm Infocenter / Developer Documentation | Authoritative specification for ARMv7-A PL0/PL1 privilege modes, VMSA short-descriptor MMU, CP15 registers, and barriers |
 | **L09** | **Cortex-A Programmer's Guide**| **ARM DEN 0013D** | Proprietary / Arm Reference | Arm Developer Documentation | Systems software guide for Cortex-A processors; exception handling, MMU page tables, cache management |
+
+## 5.1 Toolchain Profile Separation Contract
+
+To eliminate ambiguity across the curriculum:
+
+1. **Canonical Toolchain Profile**:
+   - Package: **Arm GNU Toolchain 13.3.rel1** (`arm-none-linux-gnueabihf`)
+   - Target prefix: `arm-none-linux-gnueabihf-`
+   - Sysroot path: `arm-none-linux-gnueabihf/libc/`
+   - Dynamic interpreter: `/lib/ld-linux-armhf.so.3`
+   - **All canonical commands, Makefiles, lab walkthroughs, and project recipes MUST exclusively use `CROSS_COMPILE=arm-none-linux-gnueabihf-`. No `or` / alternative prefix is permitted in canonical contracts.**
+
+2. **Alternate Host/Authoring Profile**:
+   - Distribution package: Ubuntu 24.04 LTS `gcc-arm-linux-gnueabihf` (GCC 13.3.0)
+   - Target prefix: `arm-linux-gnueabihf-`
+   - Sysroot path: `/usr/arm-linux-gnueabihf/`
+   - Status: **UNVERIFIED** for execution in the current environment (not executed on this host).
+   - Usage: Permitted solely as an authoring/distribution alternate profile for learners using Ubuntu package managers; learners must adjust their environment variables accordingly.
 
 ---
 
@@ -463,7 +483,7 @@ A cross-compiler runs on the **host system** (e.g. x86-64 Linux) but generates m
 Given an unknown precompiled ARM binary that crashes on target with `No such file or directory` (despite the binary existing in `/bin/app`), extract its required dynamic interpreter using `readelf -l`, verify the presence/absence of that interpreter in the target filesystem, and write a one-line shell audit script that checks whether any binary in a directory has unsatisfied library dependencies.
 
 ### 10. Deliberate Fault
-Seed an executable compiled with `arm-linux-gnueabihf-gcc` into a minimal rootfs that only contains `musl` dynamic libraries (`/lib/ld-musl-armhf.so.1`). The learner executes the full diagnostic chain:
+Seed an executable compiled with `arm-none-linux-gnueabihf-gcc` into a minimal rootfs that only contains `musl` dynamic libraries (`/lib/ld-musl-armhf.so.1`). The learner executes the full diagnostic chain:
 Symptom: `sh: ./app: not found` $\rightarrow$ Own Description $\rightarrow$ 3 Hypotheses $\rightarrow$ Experiment (inspect binary `PT_INTERP` vs rootfs `/lib`) $\rightarrow$ Evidence (`readelf -l` requests `/lib/ld-linux-armhf.so.3`) $\rightarrow$ Narrow Scope $\rightarrow$ Root Cause $\rightarrow$ Fix (copy glibc loader or compile static) $\rightarrow$ Regression.
 
 ### 11. Module Gate
@@ -517,7 +537,7 @@ Running `make multi_v7_defconfig` combined with our Phase 3 config fragment outp
   - `vmlinux`: Non-stripped ELF executable; contains all kernel symbols; used for debugging with GDB and post-mortem oops analysis.
   - `zImage`: Self-extracting compressed bootable kernel image loaded by QEMU.
   - `System.map`: Symbol lookup table mapping kernel symbol names to virtual memory addresses.
-- Cross-compilation variables: `ARCH=arm` and `CROSS_COMPILE=arm-none-linux-gnueabihf-` (or `arm-linux-gnueabihf-`).
+- Cross-compilation variables: `ARCH=arm` and `CROSS_COMPILE=arm-none-linux-gnueabihf-`.
 
 ### 5. Official Sources & Reading
 - Linux Kernel Documentation: `Documentation/kbuild/kconfig-language.rst`.
@@ -532,7 +552,7 @@ Running `make multi_v7_defconfig` combined with our Phase 3 config fragment outp
 - **Lab 2.1**: Set up the kernel build environment:
   ```bash
   export ARCH=arm
-  export CROSS_COMPILE=arm-linux-gnueabihf-
+  export CROSS_COMPILE=arm-none-linux-gnueabihf-
   make multi_v7_defconfig
   # Apply Phase 3 config delta (enabling CONFIG_ARCH_VIRT, CONFIG_ARM_LPAE=n, CONFIG_VMSPLIT_3G=y)
   ```
@@ -545,7 +565,7 @@ Running `make multi_v7_defconfig` combined with our Phase 3 config fragment outp
 - **Lab 2.3**: Inspect kernel symbols using `nm vmlinux | grep start_kernel` and compare the address with the entry in `System.map`. Verify that the address is in the high virtual address range (`0xC0...`).
 - **Lab 2.4**: Boot the compiled `zImage` in QEMU without a root filesystem:
   ```bash
-  qemu-system-arm -M virt -cpu cortex-a7 -m 512M -smp 1 -nographic -kernel arch/arm/boot/zImage
+  qemu-system-arm -machine virt,highmem=off,gic-version=2 -cpu cortex-a7 -m 512M -smp 1 -nographic -kernel arch/arm/boot/zImage
   ```
   Observe that the kernel boots, prints startup messages, and terminates in a kernel panic: `VFS: Unable to mount root fs`. Explain why this panic represents successful kernel execution up to the rootfs mount stage.
 
@@ -646,7 +666,7 @@ The Linux root filesystem is the environment in which the first userspace proces
   ```
 - **Lab 3.6**: Boot QEMU with the kernel and initramfs:
   ```bash
-  qemu-system-arm -M virt -cpu cortex-a7 -m 512M -smp 1 -nographic \
+  qemu-system-arm -machine virt,highmem=off,gic-version=2 -cpu cortex-a7 -m 512M -smp 1 -nographic \
       -kernel zImage -initrd rootfs.cpio.gz \
       -append "console=ttyAMA0,115200 rdinit=/bin/sh"
   ```
@@ -681,12 +701,15 @@ AI-Free manual rootfs assembly: Given an empty directory and a cross-compiled Bu
 With a working kernel and minimal rootfs, the learner now focuses on the communication channel between the kernel and the outside world: the **kernel command line (`bootargs`)** and the **serial console**. Boot failures in production embedded systems often leave developers with zero output or cryptic panics. Learners master the distinction between early console (`earlycon`) and normal driver console (`console=ttyAMA0`), and practice systematic fault isolation across a seeded pool of boot failures.
 
 ### 2. Prerequisites
-- P3-M02 kernel build and boot flow.
-- P3-M03 rootfs and initramfs construction.
-- Hypothesis-driven diagnostic discipline from Phase 1 and Phase 2.
+With a working kernel and minimal rootfs, the learner now investigates the **communication channels between the bootloader/QEMU, kernel, and userspace**. Boot arguments (`bootargs`), console handoff from early boot to full TTY drivers, and diagnostic triage of boot panics are core skills for any bring-up engineer.
+
+### 2. Prerequisites
+- P3-M02 kernel image artifacts (`zImage`).
+- P3-M03 initramfs root filesystem (`rootfs.cpio.gz`).
+- Basic UART communication concepts (baud rates, TX/RX, FIFOs).
 
 ### 3. Mental Model
-During early boot, the kernel has not yet loaded the full PL011 UART serial driver or the TTY subsystem. If the kernel crashes during early memory or interrupt initialization, standard `printk` output is lost in the internal log buffer. Specifying `earlycon` instructs the kernel to write raw ASCII characters directly into the UART hardware MMIO register (`0x09000000`) before any driver framework exists. Later in boot, the full serial driver initializes and registers `ttyAMA0`, taking over the console. The kernel command line (`bootargs`) configures this console, specifies the root filesystem location, and dictates the init executable.
+During boot, the kernel needs to emit diagnostic messages long before full serial subsystem drivers, line disciplines, and TTY devices are registered. The `earlycon` mechanism provides a primitive polled-MMIO write loop that outputs characters directly to the UART hardware register (`0x09000000` on PL011). Later in boot, `console_init()` registers the real interrupt-driven serial driver (`ttyAMA0`). Finally, the kernel opens `/dev/console` and hands file descriptors 0, 1, and 2 to PID 1. If any link in this console chain breaks, the terminal goes completely silent.
 
 ### 4. Minimal Theory Boundary
 - Kernel command line syntax: Passed by bootloader/QEMU via Device Tree `/chosen` node (`bootargs = "..."`).
@@ -717,7 +740,7 @@ During early boot, the kernel has not yet loaded the full PL011 UART serial driv
 ### 7. Hands-On Labs
 - **Lab 4.1**: Boot QEMU with `earlycon` enabled:
   ```bash
-  qemu-system-arm -M virt -cpu cortex-a7 -m 512M -smp 1 -nographic \
+  qemu-system-arm -machine virt,highmem=off,gic-version=2 -cpu cortex-a7 -m 512M -smp 1 -nographic \
       -kernel zImage -initrd rootfs.cpio.gz \
       -append "earlycon=pl011,0x09000000 console=ttyAMA0,115200 rdinit=/bin/sh"
   ```
@@ -792,7 +815,7 @@ The Device Tree is a tree data structure describing hardware resources. It consi
 ### 7. Hands-On Labs
 - **Lab 5.1**: Dump the live QEMU `virt` device tree:
   ```bash
-  qemu-system-arm -M virt,dumpdtb=virt.dtb -cpu cortex-a7 -m 512M
+  qemu-system-arm -machine virt,dumpdtb=virt.dtb,highmem=off,gic-version=2 -cpu cortex-a7 -m 512M
   ```
 - **Lab 5.2**: Decompile `virt.dtb` to human-readable source using `dtc`:
   ```bash
@@ -882,7 +905,7 @@ Buildroot is a set of Makefiles and patches that automates the generation of a c
   Audit `output/images/` and verify the creation of `zImage` and `rootfs.ext4`.
 - **Lab 6.4**: Boot the Buildroot-generated image in QEMU:
   ```bash
-  qemu-system-arm -M virt -cpu cortex-a7 -m 512M -smp 1 -nographic \
+  qemu-system-arm -machine virt,highmem=off,gic-version=2 -cpu cortex-a7 -m 512M -smp 1 -nographic \
       -kernel output/images/zImage -dtb virt.dtb \
       -drive file=output/images/rootfs.ext4,format=raw,id=hd0 \
       -device virtio-blk-device,drive=hd0 \
@@ -899,8 +922,8 @@ Buildroot is a set of Makefiles and patches that automates the generation of a c
 Add a custom C diagnostic application (`appliance_monitor.c`) to Buildroot using a local package definition (`package/appliance-monitor/Config.in` and `appliance-monitor.mk`). Build the image, verify that the application compiles automatically, and prove it executes at boot via an init script in the overlay.
 
 ### 10. Deliberate Fault
-Modify an overlay file on the host after an initial build, run `make`, and observe that the changes do not appear in `output/images/rootfs.ext4`. The learner executes the full diagnostic chain:
-Symptom: modified file missing in target image $\rightarrow$ Own Description $\rightarrow$ 3 Hypotheses $\rightarrow$ Experiment (check timestamps and `.stamp_target_installed`) $\rightarrow$ Evidence (Buildroot skips target-finalize if no package rebuilt) $\rightarrow$ Narrow Scope $\rightarrow$ Root Cause $\rightarrow$ Fix (`make target-finalize` or rebuild) $\rightarrow$ Regression.
+Modify the C source file of a local in-tree custom package (`package/appliance-monitor/appliance_monitor.c`) on the host after an initial build, run top-level `make`, and observe that the updated code is not recompiled and the old binary still executes on the booted target image (`rootfs.ext4`). The learner executes the full diagnostic chain:
+Symptom: modified C source code changes do not appear in target binary $\rightarrow$ Own Description $\rightarrow$ 3 Hypotheses (source file unsaved, Buildroot package build stamps prevent rebuilding, package version unchanged) $\rightarrow$ Experiment (compare timestamps between source file and `output/build/appliance-monitor-1.0/.stamp_target_installed`) $\rightarrow$ Evidence (Buildroot skips the package build because `.stamp_target_installed` is already present) $\rightarrow$ Narrow Scope (Buildroot package build model is stamp-driven, not fine-grained file-dependency-driven) $\rightarrow$ Root Cause (package build stamp prevents automatic recompilation on top-level `make`) $\rightarrow$ Fix (invoke official package rebuild target: `make appliance-monitor-rebuild` or `make appliance-monitor-reconfigure`) $\rightarrow$ Regression (verify new binary behavior in QEMU).
 
 ### 11. Module Gate
 AI-Free build automation test: Given a clean Buildroot tree, configure an appliance image with a specified rootfs overlay, build the image, boot it in QEMU with `-cpu cortex-a7`, and demonstrate automated execution of a custom diagnostic tool without interactive manual intervention.
@@ -1009,7 +1032,7 @@ The integration project represents the culmination of Phase 3. The learner demon
                          |
                          v
 [Automated Launch & Test Harness (run_qemu.sh)]
-- Boots QEMU -M virt -cpu cortex-a7 -m 512M -smp 1 with earlycon
+- Boots QEMU -machine virt,highmem=off,gic-version=2 -cpu cortex-a7 -m 512M -smp 1 with earlycon
 - Executes non-interactive guest self-test suite
 - Validates /var/log/appliance_status.json
 - Verifies clean shutdown
@@ -1072,7 +1095,7 @@ Phase 3 establishes a controlled seeded fault pool across 6 core fault families:
 |    - F11: Bad MMIO reg base address (Wrong UART address -> MMIO fault / hang)         |
 +---------------------------------------------------------------------------------------+
 | 5. BUILDROOT FAULTS                                                                   |
-|    - F12: Overlay not copied or stale build stamp preventing package re-creation      |
+|    - F12: Local package source modified but stale binary packaged (build stamp fault) |
 +---------------------------------------------------------------------------------------+
 | 6. ARCHITECTURE & SYSTEM FAULTS                                                       |
 |    - F13: Userspace dereference of kernel address (0xC0000000+ -> Data Abort / SIGSEGV)|
@@ -1125,6 +1148,17 @@ Phase 3 establishes a controlled seeded fault pool across 6 core fault families:
 - **Root Cause**: Permissions on `rootfs/sbin/init` were set to `644` instead of `755` (`rwxr-xr-x`).
 - **Fix**: Execute `chmod +x rootfs/sbin/init` and rebuild the initramfs.
 - **Regression**: Boot QEMU, verify clean handoff to `/sbin/init` and user prompt.
+
+#### Fault F12: Local Package Source Modified but Stale Binary Packaged Due to Valid Stamp File
+- **Symptom**: Learner modifies C source code for an in-tree local custom package (`package/appliance-monitor/appliance_monitor.c`), executes top-level `make`, boots the generated image in QEMU (`rootfs.ext4`), but observes that the application still runs the old binary and produces unchanged output.
+- **Own Description**: Modifying package C source on the host and running `make` fails to recompile the package binary or update the target rootfs.
+- **3–5 Hypotheses**: 1. Source file modifications were not saved to disk on the host; 2. Buildroot uses package stamp files (`.stamp_built`, `.stamp_target_installed`) and does not re-evaluate intra-package source file timestamps on top-level `make`; 3. Top-level `make` failed to invoke the package's build step because the package version did not change; 4. QEMU launched a stale rootfs image from a previous build.
+- **Experiment**: Inspect `output/build/appliance-monitor-1.0/` and compare timestamps between `appliance_monitor.c` and `.stamp_built` / `.stamp_target_installed`.
+- **Evidence**: `ls -l --full-time output/build/appliance-monitor-1.0/.stamp_*` reveals `.stamp_target_installed` is older than the modified source file, yet top-level `make` output shows Buildroot skipped `appliance-monitor` entirely because the stamp file exists.
+- **Narrow Scope**: The source code is saved and valid, but Buildroot's declarative build model operates as a package-level state machine driven by `.stamp_*` files rather than fine-grained file-timestamp dependency graphs.
+- **Root Cause**: Buildroot tracks package phases via stamp files. Once `.stamp_target_installed` exists, top-level `make` considers the package complete and skips rebuilding it.
+- **Fix**: Rebuild the package using Buildroot's official package rebuild target: `make appliance-monitor-rebuild` (or `make appliance-monitor-reconfigure`), which removes `.stamp_built` and `.stamp_target_installed` and triggers target installation and finalization without requiring a slow full tree `make clean`.
+- **Regression**: Execute `make appliance-monitor-rebuild`, boot the generated image in QEMU, verify that the updated binary string is executed and logged.
 
 #### Fault F14: Device MMIO Attribute Mismatch Diagnosis
 - **Symptom**: A peripheral status polling loop spins indefinitely or reads stale FIFO data, even though hardware is active.
@@ -1225,8 +1259,8 @@ Completing Phase 3 makes the learner **proficient in Embedded Linux boot chains,
 Phase 3 establishes the precise operational prerequisites upon which **Phase 4 (Linux Device Drivers & Subsystems)** will execute.
 
 ### What Phase 3 Delivers to Phase 4 (Prerequisites Handed Off):
-1. **Verified Boot Environment**: A fully functioning, reproducible QEMU ARM Linux system booting Linux 6.18.50 LTS with an explicit `-cpu cortex-a7`, clean serial console, and minimal rootfs.
-2. **Kbuild Mental Model Orientation**: Familiarity with kernel Makefiles, `Kconfig`, `.config`, `ARCH=arm`, `CROSS_COMPILE=arm-none-linux-gnueabihf-` / `arm-linux-gnueabihf-`, and target image artifacts (`vmlinux`, `zImage`).
+1. **Verified Boot Environment**: A fully functioning, reproducible QEMU ARM Linux system booting Linux 6.18.50 LTS with explicit `-machine virt,highmem=off,gic-version=2 -cpu cortex-a7`, clean serial console, and minimal rootfs.
+2. **Kbuild Mental Model Orientation**: Familiarity with kernel Makefiles, `Kconfig`, `.config`, `ARCH=arm`, `CROSS_COMPILE=arm-none-linux-gnueabihf-`, and target image artifacts (`vmlinux`, `zImage`).
 3. **Hardware Description Foundation**: Fluent understanding of Device Tree syntax (`compatible`, `reg`, `interrupts`), DTB compilation via `dtc`, and runtime sysfs inspection under `/sys/firmware/devicetree/base`.
 4. **Privilege & Memory Boundary Mental Model**: Comprehension of user virtual address space versus kernel address space, MMU translation, and the conceptual reason why `copy_to_user()` / `copy_from_user()` are required.
 5. **Diagnostic Logging & Panic Triage**: Immediate ability to read `dmesg`, kernel panics, and oops call traces over serial terminals.
@@ -1248,28 +1282,28 @@ To ensure reviewable, incremental pull requests during Phase 3 implementation, t
 ### Issue 1: `P3-M01/M02 — Toolchain, Target Artifacts & Kernel Boot` (~7.5 h MUST)
 - **Scope**:
   - P3-M01: Setup cross-toolchain environment, test static/dynamic target compilation, audit `readelf` headers, build sysroot verification tools.
-  - P3-M02: Download and pin Linux 6.18.50 kernel, configure `multi_v7_defconfig` with Phase 3 config fragment (`CONFIG_ARCH_VIRT=y`, `CONFIG_ARM_LPAE=n`, `CONFIG_VMSPLIT_3G=y`), compile `vmlinux` and `zImage`, verify QEMU boot with `-cpu cortex-a7` to VFS panic.
+  - P3-M02: Download and pin Linux 6.18.50 kernel, configure `multi_v7_defconfig` with Phase 3 config fragment (`CONFIG_ARCH_VIRT=y`, `CONFIG_ARM_LPAE=n`, `CONFIG_VMSPLIT_3G=y`), compile `vmlinux` and `zImage`, verify QEMU boot with `-machine virt,highmem=off,gic-version=2 -cpu cortex-a7` to VFS panic.
   - Implement deliberate faults F01 (architecture mismatch), F02 (missing loader), and F03 (stale `System.map`).
 - **Acceptance Criteria**: Automated test script compiling both static/dynamic binaries; verifiable QEMU boot log showing kernel reaching VFS panic.
 
 ### Issue 2: `P3-M03/M04 — Minimal Rootfs, BusyBox, Bootargs & Boot-Log Diagnosis` (~7.5 h MUST)
 - **Scope**:
   - P3-M03: Cross-compile static BusyBox 1.36.1, build minimal FHS rootfs, create `/dev/console` and `/dev/null`, write `/sbin/init` script, package initramfs.
-  - P3-M04: Configure `earlycon` and `console=ttyAMA0,115200`, boot interactive shell in QEMU with `-cpu cortex-a7`, trace `dmesg` subsystem milestones.
+  - P3-M04: Configure `earlycon` and `console=ttyAMA0,115200`, boot interactive shell in QEMU with `-machine virt,highmem=off,gic-version=2 -cpu cortex-a7`, trace `dmesg` subsystem milestones.
   - Implement deliberate faults F04 (bad root), F05 (console mismatch), F06 (insufficient RAM), F07 (missing init), F08 (permission denied), and F09 (missing procfs).
 - **Acceptance Criteria**: Interactive BusyBox shell booted in QEMU; passing automated tests for seeded boot faults using the full diagnostic loop.
 
 ### Issue 3: `P3-M05/M06 — Device Tree First Pass & Shallow Buildroot Pipeline` (~7.0 h MUST)
 - **Scope**:
   - P3-M05: Dump QEMU DTB, decompile with `dtc`, modify device properties, verify runtime sysfs tree under `/sys/firmware/devicetree/base`.
-  - P3-M06: Configure Buildroot 2026.05.2 for generic ARM Cortex-A7 QEMU `virt`, create rootfs overlay with custom diagnostic script, build `rootfs.ext4`, boot in QEMU with `-cpu cortex-a7` and virtio-blk.
-  - Implement deliberate faults F10 (disabled DT node), F11 (bad MMIO address), and F12 (Buildroot overlay rebuild stamp).
+  - P3-M06: Configure Buildroot 2026.05.2 for generic ARM Cortex-A7 QEMU `virt`, create rootfs overlay with custom diagnostic script, build `rootfs.ext4`, boot in QEMU with `-machine virt,highmem=off,gic-version=2 -cpu cortex-a7` and virtio-blk.
+  - Implement deliberate faults F10 (disabled DT node), F11 (bad MMIO address), and F12 (Buildroot local package rebuild stamp fault).
 - **Acceptance Criteria**: Verifiable DTS decompile/recompile workflow; functioning Buildroot automated image booting with custom overlay.
 
 ### Issue 4: `P3-M07/M08 — Architecture Spine & Reproducible Appliance Integration Project` (~7.0 h MUST)
 - **Scope**:
   - P3-M07: Build memory inspection tools, trace `/proc/<pid>/maps`, demonstrate CPU Data Abort on kernel address dereference, trace `svc` traps; analyze memory attributes using bounded diagnostic fixture.
-  - P3-M08: Implement the Reproducible QEMU Embedded Linux Appliance project: top-level Makefile, C diagnostic daemon (`appliance_diag`), automated QEMU launch harness (`run_qemu.sh` with `-cpu cortex-a7`), SHA256 manifest.
+  - P3-M08: Implement the Reproducible QEMU Embedded Linux Appliance project: top-level Makefile, C diagnostic daemon (`appliance_diag`), automated QEMU launch harness (`run_qemu.sh` with `-machine virt,highmem=off,gic-version=2 -cpu cortex-a7`), SHA256 manifest.
   - Implement deliberate faults F13 (userspace kernel dereference) and F14 (memory attribute mismatch diagnosis).
 - **Acceptance Criteria**: Passing automated test harness for Appliance Project; verified SHA256 manifest; complete `BUILD_RUN_DEBUG.md`.
 
