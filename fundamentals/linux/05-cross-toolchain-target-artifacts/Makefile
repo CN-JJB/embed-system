@@ -1,11 +1,11 @@
 # P3-M01 — Cross-Compilation Toolchains & Target Artifacts
 SHELL := /bin/bash
 
-# Toolchain detection: canonical first, distro fallback
 CROSS_COMPILE ?= arm-none-linux-gnueabihf-
-ifeq ($(shell which $(CROSS_COMPILE)gcc 2>/dev/null),)
-  ifneq ($(shell which arm-linux-gnueabihf-gcc 2>/dev/null),)
-    CROSS_COMPILE := arm-linux-gnueabihf-
+
+ifneq ($(MAKECMDGOALS),clean)
+  ifeq ($(shell which $(CROSS_COMPILE)gcc 2>/dev/null),)
+    $(error Cross-compiler '$(CROSS_COMPILE)gcc' not found in PATH. Canonical baseline requires Arm GNU Toolchain 13.3.rel1 (arm-none-linux-gnueabihf-). For Ubuntu/Debian distro toolchain, pass explicitly: make CROSS_COMPILE=arm-linux-gnueabihf-)
   endif
 endif
 
@@ -47,7 +47,7 @@ clean:
 	$(MAKE) -C gate clean
 
 check: all
-	bash scripts/verify_m01.sh
+	CROSS_COMPILE=$(CROSS_COMPILE) bash scripts/verify_m01.sh
 
 mutations:
-	bash reviewer/test_m01_mutations.sh
+	CROSS_COMPILE=$(CROSS_COMPILE) bash reviewer/test_m01_mutations.sh

@@ -93,12 +93,34 @@ The assembly boot stub in `arch/arm/kernel/head.S` must initialize CPU registers
 ## 3. Minimal Theory Boundary
 
 ### 3.1 Bounded Source Reading: `arch/arm/kernel/head.S`
-The kernel entry point is `stext`. On entry:
+The kernel entry point is `stext`. The ARMv7-A startup sequence follows the canonical architecture:
+```text
+stext (MMU off)
+→ processor/platform validation
+→ __create_page_tables
+→ processor-specific setup
+→ __enable_mmu / __turn_mmu_on
+→ __mmap_switched
+→ C startup (start_kernel)
+```
+
 1. **CPU State**: Supervisor mode (`SVC`, PL1), MMU disabled, Data Cache disabled, Instruction Cache optional.
-2. **Boot Data**: Register `r1` holds machine ID (legacy) or `0xFFFFFFFF` (Device Tree boot); `r2` holds the physical address of the Device Tree Blob (DTB) loaded by QEMU.
-3. **`__create_page_tables`**: Populates a 16 KB First-Level Translation Table (PGD) in physical RAM. It identity-maps the page containing the MMU turn-on code, maps the kernel code and data into the high virtual memory region starting at `PAGE_OFFSET` (`0xC0000000`), and maps the early UART MMIO block.
-4. **`__enable_mmu`**: Programs CP15 Translation Table Base Register 0 (`TTBR0`) with the physical address of the PGD, sets domain access permissions in `DACR`, issues memory barriers (`dsb`), and writes to CP15 System Control Register (`SCTLR`) to set the MMU Enable bit (`CR_M`).
-5. **`__mmap_switched`**: Switches execution to the virtual address space, sets up the C runtime stack pointer (`sp`), clears the BSS section, sets up processor architecture vectors, and branches to `start_kernel()`.
+2. **Boot Data**: Register `r1` holds machine ID (legacy) or `0xFFFFFFFF` (Device Tree boot); `r2` holds the physical address of the Device Tree Blob (DTB) passed by QEMU direct boot.
+3. **Processor Validation**: Reads processor ID (`mrc p15, 0, r9, c0, c0`) and validates against `proc_info_list` (`__lookup_processor_type`).
+4. **`__create_page_tables`**: Populates the initial 16 KB Level-1 Page Directory (PGD) in physical RAM. It:
+   - Identity-maps the physical RAM range containing the turn-on code;
+   - Maps the kernel code/data into the high virtual memory region starting at `PAGE_OFFSET` (`0xC0000000`);
+   - **UART MMIO Note**: Early page tables map serial debug IO **only if `CONFIG_DEBUG_LL=y`** is compiled in. Standard runtime `earlycon=pl011` does not rely on `__create_page_tables` mapping UART; `earlycon` uses early fixmap mappings established during early C architecture initialization (`setup_arch`).
+5. **Processor Setup & MMU Turn-On**: Invokes processor-specific initialization (e.g. `v7_setup`), then branches to `__enable_mmu` / `__turn_mmu_on`. In `__turn_mmu_on`:
+   - Configures Domain Access Control (`DACR`);
+   - Translation Table Base Register (`TTBR0`) is loaded with the physical base address of the page table;
+   - Memory barriers are issued (`dsb`, `isb`);
+   - The MMU enable bit (`CR_M`, bit 0) in CP15 `SCTLR` is set;
+   - Execution branches to `__mmap_switched` in virtual address space.
+6. **`__mmap_switched`**: Now running with MMU enabled in virtual memory (`0xC0000000+`):
+   - Sets up initial C runtime kernel stack (`sp`);
+   - Clears kernel `.bss` section;
+   - Sets up architecture data structures and branches to architecture-independent C startup: `start_kernel()`!
 
 ### 3.2 Bounded Source Reading: `init/main.c`
 In `start_kernel()`:

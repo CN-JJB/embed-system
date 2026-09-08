@@ -1,7 +1,8 @@
 CROSS_COMPILE ?= arm-none-linux-gnueabihf-
-ifeq ($(shell which $(CROSS_COMPILE)gcc 2>/dev/null),)
-  ifneq ($(shell which arm-linux-gnueabihf-gcc 2>/dev/null),)
-    CROSS_COMPILE := arm-linux-gnueabihf-
+
+ifneq ($(MAKECMDGOALS),clean)
+  ifeq ($(shell which $(CROSS_COMPILE)gcc 2>/dev/null),)
+    $(error Cross-compiler '$(CROSS_COMPILE)gcc' not found in PATH. Pass: make CROSS_COMPILE=arm-linux-gnueabihf-)
   endif
 endif
 
@@ -13,6 +14,8 @@ endif
 
 .PHONY: all clean
 
+# SYNTHETIC PEDAGOGICAL STATIC FIXTURE — NOT A LINUX KERNEL BUILD
+# These artifacts are purely for fast host-side static ELF/symbol checks.
 all: vmlinux System.map stale_System.map arch/arm/boot/zImage
 
 vmlinux: vmlinux_kernel_symbols.S vmlinux.lds

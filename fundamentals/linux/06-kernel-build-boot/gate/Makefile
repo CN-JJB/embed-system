@@ -1,17 +1,17 @@
-# P3-M02 Module Gate Makefile
-ARTIFACTS_DIR := ../fixtures/artifacts
-CONFIGS_DIR := ../fixtures/configs
+CROSS_COMPILE ?= arm-none-linux-gnueabihf-
+
+ifneq ($(MAKECMDGOALS),clean)
+  ifeq ($(shell which $(CROSS_COMPILE)gcc 2>/dev/null),)
+    $(error Cross-compiler '$(CROSS_COMPILE)gcc' not found in PATH. Pass: make CROSS_COMPILE=arm-linux-gnueabihf-)
+  endif
+endif
+
+FIXTURES_DIR := fixtures
 
 .PHONY: all clean
 
-all: fixtures
-
-fixtures:
-	mkdir -p fixtures
-	cp $(CONFIGS_DIR)/effective_kernel.config fixtures/gate_effective.config
-	cp $(ARTIFACTS_DIR)/vmlinux fixtures/gate_vmlinux
-	cp $(ARTIFACTS_DIR)/arch/arm/boot/zImage fixtures/gate_zImage
-	cp $(ARTIFACTS_DIR)/System.map fixtures/gate_System.map
+all:
+	bash ../reviewer/scripts/generate_m02_gate_fixtures.sh $(FIXTURES_DIR) $(CROSS_COMPILE)
 
 clean:
-	rm -rf fixtures
+	rm -rf $(FIXTURES_DIR)

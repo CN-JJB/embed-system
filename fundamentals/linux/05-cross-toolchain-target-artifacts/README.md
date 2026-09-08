@@ -109,7 +109,12 @@ When compiled with `-static`:
 - The linker resolves all library routines (e.g. `printf`, `exit`, `malloc`) directly from archive libraries (`libc.a`) and embeds the machine code into the binary.
 - `PT_INTERP` is **completely absent**.
 - `PT_DYNAMIC` and `DT_NEEDED` are **completely absent**.
-- The binary is completely self-contained. It can execute on any compliant Linux ARMv7-A kernel even if `/lib` in the rootfs is completely empty!
+- Static linkage eliminates the requirement for an ELF interpreter and shared objects, enabling execution in an environment where `/lib` contains no shared libraries.
+- **Portability Boundary**: The absence of `PT_INTERP` does **not** guarantee universal execution on "any ARMv7 Linux kernel". The binary still strictly requires:
+  1. Instruction set and CPU compatibility (ARMv7-A vs ARMv6/ARMv8);
+  2. Floating-point ABI compatibility (VFP/NEON hard-float calling convention);
+  3. Kernel syscall ABI compatibility (e.g. minimum supported kernel version for libc syscall wrappers);
+  4. Application-level runtime dependencies (e.g. `/dev`, `/proc`, `/sys` mounts, environment variables).
 
 > [!IMPORTANT]
 > **Static Linkage Proof Contract**:  

@@ -13,21 +13,19 @@ echo "================================================================"
 
 CROSS_COMPILE=${CROSS_COMPILE:-arm-none-linux-gnueabihf-}
 if ! command -v "${CROSS_COMPILE}gcc" >/dev/null 2>&1; then
-    if command -v arm-linux-gnueabihf-gcc >/dev/null 2>&1; then
-        CROSS_COMPILE="arm-linux-gnueabihf-"
-        echo "[NOTE] Canonical arm-none-linux-gnueabihf-gcc not in PATH; falling back to distro arm-linux-gnueabihf-gcc"
-    else
-        echo "ERROR: No ARM cross compiler found in PATH!" >&2
-        exit 1
-    fi
+    echo "ERROR: Cross compiler '${CROSS_COMPILE}gcc' not found in PATH!" >&2
+    echo "Canonical baseline requires Arm GNU Toolchain 13.3.rel1 (arm-none-linux-gnueabihf-)." >&2
+    echo "To test with Ubuntu/Debian distro toolchain, explicitly invoke:" >&2
+    echo "  CROSS_COMPILE=arm-linux-gnueabihf- $0" >&2
+    exit 1
 fi
 
 READELF="readelf"
-echo "[PASS] Toolchain prefix detected: ${CROSS_COMPILE}gcc"
+echo "[PASS] Toolchain prefix confirmed: ${CROSS_COMPILE}gcc"
 
 # 1. Build all lab and fault targets
 echo "=== Step 1: Building all M01 targets ==="
-make all >/dev/null
+make all CROSS_COMPILE="${CROSS_COMPILE}" >/dev/null
 echo "[PASS] All lab, fault, challenge, and gate targets built cleanly"
 
 # 2. Verify Lab 1.1: Host vs Target ELF
@@ -143,17 +141,19 @@ ALPHA_MACH=$("$READELF" -h "$GATE_ALPHA" | awk -F: '/Machine:/ {print $2}' | xar
 BETA_MACH=$("$READELF" -h "$GATE_BETA" | awk -F: '/Machine:/ {print $2}' | xargs)
 GAMMA_MACH=$("$READELF" -h "$GATE_GAMMA" | awk -F: '/Machine:/ {print $2}' | xargs)
 
-[[ "$ALPHA_MACH" == *"ARM"* ]] || { echo "ERROR: Alpha machine check failed"; exit 1; }
-[[ "$BETA_MACH" != *"ARM"* ]]  || { echo "ERROR: Beta machine check failed"; exit 1; }
-[[ "$GAMMA_MACH" == *"ARM"* ]] || { echo "ERROR: Gamma machine check failed"; exit 1; }
+[[ "$ALPHA_MACH" != *"ARM"* ]] || { echo "ERROR: Alpha machine check failed (expected non-ARM host)"; exit 1; }
+[[ "$BETA_MACH" == *"ARM"* ]]  || { echo "ERROR: Beta machine check failed (expected ARM target)"; exit 1; }
+[[ "$GAMMA_MACH" == *"ARM"* ]] || { echo "ERROR: Gamma machine check failed (expected ARM target)"; exit 1; }
 
-"$READELF" -l "$GATE_ALPHA" | grep -q "INTERP" || { echo "ERROR: Alpha missing INTERP"; exit 1; }
-! ("$READELF" -l "$GATE_GAMMA" 2>/dev/null | grep -q "INTERP") || { echo "ERROR: Gamma has INTERP"; exit 1; }
+# Beta is static (no INTERP)
+! ("$READELF" -l "$GATE_BETA" 2>/dev/null | grep -q "INTERP") || { echo "ERROR: Beta should be static without INTERP"; exit 1; }
+# Gamma is dynamic (requests INTERP)
+"$READELF" -l "$GATE_GAMMA" | grep -q "INTERP" || { echo "ERROR: Gamma missing INTERP"; exit 1; }
 echo "[PASS] Gate blind candidates strictly match reference classification"
 
 # 8. Run Negative Control Mutations
 echo "=== Step 8: Running Reviewer Negative Control Mutations ==="
-bash reviewer/test_m01_mutations.sh
+CROSS_COMPILE="${CROSS_COMPILE}" bash reviewer/test_m01_mutations.sh
 
 echo "================================================================"
 echo "=== ALL P3-M01 SEMANTIC CHECKS & MUTATION TESTS PASSED (8/8) ==="

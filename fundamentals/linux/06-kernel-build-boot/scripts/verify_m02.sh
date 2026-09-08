@@ -20,11 +20,27 @@ PINNED_TOOLCHAIN_SHA="560267bdecf966b7a48467d0af6c81a85b906ef7b0a9b9dd91f506184b
 grep -q "$PINNED_LINUX_COMMIT" SOURCE_LEDGER.md || { echo "ERROR: Linux commit pin missing in SOURCE_LEDGER"; exit 1; }
 grep -q "$PINNED_QEMU_COMMIT" SOURCE_LEDGER.md || { echo "ERROR: QEMU commit pin missing in SOURCE_LEDGER"; exit 1; }
 grep -q "$PINNED_TOOLCHAIN_SHA" SOURCE_LEDGER.md || { echo "ERROR: Toolchain package SHA missing in SOURCE_LEDGER"; exit 1; }
-echo "[PASS] Canonical source pins verified in SOURCE_LEDGER.md"
+echo "[PASS] Canonical source pins verified in SOURCE_LEDGER.md (Ledger metadata consistency: VERIFIED)"
+
+# Check real source tree if present
+LINUX_SRC="${LINUX_SRC:-/tmp/linux-6.18.50}"
+if [ -d "$LINUX_SRC/.git" ]; then
+    ACTUAL_SRC_COMMIT=$(git -C "$LINUX_SRC" rev-parse HEAD 2>/dev/null || true)
+    if [ "$ACTUAL_SRC_COMMIT" = "$PINNED_LINUX_COMMIT" ]; then
+        echo "[PASS] Actual upstream Linux source git commit verified: $ACTUAL_SRC_COMMIT (Source/version: VERIFIED)"
+    fi
+fi
 
 # 2. Build Artifacts
-echo "=== Step 2: Building Kernel Fixtures & Artifacts ==="
-make all >/dev/null
+CROSS_COMPILE="${CROSS_COMPILE:-arm-none-linux-gnueabihf-}"
+if ! command -v "${CROSS_COMPILE}gcc" >/dev/null 2>&1; then
+    echo "ERROR: Cross compiler '${CROSS_COMPILE}gcc' not found in PATH." >&2
+    echo "For Ubuntu/Debian distro toolchain, pass: CROSS_COMPILE=arm-linux-gnueabihf- $0" >&2
+    exit 1
+fi
+
+echo "=== Step 2: Building Kernel Static Fixtures & Artifacts ==="
+make all CROSS_COMPILE="${CROSS_COMPILE}" >/dev/null
 echo "[PASS] Fixtures, challenge, and gate targets built cleanly"
 
 # 3. Effective Kernel Configuration Validation
@@ -49,20 +65,28 @@ echo "[PASS] vmlinux entry point confirmed: $ENTRY_POINT"
 for sym in stext start_kernel setup_arch console_init rest_init kernel_init; do
     readelf -s "$VMLINUX" | grep -q "$sym" || { echo "ERROR: Symbol $sym missing in vmlinux!"; exit 1; }
 done
-echo "[PASS] Core boot symbols confirmed in vmlinux: stext, start_kernel, setup_arch, console_init, rest_init, kernel_init"
+echo "[PASS] Core boot symbols confirmed in synthetic vmlinux: stext, start_kernel, setup_arch, console_init, rest_init, kernel_init"
+echo "       Label: SYNTHETIC PEDAGOGICAL STATIC FIXTURE — NOT A LINUX KERNEL BUILD"
 
 # 5. zImage Presence and Header Magic
 echo "=== Step 5: Auditing arch/arm/boot/zImage ==="
 ZIMAGE="fixtures/artifacts/arch/arm/boot/zImage"
 [ -f "$ZIMAGE" ] || { echo "ERROR: zImage missing"; exit 1; }
 
-# Check ARM zImage magic (0x016f2818 at offset 0x24)
-ZMAGIC=$(hexdump -s 0x24 -n 4 -e '"%08x"' "$ZIMAGE" 2>/dev/null || true)
-if [ "$ZMAGIC" = "016f2818" ]; then
-    echo "[PASS] zImage verified with official ARM Linux boot magic (0x016f2818)"
-else
-    echo "[PASS] zImage boot artifact presence verified ($(wc -c < "$ZIMAGE") bytes)"
+# Strictly require ARM zImage magic (0x016f2818 at offset 0x24) and minimum header size
+ZSIZE=$(wc -c < "$ZIMAGE")
+if [ "$ZSIZE" -lt 40 ]; then
+    echo "ERROR: zImage file is too short ($ZSIZE bytes < 40) to contain ARM boot header!" >&2
+    exit 1
 fi
+
+ZMAGIC=$(hexdump -s 0x24 -n 4 -e '"%08x"' "$ZIMAGE" 2>/dev/null || true)
+if [ "$ZMAGIC" != "016f2818" ]; then
+    echo "ERROR: Invalid ARM zImage magic (got 0x$ZMAGIC, expected 0x016f2818)!" >&2
+    exit 1
+fi
+echo "[PASS] zImage verified with official ARM Linux boot magic (0x016f2818 at offset 0x24)"
+echo "       Label: SYNTHETIC PEDAGOGICAL STATIC FIXTURE — NOT A LINUX KERNEL BUILD"
 
 # 6. System.map Synchronization Check
 echo "=== Step 6: Verifying System.map Synchronization with vmlinux ==="
@@ -99,7 +123,7 @@ echo "[PASS] Canonical QEMU launch command syntax verified"
 
 # 9. Reviewer Negative Control Mutations
 echo "=== Step 9: Running Reviewer Negative Control Mutations ==="
-bash reviewer/test_m02_mutations.sh
+CROSS_COMPILE="${CROSS_COMPILE}" bash reviewer/test_m02_mutations.sh
 
 echo "================================================================"
 echo "=== ALL P3-M02 SEMANTIC CHECKS & MUTATION TESTS PASSED (9/9) ==="

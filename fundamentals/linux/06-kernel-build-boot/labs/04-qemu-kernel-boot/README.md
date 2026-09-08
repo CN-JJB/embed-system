@@ -17,6 +17,10 @@ qemu-system-arm \
   -kernel arch/arm/boot/zImage
 ```
 
+> [!NOTE]
+> **Device Tree Passing Contract in Direct Boot**:  
+> In QEMU direct kernel boot (`-kernel`), QEMU automatically generates an internal Device Tree conforming to the machine configuration and places its physical address into CPU register **`r2`** prior to entering the kernel entry point. While bare-metal boot paths may place firmware/DTB at the fixed RAM base (`0x40000000`), the 32-bit ARM Linux direct-boot protocol dynamically receives the DTB address via `r2`.
+
 ## Parameter Contract Breakdown
 - `-machine virt,highmem=off,gic-version=2`:
   - `virt`: Generic ARM virtual platform.

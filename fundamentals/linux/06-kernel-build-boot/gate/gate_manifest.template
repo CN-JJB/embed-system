@@ -14,14 +14,18 @@ Date:
 ## 2. Kernel Artifact Analysis
 - `gate_vmlinux` Machine type: 
 - `gate_vmlinux` Entry point address: 
-- `gate_zImage` File type and size: 
+- `gate_zImage` 32-bit Magic at offset 0x24 (hex): 
+- `gate_zImage` Magic Verdict (Valid ARM boot magic / Invalid): 
 - Virtual address of `start_kernel` in `gate_vmlinux`: 
 - Virtual address of `start_kernel` in `gate_System.map`: 
-- Synchronization Verdict (Synchronized / Stale): 
+- Virtual address of `rest_init` in `gate_vmlinux`: 
+- Virtual address of `rest_init` in `gate_System.map`: 
+- Synchronization Verdict (Synchronized / Drifted / Stale): 
 
-## 3. Canonical QEMU Launch Contract
+## 3. Canonical QEMU Launch Contract & Evidence Boundaries
 State the complete canonical QEMU launch command line for booting `gate_zImage` and explain:
-1. Why `highmem=off` is mandatory:
-2. Why `gic-version=2` is specified:
+1. Why `highmem=off` is mandatory for non-LPAE kernels:
+2. How the Device Tree Blob (DTB) address is communicated to the Linux kernel during direct boot (and why it is not hardcoded to `0x40000000`):
 3. Why `cortex-a7` is explicitly set:
-4. Why QEMU terminates in a VFS root mount panic:
+4. Why direct kernel boot without a root filesystem terminates in a VFS root mount panic, and why this is expected proof of early boot success:
+5. Why the absence of dynamic loader dependencies (`PT_INTERP`) in a static binary does NOT guarantee universal execution across any ARM Linux kernel:

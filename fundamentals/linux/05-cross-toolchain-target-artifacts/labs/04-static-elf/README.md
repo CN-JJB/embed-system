@@ -18,3 +18,6 @@ make inspect
 You must verify with:
 - `readelf -l <binary> | grep INTERP` -> returns empty / no match
 - `readelf -d <binary>` -> prints "There is no dynamic section in this file."
+
+### Portability Boundary
+Static linking eliminates the requirement for `/lib/ld-linux-armhf.so.3` and userspace shared libraries. It does NOT guarantee execution on arbitrary ARM systems: instruction set (ARMv7-A), hardware floating-point ABI (hard-float VFP), and kernel syscall interface compatibility are still mandatory.

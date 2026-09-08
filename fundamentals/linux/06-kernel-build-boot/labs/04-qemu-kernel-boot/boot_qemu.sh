@@ -25,8 +25,10 @@ echo ""
 echo "--- QEMU Device Tree Handling Note ---"
 echo "In this direct-boot path, QEMU dynamically generates an internal Device Tree"
 echo "matching the machine configuration (-machine virt,gic-version=2) and passes"
-echo "it to the kernel in register r2 at the start of physical RAM (0x40000000)."
-echo "Passing an external -dtb is only required when custom nodes or modifications are needed."
+echo "its physical address to the 32-bit Linux kernel entry in register r2."
+echo "Note: While bare-metal boot paths may place firmware/DTB at fixed RAM base (0x40000000),"
+echo "the ARM Linux direct-boot protocol dynamically receives the DTB address via r2."
+echo "Passing an external -dtb is only required when custom nodes or overrides are needed."
 echo ""
 
 # Validate QEMU binary availability on host

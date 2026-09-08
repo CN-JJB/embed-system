@@ -1,6 +1,7 @@
 /*
- * Synthetic Pedagogical Kernel Image Artifact for P3-M02
- * Implements real ARMv7-A symbols at PAGE_OFFSET (0xC0000000)
+ * SYNTHETIC PEDAGOGICAL STATIC FIXTURE — NOT A LINUX KERNEL BUILD
+ * Provides synthetic ARMv7-A symbols at PAGE_OFFSET (0xC0000000) for fast host static checks.
+ * Must NOT be counted as real Linux compile/link or QEMU evidence.
  */
 
 	.arm
