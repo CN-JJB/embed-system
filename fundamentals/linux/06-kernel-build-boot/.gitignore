@@ -1,0 +1,11 @@
+# Ignore generated kernel artifacts
+fixtures/artifacts/vmlinux
+fixtures/artifacts/System.map
+fixtures/artifacts/stale_System.map
+fixtures/artifacts/arch/
+faults/F03-stale-system-map/fixtures/
+challenge/fixtures/
+gate/fixtures/
+reviewer/mutations/
+*.o
+*.elf

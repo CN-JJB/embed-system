@@ -1,0 +1,27 @@
+# P3-M02 Module Gate Evaluation Manifest
+
+Learner Name: 
+Date: 
+
+## 1. Effective Kernel Configuration Verification
+- `CONFIG_ARCH_VIRT` status: 
+- `CONFIG_ARM_LPAE` status: 
+- `CONFIG_VMSPLIT_3G` status: 
+- `CONFIG_PAGE_OFFSET` value: 
+- `CONFIG_SERIAL_AMBA_PL011` status: 
+- `CONFIG_PRINTK` status: 
+
+## 2. Kernel Artifact Analysis
+- `gate_vmlinux` Machine type: 
+- `gate_vmlinux` Entry point address: 
+- `gate_zImage` File type and size: 
+- Virtual address of `start_kernel` in `gate_vmlinux`: 
+- Virtual address of `start_kernel` in `gate_System.map`: 
+- Synchronization Verdict (Synchronized / Stale): 
+
+## 3. Canonical QEMU Launch Contract
+State the complete canonical QEMU launch command line for booting `gate_zImage` and explain:
+1. Why `highmem=off` is mandatory:
+2. Why `gic-version=2` is specified:
+3. Why `cortex-a7` is explicitly set:
+4. Why QEMU terminates in a VFS root mount panic:

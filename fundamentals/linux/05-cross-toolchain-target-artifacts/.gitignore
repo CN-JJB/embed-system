@@ -1,0 +1,13 @@
+# Ignore generated binaries and fixtures
+hello_target
+hello_host
+dynamic_app
+static_app
+app_faulty
+app_fixed
+audit_tool
+rootfs_fixture/
+fixtures/
+mutations/
+*.o
+*.elf

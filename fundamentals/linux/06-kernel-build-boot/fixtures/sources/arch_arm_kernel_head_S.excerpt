@@ -1,0 +1,98 @@
+/*
+ * arch/arm/kernel/head.S - Kernel startup code for 32-bit ARM
+ * Linux 6.18.50 LTS (commit 7cfc41f8e80f11ffa8382ed1a505154ceffb79c7)
+ *
+ * Kernel startup entry point.
+ * State on entry:
+ *   - MMU disabled
+ *   - D-cache disabled
+ *   - I-cache either disabled or enabled
+ *   - r0 = 0
+ *   - r1 = machine architecture ID (0xFFFFFFFF for Device Tree boot)
+ *   - r2 = physical address of tagged list in RAM / Device Tree Blob (DTB)
+ */
+
+	.arm
+	__HEAD
+ENTRY(stext)
+ ARM_BE8(setend	be )			@ ensure we are in correct endian mode
+
+ @ Ensure CPU is in Supervisor (SVC) mode with interrupts disabled
+	safe_svcmode_maskall r9
+
+ @ Read processor ID register (CP15 MIDR)
+	mrc	p15, 0, r9, c0, c0		@ get processor id
+	bl	__lookup_processor_type		@ r5=procinfo r9=cpuid
+	movs	r10, r5				@ invalid processor (r5=0)?
+ THUMB( it	eq )
+	beq	__error_p			@ yes, error 'p'
+
+ @ Check machine/DTB pointer passed in r2
+	bl	__vet_atags
+#ifdef CONFIG_SMP_ON_UP
+	bl	__fixup_smp
+#endif
+
+ @ Preserve boot data
+	bl	__fixup_pv_table
+
+ @ Populate initial Level 1 Translation Table (PGD) in physical RAM
+	bl	__create_page_tables
+
+ @ Set up the environment to enable the MMU
+	ldr	r13, =__mmap_switched		@ address to jump to after MMU is enabled
+	b	__enable_mmu
+ENDPROC(stext)
+
+/*
+ * Setup the initial page tables.  We identity-map the kernel code
+ * at its physical address, and map it at its virtual address (PAGE_OFFSET).
+ */
+__create_page_tables:
+	pgtbl	r4, r8				@ page table address in physical RAM
+
+	/* Clear the 16 KB Level 1 Page Directory */
+	mov	r0, r4
+	mov	r3, #0
+	add	r6, r0, #PG_DIR_SIZE
+1:	str	r3, [r0], #4
+	str	r3, [r0], #4
+	str	r3, [r0], #4
+	str	r3, [r0], #4
+	teq	r0, r6
+	bne	1b
+
+	/* Identity map the physical RAM containing turn-on code */
+	/* Create 1MB section mapping for kernel virtual space (0xC0000000 -> RAM) */
+	/* Map early serial UART MMIO if CONFIG_DEBUG_LL is active */
+	ret	lr
+ENDPROC(__create_page_tables)
+
+/*
+ * Turn on the MMU:
+ * Program CP15 TTBR0, DACR, and SCTLR (CR_M bit)
+ */
+__enable_mmu:
+	mov	r5, #(domain_val(DOMAIN_USER, DOMAIN_FAULT) | \
+		      domain_val(DOMAIN_BOOT, DOMAIN_MANAGER) | \
+		      domain_val(DOMAIN_TABLE, DOMAIN_CLIENT))
+	mcr	p15, 0, r5, c3, c0, 0		@ load domain access register
+	mcr	p15, 0, r4, c2, c0, 0		@ load page table pointer (TTBR0)
+	dsb	nsh
+	mrc	p15, 0, r0, c1, c0, 0		@ read control reg (SCTLR)
+	orr	r0, r0, #CR_M			@ enable MMU bit
+	mcr	p15, 0, r0, c1, c0, 0		@ write control reg
+	isb
+	mov	pc, r13				@ branch to __mmap_switched in virtual space
+ENDPROC(__enable_mmu)
+
+/*
+ * The following fragment executes with the MMU enabled.
+ * All memory references are now in virtual address space (0xC0000000+).
+ */
+__mmap_switched:
+	mov	sp, r4				@ set up initial C runtime kernel stack
+	mov	fp, #0				@ clear frame pointer
+	bl	__clear_bss			@ zero out kernel .bss section
+	b	start_kernel			@ Jump to architecture-independent C startup!
+ENDPROC(__mmap_switched)
