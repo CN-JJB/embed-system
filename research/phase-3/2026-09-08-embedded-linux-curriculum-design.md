@@ -701,9 +701,6 @@ AI-Free manual rootfs assembly: Given an empty directory and a cross-compiled Bu
 With a working kernel and minimal rootfs, the learner now focuses on the communication channel between the kernel and the outside world: the **kernel command line (`bootargs`)** and the **serial console**. Boot failures in production embedded systems often leave developers with zero output or cryptic panics. Learners master the distinction between early console (`earlycon`) and normal driver console (`console=ttyAMA0`), and practice systematic fault isolation across a seeded pool of boot failures.
 
 ### 2. Prerequisites
-With a working kernel and minimal rootfs, the learner now investigates the **communication channels between the bootloader/QEMU, kernel, and userspace**. Boot arguments (`bootargs`), console handoff from early boot to full TTY drivers, and diagnostic triage of boot panics are core skills for any bring-up engineer.
-
-### 2. Prerequisites
 - P3-M02 kernel image artifacts (`zImage`).
 - P3-M03 initramfs root filesystem (`rootfs.cpio.gz`).
 - Basic UART communication concepts (baud rates, TX/RX, FIFOs).
@@ -922,7 +919,7 @@ Buildroot is a set of Makefiles and patches that automates the generation of a c
 Add a custom C diagnostic application (`appliance_monitor.c`) to Buildroot using a local package definition (`package/appliance-monitor/Config.in` and `appliance-monitor.mk`). Build the image, verify that the application compiles automatically, and prove it executes at boot via an init script in the overlay.
 
 ### 10. Deliberate Fault
-Modify the C source file of a local in-tree custom package (`package/appliance-monitor/appliance_monitor.c`) on the host after an initial build, run top-level `make`, and observe that the updated code is not recompiled and the old binary still executes on the booted target image (`rootfs.ext4`). The learner executes the full diagnostic chain:
+Use Buildroot's package override development flow for the custom `appliance-monitor` package (for example, `APPLIANCE_MONITOR_OVERRIDE_SRCDIR` pointing at a local source directory). After an initial successful build, modify `appliance_monitor.c` in that override source directory, run top-level `make`, and observe that the package is not automatically rebuilt and the old binary still executes from the regenerated target image (`rootfs.ext4`). The learner executes the full diagnostic chain:
 Symptom: modified C source code changes do not appear in target binary $\rightarrow$ Own Description $\rightarrow$ 3 Hypotheses (source file unsaved, Buildroot package build stamps prevent rebuilding, package version unchanged) $\rightarrow$ Experiment (compare timestamps between source file and `output/build/appliance-monitor-1.0/.stamp_target_installed`) $\rightarrow$ Evidence (Buildroot skips the package build because `.stamp_target_installed` is already present) $\rightarrow$ Narrow Scope (Buildroot package build model is stamp-driven, not fine-grained file-dependency-driven) $\rightarrow$ Root Cause (package build stamp prevents automatic recompilation on top-level `make`) $\rightarrow$ Fix (invoke official package rebuild target: `make appliance-monitor-rebuild` or `make appliance-monitor-reconfigure`) $\rightarrow$ Regression (verify new binary behavior in QEMU).
 
 ### 11. Module Gate
@@ -1158,7 +1155,7 @@ Phase 3 establishes a controlled seeded fault pool across 6 core fault families:
 - **Narrow Scope**: The source code is saved and valid, but Buildroot's declarative build model operates as a package-level state machine driven by `.stamp_*` files rather than fine-grained file-timestamp dependency graphs.
 - **Root Cause**: Buildroot tracks package phases via stamp files. Once `.stamp_target_installed` exists, top-level `make` considers the package complete and skips rebuilding it.
 - **Fix**: Rebuild the package using Buildroot's official package rebuild target: `make appliance-monitor-rebuild all` (or `make appliance-monitor-reconfigure all` when configuration must be rerun), which removes `.stamp_built` and `.stamp_target_installed` and triggers target installation and finalization without requiring a slow full tree `make clean`.
-- **Regression**: Execute `make appliance-monitor-rebuild`, boot the generated image in QEMU, verify that the updated binary string is executed and logged.
+- **Regression**: Execute `make appliance-monitor-rebuild all`, then boot the regenerated image in QEMU and verify that the updated binary string is executed and logged.
 
 #### Fault F14: Device MMIO Attribute Mismatch Diagnosis
 - **Symptom**: A peripheral status polling loop spins indefinitely or reads stale FIFO data, even though hardware is active.
@@ -1168,7 +1165,7 @@ Phase 3 establishes a controlled seeded fault pool across 6 core fault families:
 - **Evidence**: The page table entry flags show Normal Memory Inner/Outer Write-Back cacheable rather than Device memory attributes.
 - **Narrow Scope**: The physical address is correct, but the CPU satisfies reads from the L1 Data Cache without generating bus cycles to the peripheral.
 - **Root Cause**: Memory mapping descriptor omitted `pgprot_noncached` / Device memory attributes.
-- **Fix**: Correct the mapping specification to use Device Non-cacheable attributes (`pgprot_device` / `pgprot_noncached`).
+- **Fix**: Correct the reviewer-provided mapping specification to use the appropriate ARM Device-memory attributes. The learner diagnoses and explains the mapping correction; implementing Linux driver mapping APIs remains Phase 4 scope.
 - **Regression**: Re-evaluate the diagnostic fixture, verify that memory reads generate physical bus cycles and register polling succeeds.
 
 ---
