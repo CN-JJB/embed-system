@@ -1,0 +1,84 @@
+# ==============================================================================
+# SCRIPTED / SEEDED ASSESSMENT FIXTURE — NOT LIVE HARDWARE EVIDENCE
+# Target: STM32F103C8T6 running FreeRTOS V11.3.0
+# Supplied assessment input formatted as GDB task inspection session.
+# ==============================================================================
+
+(gdb) info threads
+  Id   Target Id         Frame 
+* 1    Thread 536871104 (Task_Storage : Blocked) 0x08000620 in vListInsert ()
+  2    Thread 536870984 (Task_Telemetry : Blocked) 0x08000620 in vListInsert ()
+
+(gdb) print *xTaskGetHandle("Task_Telemetry")
+$1 = {
+  pxTopOfStack = 0x20000a40,
+  xStateListItem = {
+    xItemValue = 0,
+    pxNext = 0x200001a8,
+    pxPrevious = 0x200001a8,
+    pvOwner = 0x20000240,
+    pxContainer = 0x20000508
+  },
+  uxPriority = 2,
+  uxBasePriority = 2,
+  pcTaskName = "Task_Telemetry\000"
+}
+
+(gdb) print *xTaskGetHandle("Task_Storage")
+$2 = {
+  pxTopOfStack = 0x20000e10,
+  xStateListItem = {
+    xItemValue = 0,
+    pxNext = 0x20000120,
+    pxPrevious = 0x20000120,
+    pvOwner = 0x20000300,
+    pxContainer = 0x20000408
+  },
+  uxPriority = 2,
+  uxBasePriority = 1,
+  pcTaskName = "Task_Storage\000\000"
+}
+
+(gdb) print *(Queue_t *)xSensorBusLock
+$3 = {
+  pcHead = 0x0,
+  pcWriteTo = 0x0,
+  u = {
+    xSemaphore = {
+      xMutexHolder = 0x20000300,
+      uxRecursiveCallCount = 0
+    }
+  },
+  xTasksWaitingToSend = { ... },
+  xTasksWaitingToReceive = {
+    uxNumberOfItems = 2,
+    pxIndex = 0x20000408
+  },
+  uxMessagesWaiting = 0,
+  uxLength = 1,
+  uxItemSize = 0,
+  cRxLock = -1,
+  cTxLock = -1
+}
+
+(gdb) print *(Queue_t *)xLogBufferLock
+$4 = {
+  pcHead = 0x0,
+  pcWriteTo = 0x0,
+  u = {
+    xSemaphore = {
+      xMutexHolder = 0x0,
+      uxRecursiveCallCount = 0
+    }
+  },
+  xTasksWaitingToSend = { ... },
+  xTasksWaitingToReceive = {
+    uxNumberOfItems = 0,
+    pxIndex = 0x0
+  },
+  uxMessagesWaiting = 1,
+  uxLength = 1,
+  uxItemSize = 0,
+  cRxLock = -1,
+  cTxLock = -1
+}

@@ -1,0 +1,37 @@
+# ==============================================================================
+# SCRIPTED / SEEDED ASSESSMENT FIXTURE — NOT LIVE HARDWARE EVIDENCE
+# Target: STM32F103C8T6 @ 72 MHz SYSCLK
+# Supplied assessment input formatted as GDB register inspection session.
+# ==============================================================================
+
+# RCC Peripheral Clocks
+RCC->CR      = 0x03035A83
+RCC->CFGR    = 0x001D840A
+RCC->APB1ENR = 0x00000002
+RCC->APB2ENR = 0x00000205
+RCC->AHBENR  = 0x00000001
+
+# TIM3 Configuration
+TIM3->CR1    = 0x0001
+TIM3->CR2    = 0x0020
+TIM3->SMCR   = 0x0000
+TIM3->DIER   = 0x0000
+TIM3->SR     = 0x0001
+TIM3->PSC    = 0x0047
+TIM3->ARR    = 0x0063
+TIM3->CNT    = 0x0032
+
+# ADC1 Configuration
+ADC1->CR1    = 0x00000100
+ADC1->CR2    = 0x001E0103
+ADC1->SMPR2  = 0x00000028
+ADC1->SQR1   = 0x00000000
+ADC1->SQR3   = 0x00000000
+ADC1->DR     = 0x0000073A
+
+# DMA1 Channel 1 Configuration
+DMA1_Channel1->CCR   = 0x0000058E
+DMA1_Channel1->CNDTR = 0x00000000
+DMA1_Channel1->CPAR  = 0x4001244C
+DMA1_Channel1->CMAR  = 0x20000200
+DMA1->ISR            = 0x00000006

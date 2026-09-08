@@ -1,0 +1,22 @@
+# ==============================================================================
+# SCRIPTED / SEEDED ASSESSMENT FIXTURE — NOT LIVE HARDWARE EVIDENCE
+# Target: STM32F103C8T6 @ 72 MHz SYSCLK
+# Supplied assessment input formatted as GDB memory dump of g_adc_buffer.
+# ==============================================================================
+
+(gdb) x/16hx &g_adc_buffer[0][0]
+0x20000200 <g_adc_buffer>:      0x073a  0x073c  0x0740  0x073f  0x073e  0x073d  0x073b  0x0738
+0x20000210 <g_adc_buffer+16>:   0x0739  0x073b  0x073e  0x0741  0x0742  0x0740  0x073c  0x0739
+
+(gdb) x/16hx &g_adc_buffer[1][0]
+0x20000280 <g_adc_buffer+128>:  0x0738  0x073a  0x073d  0x0740  0x073f  0x073e  0x073c  0x0738
+0x20000290 <g_adc_buffer+144>:  0x0737  0x0739  0x073c  0x073e  0x0740  0x073e  0x073b  0x0737
+
+(gdb) print g_dma_ht_count
+$1 = 1
+
+(gdb) print g_dma_tc_count
+$2 = 1
+
+(gdb) print g_dma_te_count
+$3 = 0
