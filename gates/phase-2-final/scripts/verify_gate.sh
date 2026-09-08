@@ -91,10 +91,13 @@ assert sum([score_map['Part A'], score_map['Part B'], score_map['Part C'], score
 # Check 3: Part floors and overall pass threshold match canonical values
 # ------------------------------------------------------------------------------
 echo "Check 3: Part floors and overall threshold"
-python3 -c "
+python3 - "$GATE_DIR" << 'PYEOF'
 import re
+import sys
+import os
 
-with open('$GATE_DIR/SCORE.md') as f:
+gate_dir = sys.argv[1]
+with open(os.path.join(gate_dir, 'SCORE.md')) as f:
     text = f.read()
 
 table_rows = {}
@@ -105,51 +108,43 @@ for line in text.splitlines():
             crit = cols[0].replace('*', '').strip()
             table_rows[crit] = cols[2].strip()
 
-def parse_single_threshold(cell, expected_num, expected_den=None):
-    # Match all threshold expressions like \ge \mathbf{15.0 / 25} or >= 15 / 25
-    exprs = re.findall(r'(?:\\\\ge|>=|≥)\s*(?:\\\\mathbf\{)?([0-9]+(?:\.[0-9]+)?)\s*(?:/\s*([0-9]+))?', cell)
-    assert len(exprs) == 1, f'Cell must contain exactly ONE parseable threshold expression, found {len(exprs)}: {cell}'
+def parse_canonical_threshold_cell(cell, expected_num, expected_den, expected_pct=None):
+    clean_cell = cell.strip()
     
-    # Reject decoy rescue clauses or multiple operators in the same cell
-    ops = re.findall(r'(?:\\\\ge|>=|≥|\\\\le|<=|≤|>|<|=)', cell)
-    assert len(ops) == 1, f'Cell contains multiple comparison operators or rescue clause: {cell}'
-    for forbidden in ['actual', 'active', 'rescue', 'decoy', ' or ']:
-        assert forbidden not in cell.lower(), f'Cell contains prohibited decoy or rescue clause: {cell}'
+    # 1. Reject any extra or contradictory numbers in the cell
+    found_nums = re.findall(r'[0-9]+(?:\.[0-9]+)?', clean_cell)
+    allowed_nums = {str(expected_num), str(int(expected_num)) if float(expected_num).is_integer() else str(expected_num), str(expected_den)}
+    if expected_pct is not None:
+        allowed_nums.add(str(expected_pct))
+    
+    for n in found_nums:
+        assert n in allowed_nums, f"Contradictory or extra numeric value found in threshold cell: '{n}' (allowed: {allowed_nums}) in '{clean_cell}'"
+    
+    # 2. Reject multiple comparison operators or prohibited clauses
+    ops = re.findall(r'(?:\\ge|>=|≥|\\le|<=|≤|>|<|=)', clean_cell)
+    assert len(ops) == 1, f'Cell must contain exactly one comparison operator: {clean_cell}'
+    for forbidden in ['actual', 'active', 'rescue', 'decoy', ' or ', 'effectively', 'remedial']:
+        assert forbidden not in clean_cell.lower(), f'Cell contains prohibited text: {forbidden} in {clean_cell}'
+    
+    # 3. Full-cell exact grammar match
+    num_pat = rf'{int(expected_num)}(?:\.0)?' if float(expected_num).is_integer() else rf'{expected_num}'
+    if expected_pct is not None:
+        pattern = rf'^(?:\$\s*)?(?:\\ge|>=|≥)\s*(?:\\mathbf\{{)?{num_pat}\s*/\s*{expected_den}(?:\}})?(?:\s*\$)?\s*\({expected_pct}%\)$'
+    else:
+        pattern = rf'^(?:\$\s*)?(?:\\ge|>=|≥)\s*(?:\\mathbf\{{)?{num_pat}\s*/\s*{expected_den}(?:\}})?(?:\s*\$)?$'
+    assert re.match(pattern, clean_cell), f"Threshold cell does not conform to full-cell canonical grammar: '{clean_cell}'"
 
-    num_str, den_str = exprs[0]
-    num = float(num_str)
-    den = int(den_str) if den_str else (100 if expected_den == 100 else None)
-
-    assert num == expected_num, f'Threshold number mismatch: got {num}, expected {expected_num}'
-    if expected_den is not None:
-        assert den == expected_den, f'Threshold denominator mismatch: got {den}, expected {expected_den}'
-    return num, den
-
-parse_single_threshold(table_rows.get('Overall Total Score', ''), 75.0, 100)
-parse_single_threshold(table_rows.get('Part A Floor', ''), 15.0, 25)
-parse_single_threshold(table_rows.get('Part B Floor', ''), 15.0, 25)
-parse_single_threshold(table_rows.get('Part C Floor', ''), 15.0, 25)
-parse_single_threshold(table_rows.get('Part D Floor (Mastery Bar)', ''), 17.5, 25)
-
-# Check canonical evaluation outcome tiers in SCORE.md
-score_cells = [line.split('|')[1].strip().replace('\x60', '') for line in text.splitlines() if '|' in line and len(line.split('|')) >= 4]
-assert '<70' in score_cells, 'Canonical score threshold cell <70 missing from SCORE.md'
-assert '70-84' in score_cells, 'Canonical score threshold cell 70-84 missing from SCORE.md'
-assert '85-100' in score_cells, 'Canonical score threshold cell 85-100 missing from SCORE.md'
-
-# Check scoring_anchors.md
-with open('$GATE_DIR/reviewer/scoring_anchors.md') as f:
-    anchors_text = f.read()
-anchor_cells = [line.split('|')[1].strip().replace('\x60', '') for line in anchors_text.splitlines() if '|' in line and len(line.split('|')) >= 4]
-assert '<70' in anchor_cells, 'Canonical score threshold cell <70 missing from scoring_anchors.md'
-assert '70-84' in anchor_cells, 'Canonical score threshold cell 70-84 missing from scoring_anchors.md'
-assert '85-100' in anchor_cells, 'Canonical score threshold cell 85-100 missing from scoring_anchors.md'
-
-# Reject contradictory or overlapping threshold grammar across Gate documentation
-for doc in [text, anchors_text]:
-    for prohibited in ['70-85', '85-100 and', '80-100', '>= 80']:
-        assert prohibited not in doc, f'Prohibited or contradictory threshold phrasing found: {prohibited}'
-" && report_pass "Canonical floors & outcome tiers structurally verified: Total>=75.0/100, A>=15.0/25 (60%), B>=15.0/25 (60%), C>=15.0/25 (60%), D>=17.5/25 (70%), tiers=<70|70-84|85-100" || report_fail "Canonical floors or outcome tiers structural check failed in SCORE.md"
+parse_canonical_threshold_cell(table_rows.get('Overall Total Score', ''), 75.0, 100, None)
+parse_canonical_threshold_cell(table_rows.get('Part A Floor', ''), 15.0, 25, 60)
+parse_canonical_threshold_cell(table_rows.get('Part B Floor', ''), 15.0, 25, 60)
+parse_canonical_threshold_cell(table_rows.get('Part C Floor', ''), 15.0, 25, 60)
+parse_canonical_threshold_cell(table_rows.get('Part D Floor (Mastery Bar)', ''), 17.5, 25, 70)
+PYEOF
+if [ $? -eq 0 ]; then
+    report_pass "Canonical floors structurally verified: Total>=75.0/100, A>=15.0/25 (60%), B>=15.0/25 (60%), C>=15.0/25 (60%), D>=17.5/25 (70%)"
+else
+    report_fail "Canonical floors structural check failed in SCORE.md"
+fi
 
 # ------------------------------------------------------------------------------
 # Check 4: Total time budget is 210 minutes (3.5 h) with exact per-part budgets

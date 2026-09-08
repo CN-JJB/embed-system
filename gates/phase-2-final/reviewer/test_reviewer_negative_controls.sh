@@ -19,7 +19,7 @@ echo "Running Phase 2 Gate Reviewer-Isolated Negative Controls (Round 4)"
 echo "=============================================================================="
 
 NC_PASSED=0
-NC_TOTAL=15
+NC_TOTAL=16
 
 TEMP_TEST_DIR=$(mktemp -d /tmp/p2_reviewer_nc_XXXXXX)
 trap 'rm -rf "$TEMP_TEST_DIR"' EXIT
@@ -105,6 +105,42 @@ assert_reviewer_decoy_rejected() {
     else
         echo "FAIL: Decoy $nc_id did not produce [SEEDED_DEFECT_REJECT]!"
         echo "Output was: $oracle_out"
+        exit 1
+    fi
+}
+
+assert_trace_decoy_rejected() {
+    local nc_id="$1"
+    local desc="$2"
+    local oracle_cmd="$3"
+
+    echo "------------------------------------------------------------"
+    echo "Running Isolated Trace Decoy Control $nc_id: $desc"
+    local oracle_out
+    oracle_out=$(eval "$oracle_cmd" 2>&1)
+
+    # Step 1: ORACLE EXECUTION PASS (Must not crash, raise SyntaxError, or return parser ERROR / UNEXPECTED_FAILURE)
+    if echo "$oracle_out" | grep -q -E "\[ERROR\]|\[UNEXPECTED_FAILURE\]|Traceback|SyntaxError"; then
+        echo "FAIL: Trace Decoy $nc_id caused oracle execution failure:"
+        echo "$oracle_out"
+        exit 1
+    fi
+    echo "  -> [ORACLE EXECUTION PASS]"
+
+    # Step 2: Must never falsely award REFERENCE_PASS
+    if echo "$oracle_out" | grep -q "\[REFERENCE_PASS\]"; then
+        echo "FAIL: Trace Decoy $nc_id received [REFERENCE_PASS] unexpectedly!"
+        echo "$oracle_out"
+        exit 1
+    fi
+
+    # Step 3: Must produce dedicated, identifiable trace consistency rejection
+    if echo "$oracle_out" | grep -q "Watchdog trace consistency check failed:"; then
+        echo "  -> [INTENDED ORACLE REJECT]: $oracle_out"
+        echo "PASS: Trace Decoy $nc_id verified: dedicated trace consistency reject confirmed."
+        NC_PASSED=$((NC_PASSED + 1))
+    else
+        echo "FAIL: Trace Decoy $nc_id did not produce dedicated trace-consistency rejection! Output: $oracle_out"
         exit 1
     fi
 }
@@ -234,12 +270,26 @@ cp "$TEMP_TEST_DIR/part-d.c.bak" "$GATE_DIR/part-d/src/node_app.c"
 make -C "$GATE_DIR/part-d" clean all > /dev/null 2>&1
 
 # ------------------------------------------------------------------------------
-# RNC 15: Part D Decoy Mutation — reordered non-monotonic watchdog trace
+# RNC 15: Part D Decoy Mutation — buildable runtime conditional-path release
+# ------------------------------------------------------------------------------
+cp "$GATE_DIR/part-d/src/node_app.c" "$TEMP_TEST_DIR/part-d.c.bak"
+cp "$GATE_DIR/reviewer/reference/part-d/node_app.c" "$GATE_DIR/part-d/src/node_app.c"
+sed -i 's/xSemaphoreGive(xSensorBusLock);/if (g_storage_cycles > 5) { xSemaphoreGive(xSensorBusLock); }/g' "$GATE_DIR/part-d/src/node_app.c"
+assert_reviewer_decoy_rejected "RNC-15" "Part D decoy: conditional release if (g_storage_cycles > 5) leaves acquire path leaked" \
+    "make -C '$GATE_DIR/part-d' clean all" \
+    "python3 '$GATE_DIR/reviewer/regression_oracle.py' part-d '$GATE_DIR/part-d/src/node_app.c' '$GATE_DIR/part-d/fixtures/watchdog_reset_trace.txt'"
+cp "$TEMP_TEST_DIR/part-d.c.bak" "$GATE_DIR/part-d/src/node_app.c"
+make -C "$GATE_DIR/part-d" clean all > /dev/null 2>&1
+
+# ------------------------------------------------------------------------------
+# RNC 16: Part D Isolated Trace Mutation — otherwise-reference-pass source, mutated trace
 # ------------------------------------------------------------------------------
 cp "$GATE_DIR/part-d/fixtures/watchdog_reset_trace.txt" "$TEMP_TEST_DIR/trace.txt.bak"
+# Mutate trace timestamp to break monotonicity and phase ordering (0.050s -> 0.150s)
 sed -i 's/t = 0.050 s/t = 0.150 s/g' "$GATE_DIR/part-d/fixtures/watchdog_reset_trace.txt"
-assert_oracle_rejects_seeded "RNC-15" "Part D decoy: reordered trace timestamps violate monotonicity" \
-    "python3 '$GATE_DIR/reviewer/regression_oracle.py' part-d '$GATE_DIR/part-d/src/node_app.c' '$GATE_DIR/part-d/fixtures/watchdog_reset_trace.txt'"
+# Run against reference node_app.c which otherwise achieves REFERENCE_PASS
+assert_trace_decoy_rejected "RNC-16" "Part D isolated trace: reference source paired with non-monotonic trace" \
+    "python3 '$GATE_DIR/reviewer/regression_oracle.py' part-d '$GATE_DIR/reviewer/reference/part-d/node_app.c' '$GATE_DIR/part-d/fixtures/watchdog_reset_trace.txt'"
 cp "$TEMP_TEST_DIR/trace.txt.bak" "$GATE_DIR/part-d/fixtures/watchdog_reset_trace.txt"
 
 echo "=============================================================================="

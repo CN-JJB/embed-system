@@ -8,7 +8,7 @@
 
 | Part | Competency Family | Seed ID | Defective File | Root Cause Mechanism | Reference Fix |
 |---|---|---|---|---|---|
-| **Part A** | Startup & Linker | `SEED-P2G-A4` | `part-a/linker/stm32f103c8tx_flash.ld` | Invalid `.data` LMA reference: `_sidata = _etext;` points to beginning of `.rodata` rather than `LOADADDR(.data)`, so startup copy loop copies `.rodata` bytes into RAM instead of initialized data. | Change `_sidata = _etext;` to `_sidata = LOADADDR(.data);` in `stm32f103c8tx_flash.ld`. |
+| **Part A** | Startup & Linker | `SEED-P2G-A5` | `part-a/linker/stm32f103c8tx_flash.ld` | Invalid `.data` LMA reference: `_sidata = ADDR(.data);` points to SRAM VMA (`0x20000000`) rather than `LOADADDR(.data)` in Flash, so startup copy loop reads uninitialized SRAM instead of initialized data. | Change `_sidata = ADDR(.data);` to `_sidata = LOADADDR(.data);` in `stm32f103c8tx_flash.ld`. |
 | **Part B** | Peripheral & DMA | `SEED-P2G-B4` | `part-b/src/dma.c` | Non-circular channel termination: `DMA_CCR_CIRC` omitted in `DMA1_Channel1->CCR` (`CCR = 0x58E`), causing DMA to halt after first 128-sample block when CNDTR reaches 0; HT/TC counters freeze at 1. | Add `DMA_CCR_CIRC` to `DMA1_Channel1->CCR` configuration (`CCR = 0x5AE`). |
 | **Part C** | Scheduler & NVIC | `SEED-P2G-C4` | `part-c/src/interrupt_config.c` | FreeRTOS syscall boundary violation: `NVIC_SetPriority(EXTI0_IRQn, 4)` configures hardware priority `0x40` (`0x40 < 0x50`), which cannot be masked by `BASEPRI`, corrupting scheduler on ISR API call. | Configure logical priority `6` (`NVIC_SetPriority(EXTI0_IRQn, 6)`), producing hardware byte `0x60 >= 0x50`. |
 | **Part D** | Concurrency & Debug | `SEED-P2G-D4` | `part-d/src/node_app.c` | Mutex release mismatch / leak: `task_storage` acquires `xSensorBusLock` but releases `xLogBufferLock`, leaking `xSensorBusLock` and permanently blocking `task_telemetry`, starving `iwdg_refresh()`, provoking IWDG reset. | Change `xSemaphoreGive(xLogBufferLock)` to `xSemaphoreGive(xSensorBusLock)` in `task_storage`. |
@@ -17,13 +17,13 @@
 
 ## Detailed Seed Specifications
 
-### Part A: SEED-P2G-A4
-* **Competency Focus:** Linker script `_sidata` LMA assignment, memory layout with intervening read-only sections (`.rodata`, `.init_array`), startup copy loop (`Reset_Handler`).
-* **Seeded Defect:** In `part-a/linker/stm32f103c8tx_flash.ld`, `_sidata = _etext;` is defined immediately after `.text`. Because `.rodata` and `.init_array` are placed in FLASH between `_etext` and `.data`, `_sidata` points to `.rodata` instead of the load memory address of `.data`.
+### Part A: SEED-P2G-A5
+* **Competency Focus:** Linker script `_sidata` LMA assignment, memory layout distinction between VMA and LMA, startup copy loop (`Reset_Handler`).
+* **Seeded Defect:** In `part-a/linker/stm32f103c8tx_flash.ld`, `_sidata = ADDR(.data);` is defined immediately prior to `.data`. Because `ADDR(.data)` evaluates to the section's VMA in SRAM (`0x20000000`), `_sidata` points to SRAM instead of the Flash load address (`LOADADDR(.data)`).
 * **Observable Manifestation:**
-  - `arm-none-eabi-readelf -S build/firmware.elf` shows `.data` LMA is at `0x0800024c` (following `.rodata`), whereas symbol `_sidata` is at `0x0800020c` (`_etext`).
-  - Runtime execution halts in `main()` fault loop because `g_boot_config_token != 0x5A5AA5A5U` (RAM received `.rodata` constants).
-* **Expected Learner Output:** Identified mismatch between `_sidata` and `LOADADDR(.data)` via Binutils; corrected linker script by setting `_sidata = LOADADDR(.data);`.
+  - `arm-none-eabi-nm build/firmware.elf` shows symbol `_sidata` is at `0x20000000` (matching `_sdata`), whereas `arm-none-eabi-readelf -l build/firmware.elf` shows `.data` LMA is in Flash at `0x08000234`.
+  - Runtime execution halts in `main()` fault loop because `g_boot_config_token != 0x5A5AA5A5U` (RAM received uninitialized SRAM bytes from self-copy loop).
+* **Expected Learner Output:** Identified mismatch between `_sidata` (SRAM VMA `0x20000000`) and `LOADADDR(.data)` (Flash LMA `0x08000234`) via Binutils; corrected linker script by setting `_sidata = LOADADDR(.data);`.
 
 ### Part B: SEED-P2G-B4
 * **Competency Focus:** STM32 DMA controller channel circular buffering mode (`DMA_CCR_CIRC`), continuous data streaming, transfer counters.

@@ -14,22 +14,22 @@ This document establishes concrete, point-by-point scoring anchors for each of t
 * **0.0 pts:** Fundamental confusion regarding vector table loading, Thumb bit, or memory initialization order.
 
 ### Dimension A.2: ELF / Symbol / Map Evidence (5.0 pts)
-* **5.0 pts:** Provides verbatim output from `arm-none-eabi-readelf -S` and `arm-none-eabi-nm` showing that `_edata == _sdata == 0x20000000`, proving that the copy loop relocation bounds span exactly 0 bytes despite the presence of initialized `.data` in the image.
-* **3.0 pts:** Identifies that `.data` was not copied, but evidence lacks verbatim tool outputs or symbol address calculation.
+* **5.0 pts:** Provides verbatim output from `arm-none-eabi-readelf -l` (or `-S`) and `arm-none-eabi-nm` showing that `_sidata == 0x20000000` (matching the SRAM VMA of `.data`), while `.data` LOADADDR resides in Flash (`0x0800xxxx`), proving `_sidata` points to uninitialized RAM instead of Flash.
+* **3.0 pts:** Identifies that `.data` was not copied from Flash, but evidence lacks verbatim tool outputs or symbol address calculation.
 * **0.0 pts:** Fabricated evidence, or no Binutils inspection performed.
 
 ### Dimension A.3: Root Cause Reasoning (5.0 pts)
-* **5.0 pts:** Explicitly articulates why placing `_edata = .;` before `*(.data*)` causes the location counter `.` to be captured prior to consuming the data section inputs. Because `_edata` equals `_sdata`, the startup `while (dst < &_edata)` copy loop immediately terminates, leaving `.data` variables with uninitialized random/zero contents.
-* **3.0 pts:** States that `_edata` was wrong, but does not explain how location counter placement caused the 0-byte range.
+* **5.0 pts:** Explicitly articulates why assigning `_sidata = ADDR(.data);` causes the startup relocation pointer to resolve to the SRAM VMA (`0x20000000`) rather than the Flash LMA (`LOADADDR(.data)`). Because `_sidata` equals `_sdata`, the startup `Reset_Handler` copy loop copies uninitialized SRAM into SRAM instead of loading the compiled data initializers from Flash.
+* **3.0 pts:** States that `_sidata` was wrong, but does not explain how VMA assignment caused the uninitialized RAM self-copy.
 * **0.0 pts:** Guesses unrelated causes (e.g. clock failure, wrong optimization level).
 
 ### Dimension A.4: Minimal Principled Correction (5.0 pts)
-* **5.0 pts:** Corrects `linker/stm32f103c8tx_flash.ld` by moving `_edata = .;` after `*(.data*)` and alignment. Does not introduce unneeded changes or disable sections.
+* **5.0 pts:** Corrects `linker/stm32f103c8tx_flash.ld` by replacing `_sidata = ADDR(.data);` with `_sidata = LOADADDR(.data);`. Does not introduce unneeded changes or disable sections.
 * **2.5 pts:** Hardcodes Flash offset or modifies section order unsafely.
 * **0.0 pts:** Fails to repair the linker script.
 
 ### Dimension A.5: Automated Regression Proof (5.0 pts)
-* **5.0 pts:** Provides verbatim output of `make check` passing, confirming `_edata > _sdata` and data initialization contract verified.
+* **5.0 pts:** Provides verbatim output of `make check` / regression oracle passing, confirming `_sidata == LOADADDR(.data)` and data initialization contract verified.
 * **0.0 pts:** No regression test output provided.
 
 ---
@@ -119,14 +119,3 @@ This document establishes concrete, point-by-point scoring anchors for each of t
 * **5.0 pts:** Provides `make check` output confirming mutex release pairing is verified and binary satisfies all concurrency contracts.
 * **0.0 pts:** No regression proof.
 
----
-
-## 5. Canonical Evaluation Outcome Tiers
-
-Candidate final scores are classified using strict, non-overlapping threshold grammar:
-
-| Score Threshold Cell | Performance Tier | Evaluation Outcome & Roadmap Progression |
-|:---:|---|---|
-| `<70` | **Unsatisfactory** | **FAIL**. Cumulative score falls below the competency bar. Mandatory targeted remediation on deficient modules before attempting a fresh assessment variant. |
-| `70-84` | **Proficient** | **PASS** (subject to satisfying all mandatory Hard Pass Floors: Overall Total $\ge 75.0$, Part A $\ge 15.0$, Part B $\ge 15.0$, Part C $\ge 15.0$, Part D $\ge 17.5$). Demonstrates solid core competency; advances along the normal Phase 3 roadmap. |
-| `85-100` | **Mastery** | **HIGH PASS / MASTERY**. Demonstrates exceptional technical depth and disciplined observable evidence across all bare-metal and concurrency dimensions. Recommended for Fast Track progression. |

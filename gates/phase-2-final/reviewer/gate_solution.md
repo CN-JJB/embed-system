@@ -22,51 +22,48 @@ Firmware compiles and links cleanly with `-nostartfiles -Wl,--gc-sections` and z
 
 ### 2. Plausible Hypotheses
 1. `.data` copy loop in `Reset_Handler` has an off-by-one boundary condition or loop termination defect.
-2. Linker script assigns the relocation source pointer `_sidata = _etext;` without accounting for intervening `.rodata` and `.init_array` sections in Flash, causing the startup copy loop to populate RAM with read-only constants rather than data initializers.
+2. Linker script assigns the relocation source pointer `_sidata = ADDR(.data);` pointing to the SRAM VMA (`0x20000000`) instead of the Flash LMA (`LOADADDR(.data)`), causing the startup copy loop to self-copy uninitialized SRAM rather than copying initialized data from Flash.
 3. Linker script positions `_edata = .;` before `*(.data*)`, collapsing the copy range to 0 bytes (`_edata == _sdata`).
 4. `.bss` zeroing loop executes after `.data` copy loop and accidentally clears `.data`.
 
 ### 3. Discriminative Evidence
 Inspect section and symbol table headers in the compiled ELF:
 ```bash
-arm-none-eabi-readelf -S build/firmware.elf
+arm-none-eabi-readelf -l build/firmware.elf
 arm-none-eabi-nm build/firmware.elf | grep -E '_si|_sd|_ed|_et'
 ```
 Observations:
 ```text
-Section Headers:
-  [Nr] Name              Type            Addr     Off    Size   ES Flg Lk Inf Al
-  [ 1] .isr_vector       PROGBITS        08000000 010000 00010c 00   A  0   0  1
-  [ 2] .text             PROGBITS        0800010c 01010c 000100 00  AX  0   0  4
-  [ 3] .rodata           PROGBITS        0800020c 01020c 000020 00   A  0   0  4
-  [ 4] .init_array       INIT_ARRAY      0800022c 01022c 000004 04  WA  0   0  4
-  [ 5] .data             PROGBITS        20000000 020000 000004 00  WA  0   0  4
+Program Headers:
+  Type           Offset   VirtAddr   PhysAddr   FileSiz MemSiz  Flg Align
+  LOAD           0x010000 0x08000000 0x08000000 0x00234 0x00234 R E 0x4
+  LOAD           0x020000 0x20000000 0x08000234 0x00004 0x00004 RW  0x4
 ```
 Symbol table inspection:
 ```text
 0800020c A _etext
-0800020c A _sidata
+20000000 A _sidata
 20000000 D _sdata
 20000004 D _edata
 ```
 Discriminative Finding:
-- `.data` LMA (Load Memory Address) is at `0x08000230` (or `0x0800024c` depending on alignment/padding), strictly after `.rodata` and `.init_array`.
-- Symbol `_sidata` is set to `_etext` (`0x0800020c`).
+- `.data` LMA (Load Memory Address / PhysAddr) is at `0x08000234`, strictly in Flash.
+- Symbol `_sidata` is set to `ADDR(.data)` (`0x20000000`), which is the Virtual Memory Address (VMA) in SRAM.
 - In `startup_stm32f103c8.s`, the startup copy loop evaluates:
   ```assembly
   ldr r0, =_sdata
   ldr r1, =_edata
   ldr r2, =_sidata
   ```
-- Because `r2 (_sidata)` points to `_etext` (`0x0800020c`), the copy loop reads the bytes of `.rodata` and copies them into `.data` at `0x20000000`.
-- The actual initial value of `g_boot_config_token` (located in Flash at `LOADADDR(.data)`) is never loaded into SRAM. Instead, `g_boot_config_token` receives `.rodata` constants/strings, failing the verification in `main()`.
+- Because `r2 (_sidata)` points to `0x20000000` (equal to `_sdata`), the copy loop reads uninitialized SRAM from `0x20000000` and writes it back into `0x20000000`.
+- The actual initial value of `g_boot_config_token` (located in Flash at `LOADADDR(.data)`) is never loaded into SRAM. Instead, `g_boot_config_token` retains uninitialized SRAM garbage, failing the verification in `main()`.
 
 ### 4. Root Cause
 In `linker/stm32f103c8tx_flash.ld`, `_sidata` was defined as:
 ```ld
-_sidata = _etext;
+_sidata = ADDR(.data);
 ```
-Because read-only sections (`.rodata`, `.init_array`) reside in Flash between `_etext` and the load address of `.data`, `_etext` does not equal `LOADADDR(.data)`.
+Because `ADDR(.data)` returns the runtime VMA in RAM (`0x20000000`), `_sidata` does not point to the load address in Flash (`LOADADDR(.data)`).
 
 ### 5. Minimal Fix
 In `linker/stm32f103c8tx_flash.ld`, define `_sidata` using the builtin function `LOADADDR(.data)`:

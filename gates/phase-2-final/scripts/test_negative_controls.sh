@@ -15,7 +15,7 @@ echo "Running Phase 2 Gate Validator Generic Negative Controls"
 echo "=============================================================================="
 
 NC_PASSED=0
-NC_TOTAL=10
+NC_TOTAL=11
 
 TEMP_TEST_DIR=$(mktemp -d /tmp/p2_gate_nc_XXXXXX)
 trap 'rm -rf "$TEMP_TEST_DIR"' EXIT
@@ -101,17 +101,24 @@ assert_mutation_fails "NC-8" "Source pin ownership swap between FreeRTOS and CMS
 cp "$GATE_DIR/SOURCE_LEDGER.md" "$NC_GATE_DIR/SOURCE_LEDGER.md"
 
 # ------------------------------------------------------------------------------
-# NC 9: Correct threshold appears first as decoy, wrong active threshold second in same cell
+# NC 9: Contradictory prose floor and percentage in same cell without second operator
 # ------------------------------------------------------------------------------
-sed -i 's/\\ge \\mathbf{17.5 \/ 25} (70%)/\\ge \\mathbf{17.5 \/ 25} (decoy, actual active \\ge 15.0 \/ 25)/g' "$NC_GATE_DIR/SCORE.md"
-assert_mutation_fails "NC-9" "Correct threshold first as decoy, wrong active threshold later in same cell" "bash '$NC_GATE_DIR/scripts/verify_gate.sh'"
+sed -i 's/\\ge \\mathbf{17.5 \/ 25} (70%)/\\ge \\mathbf{17.5 \/ 25} (70%) (remedial floor is 14 points or 50%)/g' "$NC_GATE_DIR/SCORE.md"
+assert_mutation_fails "NC-9" "Contradictory prose floor and percentage in same cell without second operator" "bash '$NC_GATE_DIR/scripts/verify_gate.sh'"
 cp "$GATE_DIR/SCORE.md" "$NC_GATE_DIR/SCORE.md"
 
 # ------------------------------------------------------------------------------
-# NC 10: Wrong Part A time budget with decoy '210' present in file
+# NC 10: Correct threshold appears first as decoy, wrong active threshold second in same cell
+# ------------------------------------------------------------------------------
+sed -i 's/\\ge \\mathbf{17.5 \/ 25} (70%)/\\ge \\mathbf{17.5 \/ 25} (decoy, actual active \\ge 15.0 \/ 25)/g' "$NC_GATE_DIR/SCORE.md"
+assert_mutation_fails "NC-10" "Correct threshold first as decoy, wrong active threshold later in same cell" "bash '$NC_GATE_DIR/scripts/verify_gate.sh'"
+cp "$GATE_DIR/SCORE.md" "$NC_GATE_DIR/SCORE.md"
+
+# ------------------------------------------------------------------------------
+# NC 11: Wrong Part A time budget with decoy '210' present in file
 # ------------------------------------------------------------------------------
 sed -i 's/45 min/40 min/g' "$NC_GATE_DIR/README.md"
-assert_mutation_fails "NC-10" "Wrong Part A time budget (40m instead of 45m) with decoy 210 in file" "bash '$NC_GATE_DIR/scripts/verify_gate.sh'"
+assert_mutation_fails "NC-11" "Wrong Part A time budget (40m instead of 45m) with decoy 210 in file" "bash '$NC_GATE_DIR/scripts/verify_gate.sh'"
 cp "$GATE_DIR/README.md" "$NC_GATE_DIR/README.md"
 
 echo "=============================================================================="

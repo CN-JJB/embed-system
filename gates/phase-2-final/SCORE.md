@@ -68,14 +68,3 @@ Failure to achieve any individual floor results in an automatic overall **FAIL**
 4. **Distinction Between Configuration and Execution**:
    Credit for peripheral verification requires proving that the peripheral actually functioned (e.g. data in buffer, interrupt counter advancing), not merely that control register bits were written.
 
----
-
-## 4. Canonical Evaluation Outcome Tiers
-
-Candidate final scores are classified using strict, non-overlapping threshold grammar:
-
-| Score Threshold Cell | Performance Tier | Evaluation Outcome & Roadmap Progression |
-|:---:|---|---|
-| `<70` | **Unsatisfactory** | **FAIL**. Cumulative score falls below the competency bar. Mandatory targeted remediation on deficient modules before attempting a fresh assessment variant. |
-| `70-84` | **Proficient** | **PASS** (subject to satisfying all mandatory Hard Pass Floors in Section 2: Overall Total $\ge 75.0$, Part A $\ge 15.0$, Part B $\ge 15.0$, Part C $\ge 15.0$, Part D $\ge 17.5$). Demonstrates solid core competency; advances along the normal Phase 3 roadmap. |
-| `85-100` | **Mastery** | **HIGH PASS / MASTERY**. Demonstrates exceptional technical depth and disciplined observable evidence across all bare-metal and concurrency dimensions. Recommended for Fast Track progression. |
