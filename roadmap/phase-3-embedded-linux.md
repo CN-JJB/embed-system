@@ -105,7 +105,7 @@ All curriculum content, source-reading tasks, and lab exercises must derive from
   - Interrupt controller contract: Explicit `gic-version=2` (ARM Generic Interrupt Controller v2 at `0x08000000`);
   - Hardware model reference: PL011 UART (`0x09000000`, IRQ 1), DRAM base (`0x40000000`), virtio-mmio bus (`0x0a000000`);
   - Official documentation: `docs/system/arm/virt.rst`.
-- **BusyBox Multi-Call Binary** (Upstream git: `https://git.busybox.net/busybox/`, Canonical Baseline: **BusyBox 1.36.1**, tag `1_36_1` [lightweight tag, commit `1a64f6a20aaf6ea4dbba68bbfa8cc1ab7e5c57c4`], released 2023-05-18; GPL-2.0-only):
+- **BusyBox Multi-Call Binary** (Upstream git: `https://git.busybox.net/busybox/`, Canonical Baseline: **BusyBox 1.36.1**, tag `1_36_1` [lightweight tag, commit `1a64f6a20aaf6ea4dbba68bbfa8cc1ab7e5c57c4`], released 2023-05-19; GPL-2.0-only):
   - Multi-call dispatcher: `applets/applets.c` and `libbb/appletlib.c`;
   - Init implementation: `init/init.c` (signal handling, `/etc/inittab` parsing, respawn/sysinit actions, console redirection).
 - **Buildroot Automated Build System** (Upstream git: `https://gitlab.com/buildroot.org/buildroot.git`, Canonical Baseline: **Buildroot 2026.05.2**, tag `2026.05.2` [annotated tag object `d5774f1666c406402abc46c94aa1517775dd61af`, peeled commit `72d9d4fa636a371ef9eb99c92a735ce9f6d829d5`], released 2026-08-23, stable bugfix release [non-LTS; Buildroot LTS releases occur only on odd-numbered years: 2025.02, 2027.02]; GPL-2.0-or-later):
