@@ -2,6 +2,10 @@
 set -euo pipefail
 
 # Semantic Verification Suite for P3-M03: Minimal Rootfs, BusyBox, Pseudo-Filesystems & PID 1 Init Lifecycle
+# Learner-safe: validates the SYNTHETIC teaching fixture (explicitly NOT
+# BusyBox) plus static structure/archive contracts. Real BusyBox evidence
+# is covered by the separate real-busybox-build-check / real-qemu-check
+# targets and MUST NOT be confused with synthetic results.
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 M03_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
@@ -41,25 +45,43 @@ if ! command -v "${CROSS_COMPILE}gcc" >/dev/null 2>&1; then
     exit 1
 fi
 
-echo "=== Step 2: Building Fixtures & Provisioned Artifacts ==="
-make all CROSS_COMPILE="${CROSS_COMPILE}" >/dev/null
-echo "[PASS] Static fixtures, challenge, and gate provisioned artifacts built"
+echo "=== Step 2: Building SYNTHETIC Teaching Fixtures ==="
+# Teaching fixtures only. Challenge/Gate candidates are NEVER rebuilt here:
+# re-provisioning would wipe the learner's in-progress repair.
+make -C fixtures synthetic CROSS_COMPILE="${CROSS_COMPILE}" >/dev/null
+echo "[PASS] Synthetic teaching fixtures built (SYNTHETIC — NOT BUSYBOX)"
 
-# 3. Audit BusyBox Static ARM ELF Binary
-echo "=== Step 3: Auditing BusyBox Target ELF Binary ==="
-TARGET_BUSYBOX="fixtures/build/busybox"
-[ -f "$TARGET_BUSYBOX" ] || { echo "ERROR: $TARGET_BUSYBOX missing"; exit 1; }
-bash scripts/audit_busybox_elf.sh "$TARGET_BUSYBOX"
+# 3. Audit SYNTHETIC Static ARM ELF Binary (teaching fixture only).
+echo "=== Step 3: Auditing SYNTHETIC Target ELF Binary ==="
+TARGET_SYNTHETIC="fixtures/build/synthetic_multicall"
+[ -f "$TARGET_SYNTHETIC" ] || { echo "ERROR: $TARGET_SYNTHETIC missing"; exit 1; }
+bash scripts/audit_busybox_elf.sh "$TARGET_SYNTHETIC"
+echo "[NOTE] Above PASS covers the SYNTHETIC fixture ELF shape only; real BusyBox is audited by real-busybox-build-check."
 
-# 4. Audit Rootfs Directory Layout and Init Executable
-echo "=== Step 4: Auditing Staging Rootfs Structure ==="
-ROOTFS_DIR="fixtures/build/rootfs"
+# 3b. Synthetic masquerade guard: the teaching binary must identify itself
+# as synthetic and must never claim to be BusyBox. (Pure bash matching:
+# piping a large strings dump into 'grep -q' races with SIGPIPE under
+# 'set -o pipefail' and flakes.)
+SYN_STRINGS=$(strings "$TARGET_SYNTHETIC" || true)
+if [[ "$SYN_STRINGS" != *"SYNTHETIC PEDAGOGICAL FIXTURE"* ]]; then
+    echo "ERROR: Synthetic fixture lost its NOT-BUSYBOX identity banner." >&2
+    exit 1
+fi
+if [[ "$SYN_STRINGS" == *"BusyBox v1.36.1 synthetic"* ]]; then
+    echo "ERROR: Synthetic fixture still masquerades as BusyBox (stale banner)." >&2
+    exit 1
+fi
+echo "[PASS] Synthetic fixture identity banner verified (NOT BUSYBOX)"
+
+# 4. Audit Synthetic Staging Rootfs Structure
+echo "=== Step 4: Auditing SYNTHETIC Staging Rootfs Structure ==="
+ROOTFS_DIR="fixtures/build/synthetic_rootfs"
 [ -d "$ROOTFS_DIR" ] || { echo "ERROR: $ROOTFS_DIR missing"; exit 1; }
 bash scripts/verify_rootfs_structure.sh "$ROOTFS_DIR"
 
-# 5. Audit Generated Initramfs Archive
-echo "=== Step 5: Auditing Initramfs CPIO Archive ==="
-ARCHIVE="fixtures/build/rootfs.cpio.gz"
+# 5. Audit Generated SYNTHETIC Initramfs Archive
+echo "=== Step 5: Auditing SYNTHETIC Initramfs CPIO Archive ==="
+ARCHIVE="fixtures/build/synthetic_rootfs.cpio.gz"
 [ -f "$ARCHIVE" ] || { echo "ERROR: $ARCHIVE missing"; exit 1; }
 
 # Verify archive magic / gzip integrity
@@ -87,7 +109,14 @@ fi
 [ -d "$VERIFY_TMP/proc" ] || { echo "ERROR: /proc missing in archive!"; exit 1; }
 [ -d "$VERIFY_TMP/sys" ] || { echo "ERROR: /sys missing in archive!"; exit 1; }
 [ -d "$VERIFY_TMP/dev" ] || { echo "ERROR: /dev missing in archive!"; exit 1; }
-echo "[PASS] Initramfs archive verified: valid gzip, newc cpio format, executable init, valid symlinks"
+echo "[PASS] Synthetic initramfs archive verified: valid gzip, newc cpio format, executable init, valid symlinks"
+
+# 5b. Real-rootfs static audit when a real staging is present (optional,
+# learner-safe: never builds BusyBox, only audits what exists).
+if [ -f "fixtures/build/real_rootfs.cpio.gz" ]; then
+    echo "=== Step 5b: Auditing REAL initramfs device-node contract (if present) ==="
+    bash scripts/verify_initramfs_nodes.sh fixtures/build/real_rootfs.cpio.gz
+fi
 
 # 6. Audit QEMU Launch Contract
 echo "=== Step 6: Verifying Canonical QEMU Launch Contract ==="

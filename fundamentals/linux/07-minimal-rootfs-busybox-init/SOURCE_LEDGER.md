@@ -32,10 +32,14 @@
    - Disable `CONFIG_TC=n` (eliminates dependency on obsolete CBQ scheduler headers dropped in modern Linux headers).
    - Install applets into staging directory using `make install CONFIG_PREFIX=<staging_dir>`.
 2. **Deterministic Rootfs / Initramfs Contract**:
-   - Packaging tool: Standard GNU/POSIX `cpio` with `-H newc` format.
-   - Archive entries sorted deterministically; directory and file permissions normalized.
+   - Packaging tool: hermetic `scripts/pycpio.py` (`newc`) when a `devnodes.manifest` is present (mandatory for device nodes: host `cpio` cannot encode char/block entries without root-owned `mknod`); otherwise standard GNU/POSIX `cpio -H newc` or the `pycpio.py` fallback.
+   - Archive entries sorted deterministically; directory and file permissions normalized; UID/GID fixed to 0; timestamps fixed.
+   - Canonical static nodes: `dev/console` (char 5:1, 0600), `dev/null` (char 1:3, 0666), validated from CPIO metadata by `scripts/verify_initramfs_nodes.sh`.
    - `/init` or `/sbin/init` must possess executable permission (`0755`).
-   - Pseudo-filesystem mount points (`/proc`, `/sys`, `/dev`) must be created as empty directory mount points.
+   - Pseudo-filesystem mount points (`/proc`, `/sys`, `/dev`) must be created as empty directory mount points; `CONFIG_DEVTMPFS_MOUNT=y` does NOT automount devtmpfs on initramfs boot, so userspace mounts it manually.
+3. **Synthetic vs Real Evidence Contract**:
+   - `fixtures/src/synthetic_multicall.c` builds `SYNTHETIC PEDAGOGICAL FIXTURE — NOT BUSYBOX` (`synthetic_rootfs.cpio.gz`) for fast static/component teaching only.
+   - Real runtime evidence always comes from `scripts/stage_real_rootfs.sh` + `package_initramfs.sh` over the real BusyBox 1.36.1 staging (`real_rootfs.cpio.gz`) and is gated by `run_real_qemu_m03.sh` (real ash/ps/mount markers; synthetic strings rejected).
 3. **Heavyweight Build Isolation Contract**:
    - Default `make check` executes deterministic semantic validators, ELF header audits, directory permission checks, and synthetic QEMU launch validations without forcing heavyweight external source downloads.
    - Opt-in targets `real-busybox-build-check` and `real-qemu-check` test actual compiled binaries and QEMU boots.

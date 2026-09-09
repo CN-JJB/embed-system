@@ -1,28 +1,46 @@
 M04_ROOT := $(abspath ..)
 BUILD_DIR := $(CURDIR)/build
-CONFIG_SCRIPT := $(BUILD_DIR)/gate_boot_config.sh
+FIXTURE := $(CURDIR)/fixtures/starter_launch.sh
+CANDIDATE := $(BUILD_DIR)/candidate_boot_config.sh
+CANDIDATE_LOG := $(BUILD_DIR)/candidate_boot.log
 
-.PHONY: all gate-build check clean
+.PHONY: all provision capture check clean
 
-all: gate-build
+all: provision
 
-gate-build:
+# Stage the opaque starter configuration. It is NOT canonical: diagnose it
+# against the module contract and author the canonical candidate yourself.
+provision:
 	@mkdir -p $(BUILD_DIR)
-	@echo '#!/bin/bash' > $(CONFIG_SCRIPT)
-	@echo '# Canonical QEMU ARM Cortex-A7 Launch Configuration' >> $(CONFIG_SCRIPT)
-	@echo 'MACHINE="-machine virt,highmem=off,gic-version=2"' >> $(CONFIG_SCRIPT)
-	@echo 'CPU="-cpu cortex-a7"' >> $(CONFIG_SCRIPT)
-	@echo 'MEM="-m 512M"' >> $(CONFIG_SCRIPT)
-	@echo 'SMP="-smp 1"' >> $(CONFIG_SCRIPT)
-	@echo 'DISPLAY_OPT="-nographic"' >> $(CONFIG_SCRIPT)
-	@echo 'BOOTARGS="earlycon=pl011,0x09000000 console=ttyAMA0,115200 rdinit=/init"' >> $(CONFIG_SCRIPT)
-	@echo 'qemu-system-arm $$MACHINE $$CPU $$MEM $$SMP $$DISPLAY_OPT -kernel "$$KERNEL" -initrd "$$INITRD" -append "$$BOOTARGS"' >> $(CONFIG_SCRIPT)
-	@chmod 755 $(CONFIG_SCRIPT)
-	@echo "[GATE] Generated canonical gate boot configuration at $(CONFIG_SCRIPT)"
+	@if [ ! -f "$(CANDIDATE)" ]; then \
+		cp $(FIXTURE) $(CANDIDATE); \
+		echo "[GATE] Provisioned starter as $(CANDIDATE)"; \
+		echo "[GATE] Author the canonical config, then run: make capture && make check"; \
+	else \
+		echo "[GATE] Candidate already exists at $(CANDIDATE) (not overwritten)."; \
+	fi
 
-check: gate-build
-	@echo "[GATE] Auditing canonical boot configuration..."
-	@bash $(M04_ROOT)/scripts/verify_boot_contract.sh $(CONFIG_SCRIPT)
+# Capture fresh QEMU runtime evidence for YOUR candidate BOOTARGS.
+capture:
+	@if [ ! -f "$(CANDIDATE)" ]; then echo "[GATE] No candidate. Run: make provision"; exit 1; fi
+	@BOOTARGS=$$(grep -E '^[[:space:]]*BOOTARGS=' $(CANDIDATE) | tail -n 1 | sed -E 's/^[^=]*=["'"'"']?//; s/["'"'"']$$//'); \
+	if [ -z "$$BOOTARGS" ]; then echo "[GATE] Cannot parse BOOTARGS from $(CANDIDATE)"; exit 1; fi; \
+	TIMEOUT_SEC=40 bash $(M04_ROOT)/scripts/run_qemu_diagnostic.sh "$$BOOTARGS" $(CANDIDATE_LOG); \
+	echo "[GATE] Captured fresh runtime log at $(CANDIDATE_LOG)"
+
+# Learner-safe self-check: contract audit on YOUR candidate only (plus a
+# notice about runtime evidence). This does NOT grade hidden answers.
+check:
+	@if [ ! -f "$(CANDIDATE)" ]; then \
+		echo "[GATE] Notice: $(CANDIDATE) not yet provisioned. Run: make provision"; \
+	else \
+		bash $(M04_ROOT)/scripts/verify_boot_contract.sh $(CANDIDATE); \
+		if [ -f "$(CANDIDATE_LOG)" ]; then \
+			echo "[GATE] Runtime log present at $(CANDIDATE_LOG) (final grading binds it to your BOOTARGS)."; \
+		else \
+			echo "[GATE] Notice: $(CANDIDATE_LOG) not yet captured. Run: make capture"; \
+		fi \
+	fi
 
 clean:
 	@rm -rf $(BUILD_DIR)

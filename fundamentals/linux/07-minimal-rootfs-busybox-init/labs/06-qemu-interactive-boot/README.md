@@ -42,15 +42,16 @@ To ensure 100% deterministic bring-up across ARMv7-A environments:
        -append "console=ttyAMA0,115200 earlycon=pl011,0x09000000 rdinit=/init"
    ```
 
-2. Observe the serial boot chronology:
-   - Early console banner: `bootconsole [pl011] enabled`
+2. Observe the serial boot chronology (REAL BusyBox initramfs):
+   - Early console banner: `bootconsole [pl11] enabled`
    - Kernel startup: `Linux version 6.18.50 ...`
-   - Rootfs unpacking: `Unpacking initramfs...`
+   - Rootfs unpacking: `Trying to unpack rootfs image as initramfs...`
    - PID 1 invocation: `Run /init as init process`
-   - Init script output: `Mounted /proc, /sys, and /dev successfully.`
+   - Init script output: `=== REAL-BUSYBOX-INIT-READY ===`
+   - Real BusyBox identity: `BusyBox v1.36.1 ...`
    - Shell prompt:
      ```text
-     / #
+     ~ #
      ```
 
 3. Inside the interactive shell, collect observable runtime evidence:
@@ -79,6 +80,9 @@ To ensure 100% deterministic bring-up across ARMv7-A environments:
 ## 4. Expected Evidence
 
 Capture the terminal transcript demonstrating:
-1. `ps` showing `init` with PID 1;
+1. `ps` showing `/bin/sh` with PID 1 and the real `PID   USER     TIME  COMMAND` header;
 2. `cat /proc/cpuinfo` reporting `model name: ARMv7 Processor rev 4 (v7l)` / `Hardware: Generic DT based system`;
-3. `cat /proc/mounts` confirming `proc` mounted on `/proc`, `sysfs` mounted on `/sys`, and `devtmpfs` mounted on `/dev`.
+3. `cat /proc/mounts` confirming `proc` mounted on `/proc`, `sysfs` mounted on `/sys`, and `devtmpfs` mounted on `/dev`;
+4. `busybox` reporting `BusyBox v1.36.1`.
+
+> Use the REAL BusyBox archive (`fixtures/build/real_rootfs.cpio.gz`, via `make real-qemu-check`) for runtime evidence. The SYNTHETIC teaching fixture (`synthetic_rootfs.cpio.gz`, banner `SYNTHETIC PEDAGOGICAL FIXTURE — NOT BUSYBOX`) is for fast static/component practice only and MUST NOT be presented as BusyBox evidence.

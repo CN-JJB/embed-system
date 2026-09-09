@@ -42,7 +42,11 @@ qemu-system-arm \
 1. **Machine**: `virt,highmem=off,gic-version=2` restricts memory and MMIO devices to the 32-bit physical address space, preventing virtual address mapping failures on non-LPAE kernels (`CONFIG_ARM_LPAE=n`).
 2. **CPU**: Explicit `cortex-a7` prevents QEMU from defaulting to `cortex-a15`.
 3. **Memory**: Explicit `512M` ensures consistent memory layout starting at physical DRAM base `0x40000000`.
-4. **Bootargs**:
+4. **Bootargs** (exactly one `console=` token; repeated `console=` lines are rejected — real Linux resolves same-type repeats first-of-type, not last-wins):
    - `earlycon=pl011,0x09000000`: Directs polled early printk output to the PL011 UART register from the very first instruction.
    - `console=ttyAMA0,115200`: Registers the primary interrupt-driven character console once serial subsystem initializes.
    - `rdinit=/init`: Designates `/init` as the initial userspace program in the unpacked initramfs.
+
+### Evidence Contracts:
+- **Static teaching fixture**: `fixtures/reference_boot.log` (real BusyBox capture) is audited by `scripts/audit_boot_milestones.sh` for ordered-milestone log-analysis practice only; forged text passes it by design.
+- **Runtime certification**: `scripts/verify_runtime_boot.sh` binds a log to an actual execution (command line, version, console handoff pair, initramfs unpack, init, real BusyBox identity/ps/mounts) and rejects forged, truncated, or mismatched logs. The M04 reviewer oracle re-executes the candidate launch and verifies the fresh capture.

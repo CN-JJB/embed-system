@@ -1,38 +1,45 @@
 #!/bin/bash
 set -euo pipefail
 
-# Reviewer Master Check for P3-M04
-# 1. Audits learner/reviewer isolation
-# 2. Runs gate grading oracle on reference gate artifact
-# 3. Runs adversarial mutation suite
+# P3-M04 Reviewer-Only Full Authoring Regression (REVIEWER-ONLY)
+# Orchestrates, in order:
+#   1. learner/reviewer isolation audit
+#   2. assessment fixture materialization (opaque, committed separately)
+#   3. learner-safe check re-run (must pass without reviewer tooling)
+#   4. component-validator negative control mutation suite
+#   5. assessment oracle reference + mutation regression (includes fresh
+#      QEMU runtime capture for the canonical reference)
+# Learner workflows must never invoke this script.
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 M04_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+cd "$M04_ROOT"
 
-echo "================================================================"
-echo "=== Running P3-M04 Reviewer Master Verification Suite        ==="
-echo "================================================================"
+echo "##################################################################"
+echo "# P3-M04 REVIEWER-CHECK — AUTHORING REGRESSION (REVIEWER-ONLY)  #"
+echo "##################################################################"
 
-# 1. Learner Isolation Audit
-echo "=== Step 1: Auditing Learner-Facing Isolation ==="
-LEAKED=$(grep -rn "reviewer/" "$M04_ROOT/labs" "$M04_ROOT/faults" "$M04_ROOT/challenge" "$M04_ROOT/gate" "$M04_ROOT/scripts" "$M04_ROOT/README.md" "$M04_ROOT/Makefile" 2>/dev/null || true)
-if [ -n "$LEAKED" ]; then
-    echo "ERROR: Reviewer directory leakage found in learner-facing files:" >&2
-    echo "$LEAKED" >&2
-    exit 1
-fi
-echo "[PASS] Isolation audit passed: No reviewer references found in learner-facing files"
+echo ""
+echo "===== [1/5] Learner/Reviewer Isolation Audit ====="
+bash reviewer/audit_learner_isolation.sh
 
-# 2. Gate Grading Oracle Verification
-echo "=== Step 2: Testing Gate Grading Oracle on Gate Build ==="
-make -C "$M04_ROOT/gate" gate-build >/dev/null
-bash "$M04_ROOT/reviewer/grade_m04_gate.sh" "$M04_ROOT/gate/build/gate_boot_config.sh" "$M04_ROOT/fixtures/reference_boot.log"
-echo "[PASS] Gate grading oracle successfully evaluated clean gate artifact"
+echo ""
+echo "===== [2/5] Materialize Assessment Fixtures (opaque) ====="
+bash reviewer/scripts/generate_m04_challenge_fixtures.sh challenge/fixtures
+bash reviewer/scripts/generate_m04_gate_fixtures.sh gate/fixtures
+echo "[PASS] M04 assessment fixtures materialized under challenge/ and gate/"
 
-# 3. Mutation Testing
-echo "=== Step 3: Executing Adversarial Mutation Suite ==="
-bash "$M04_ROOT/reviewer/test_m04_mutations.sh"
+echo ""
+echo "===== [3/5] Learner-Safe Module Check (no reviewer tooling) ====="
+make check
 
-echo "================================================================"
-echo "=== ALL P3-M04 REVIEWER CHECKS PASSED                        ==="
-echo "================================================================"
+echo ""
+echo "===== [4/5] Component-Validator Negative Control Mutations ====="
+bash reviewer/test_m04_mutations.sh
+
+echo ""
+echo "===== [5/5] Assessment Oracle Reference + Mutation Regression ====="
+bash reviewer/test_m04_oracle_mutations.sh
+
+echo ""
+echo "=== P3-M04 REVIEWER-CHECK COMPLETE: ALL STAGES PASSED ==="

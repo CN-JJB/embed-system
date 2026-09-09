@@ -3,7 +3,8 @@ set -euo pipefail
 
 # Rootfs Structure & Metadata Semantic Validator (M03)
 # Validates FHS directory structure, init permissions, BusyBox applet links,
-# and pseudo-filesystem mount configuration.
+# and pseudo-filesystem mount configuration with ACTIVE mount-command
+# semantics (comment/echo/decoy resistant).
 
 ROOTFS_DIR="${1:-}"
 if [ -z "$ROOTFS_DIR" ] || [ ! -d "$ROOTFS_DIR" ]; then
@@ -56,8 +57,15 @@ else
     echo "[PASS] /bin/sh binary executable present"
 fi
 
-# 4. Pseudo-filesystem mount contract
-# If /init or /etc/init.d/rcS is a script, inspect mount commands
+# 4. Pseudo-filesystem mount contract (SEMANTIC, decoy-resistant).
+# A valid mount requires an ACTIVE (non-comment, non-echo) command of the
+# form: mount -t <fstype> ... <mountpoint>, with correct fstype<->target
+# binding:
+#   proc    -> /proc
+#   sysfs   -> /sys
+#   devtmpfs-> /dev
+# Comment lines, echo-only text, wrong targets, or bare-word mentions
+# MUST NOT satisfy this check.
 MOUNT_SCRIPT=""
 if [ -f "$ROOTFS_DIR/init" ] && head -n 1 "$ROOTFS_DIR/init" | grep -q "^#\!"; then
     MOUNT_SCRIPT="$ROOTFS_DIR/init"
@@ -66,15 +74,46 @@ elif [ -f "$ROOTFS_DIR/etc/init.d/rcS" ]; then
 fi
 
 if [ -n "$MOUNT_SCRIPT" ]; then
-    if ! grep -q "proc" "$MOUNT_SCRIPT"; then
-        echo "REJECT: Init startup script '$MOUNT_SCRIPT' does not contain 'proc' filesystem mount." >&2
+    # Strip comments and echo-only decoys: only real command lines count.
+    ACTIVE=$(grep -v '^[[:space:]]*#' "$MOUNT_SCRIPT" \
+        | grep -vE '^[[:space:]]*echo([[:space:]]|$)' || true)
+    if [ -z "$ACTIVE" ]; then
+        echo "REJECT: Init startup script '$MOUNT_SCRIPT' contains no active mount commands." >&2
         exit 2
     fi
-    if ! grep -q "sysfs" "$MOUNT_SCRIPT"; then
-        echo "REJECT: Init startup script '$MOUNT_SCRIPT' does not contain 'sysfs' filesystem mount." >&2
-        exit 2
+    check_mount() {
+        local fstype="$1" target="$2"
+        # Active mount line: starts with 'mount', has '-t <fstype>',
+        # and mounts exactly <target>. Allows 'mount -t proc none /proc',
+        # 'mount -t proc proc /proc', extra flags, trailing '|| true'.
+        if ! echo "$ACTIVE" | grep -Eq \
+            "^[[:space:]]*mount([[:space:]]+-[A-Za-z]+([[:space:]]+[^[:space:]]+)?)*[[:space:]]+-t[[:space:]]+$fstype([[:space:]]|$)"; then
+            echo "REJECT: Init script '$MOUNT_SCRIPT' lacks an ACTIVE 'mount -t $fstype' command (comments/echo text do not count)." >&2
+            exit 2
+        fi
+        if ! echo "$ACTIVE" | grep -E \
+            "^[[:space:]]*mount.*-t[[:space:]]+$fstype[[:space:]]+[^[:space:]]+[[:space:]]+$target([[:space:]]|$|;)" \
+            >/dev/null; then
+            echo "REJECT: Init script '$MOUNT_SCRIPT' has 'mount -t $fstype' but not targeting '$target' (wrong mount target)." >&2
+            exit 2
+        fi
+    }
+    check_mount "proc" "/proc"
+    check_mount "sysfs" "/sys"
+    # devtmpfs is SHOULD (tolerated with '|| true' fallback); require active
+    # intent but do not fail closed if the appliance documents a no-devtmpfs
+    # path explicitly. Canonical real rootfs mounts it.
+    if echo "$ACTIVE" | grep -Eq "^[[:space:]]*mount.*-t[[:space:]]+devtmpfs([[:space:]]|$)"; then
+        if ! echo "$ACTIVE" | grep -E \
+            "^[[:space:]]*mount.*-t[[:space:]]+devtmpfs[[:space:]]+[^[:space:]]+[[:space:]]+/dev([[:space:]]|$|;)" \
+            >/dev/null; then
+            echo "REJECT: Init script '$MOUNT_SCRIPT' has 'mount -t devtmpfs' but not targeting '/dev'." >&2
+            exit 2
+        fi
+        echo "[PASS] Pseudo-filesystem mounts (proc, sysfs, devtmpfs) confirmed in $MOUNT_SCRIPT"
+    else
+        echo "[PASS] Pseudo-filesystem mounts (proc, sysfs) confirmed in $MOUNT_SCRIPT (devtmpfs mount absent)"
     fi
-    echo "[PASS] Pseudo-filesystem mounts (proc, sysfs) confirmed in $MOUNT_SCRIPT"
 fi
 
 echo "[PASS] Rootfs structure validation successful."

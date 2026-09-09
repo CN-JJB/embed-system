@@ -94,23 +94,39 @@ if ! echo "$APPEND_STR" | grep -Eq 'earlycon=pl011,0x09000000'; then
     exit 2
 fi
 
-# Check effective console:
-# Linux kernel processes console= arguments left-to-right; the LAST valid console parameter becomes the primary console.
-# We must find all console= tokens and verify the LAST one is ttyAMA0 (with optional baud rate).
+# Check effective console (CANONICAL CONTRACT: exactly one console token).
+# Real Linux multiple-console semantics (Documentation/admin-guide/
+# serial-console.rst): output goes to ALL consoles of distinct device types,
+# but when the SAME device type repeats, only the FIRST of that type emits
+# and /dev/console binds to the first registered device — NOT "last wins".
+# Because repeated console= lines are ambiguous and board-dependent, the
+# Phase 3 canonical contract requires EXACTLY ONE normal console token:
+#   console=ttyAMA0,115200
+# Any additional console= token (conflicting or duplicate) is REJECTED here;
+# the conflicting-console fault is diagnosed against the real first-of-type
+# rule, never a fabricated last-wins parser.
 CONSOLES=$(echo "$APPEND_STR" | grep -oE 'console=[^[:space:]]+' || true)
 if [ -z "$CONSOLES" ]; then
     echo "REJECT: Bootargs missing 'console=' parameter." >&2
     exit 2
 fi
 
-LAST_CONSOLE=$(echo "$CONSOLES" | tail -n 1)
-if ! echo "$LAST_CONSOLE" | grep -Eq '^console=ttyAMA0(,115200)?$'; then
-    echo "REJECT: Effective console parameter is '$LAST_CONSOLE', expected 'console=ttyAMA0,115200'." >&2
+NCONSOLES=$(echo "$CONSOLES" | wc -l | tr -d ' ')
+if [ "$NCONSOLES" -ne 1 ]; then
+    echo "REJECT: Canonical contract requires exactly one 'console=' token (got $NCONSOLES: $(echo "$CONSOLES" | tr '\n' ' '))." >&2
+    echo "        Real Linux binds repeated same-type consoles first-of-type, not last-wins;" >&2
+    echo "        conflicting/duplicate console= lines are not permitted in canonical bootargs." >&2
     exit 2
 fi
 
-# Check rdinit=/init
-if ! echo "$APPEND_STR" | grep -Eq 'rdinit=/init'; then
+ONLY_CONSOLE=$(echo "$CONSOLES" | head -n 1)
+if ! echo "$ONLY_CONSOLE" | grep -Eq '^console=ttyAMA0,115200$'; then
+    echo "REJECT: Console parameter is '$ONLY_CONSOLE', expected exactly 'console=ttyAMA0,115200'." >&2
+    exit 2
+fi
+
+# Check rdinit=/init (exact token; longer paths like /init-bad do not count).
+if ! echo "$APPEND_STR" | grep -Eq '(^|[[:space:]])rdinit=/init([[:space:]]|$)'; then
     echo "REJECT: Bootargs missing required init selector: 'rdinit=/init'." >&2
     exit 2
 fi

@@ -1,7 +1,11 @@
 /*
- * Synthetic Multi-Call BusyBox & PID 1 Init Fixture (M03)
+ * SYNTHETIC PEDAGOGICAL FIXTURE — NOT BUSYBOX (M03)
  *
- * Provides a minimal, hermetic static ARM executable implementing:
+ * Minimal hermetic static ARM multi-call executable for fast
+ * component/static teaching tests only. It is NOT BusyBox 1.36.1,
+ * does NOT implement ash/init/ps/mount semantics, and MUST NOT be
+ * mistaken for real BusyBox runtime evidence.
+ *
  * - Multi-call dispatch via argv[0] (init, sh, ps, mount, ls, echo, cat)
  * - PID 1 initialization: mounts /proc, /sys, /dev
  * - /proc validation: ps verifies procfs is mounted
@@ -80,7 +84,7 @@ static int cmd_mount(void)
 
 static int cmd_sh(void)
 {
-    printf("\n=== Interactive BusyBox Synthetic Shell (M03) ===\n");
+    printf("\n=== SYNTHETIC Pedagogical Shell (NOT BUSYBOX, M03) ===\n");
     printf("Type 'exit' to quit or run commands (ls, ps, mount, cat, echo).\n");
     printf("/ # ");
     fflush(stdout);
@@ -127,7 +131,7 @@ static int cmd_init(void)
 {
     pid_t pid = getpid();
     printf("====================================================\n");
-    printf("=== Starting PID 1 Minimal Init Process (PID=%d) ===\n", (int)pid);
+    printf("=== SYNTHETIC PID 1 Init (NOT BUSYBOX, PID=%d) ===\n", (int)pid);
     printf("====================================================\n");
 
     do_mount_pseudofs();
@@ -159,7 +163,7 @@ int main(int argc, char **argv)
             if (strcmp(argv[1], "ps") == 0) return cmd_ps();
             if (strcmp(argv[1], "mount") == 0) return cmd_mount();
         }
-        printf("BusyBox v1.36.1 synthetic multi-call binary (ARM static fixture)\n");
+        printf("SYNTHETIC PEDAGOGICAL FIXTURE v0.1 (ARM static) -- NOT BUSYBOX\n");
         printf("Currently defined functions:\n");
         printf("  cat, echo, init, ls, mount, ps, sh\n\n");
         return 0;

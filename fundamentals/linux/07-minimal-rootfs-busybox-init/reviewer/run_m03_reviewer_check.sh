@@ -1,39 +1,46 @@
 #!/bin/bash
 set -euo pipefail
 
-# Reviewer Master Check for P3-M03
-# 1. Audits learner/reviewer isolation
-# 2. Runs gate grading oracle on reference gate artifact
-# 3. Runs adversarial mutation suite
+# P3-M03 Reviewer-Only Full Authoring Regression (REVIEWER-ONLY)
+# Orchestrates, in order:
+#   1. learner/reviewer isolation audit
+#   2. assessment fixture materialization (opaque, committed separately)
+#   3. learner-safe check re-run (must pass without reviewer tooling)
+#   4. component-validator negative control mutation suite
+#   5. assessment oracle reference + mutation regression
+# Learner workflows must never invoke this script.
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 M03_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+cd "$M03_ROOT"
 
-echo "================================================================"
-echo "=== Running P3-M03 Reviewer Master Verification Suite        ==="
-echo "================================================================"
+CROSS_COMPILE="${CROSS_COMPILE:-arm-none-linux-gnueabihf-}"
 
-# 1. Learner Isolation Audit
-echo "=== Step 1: Auditing Learner-Facing Isolation ==="
-# Learner files must not invoke or import from reviewer/
-LEAKED=$(grep -rn "reviewer/" "$M03_ROOT/labs" "$M03_ROOT/faults" "$M03_ROOT/challenge" "$M03_ROOT/gate" "$M03_ROOT/scripts" "$M03_ROOT/README.md" "$M03_ROOT/Makefile" 2>/dev/null || true)
-if [ -n "$LEAKED" ]; then
-    echo "ERROR: Reviewer directory leakage found in learner-facing files:" >&2
-    echo "$LEAKED" >&2
-    exit 1
-fi
-echo "[PASS] Isolation audit passed: No reviewer references found in learner-facing files"
+echo "##################################################################"
+echo "# P3-M03 REVIEWER-CHECK — AUTHORING REGRESSION (REVIEWER-ONLY)  #"
+echo "##################################################################"
 
-# 2. Gate Grading Oracle Verification
-echo "=== Step 2: Testing Gate Grading Oracle on Gate Build ==="
-make -C "$M03_ROOT" gate-build CROSS_COMPILE="${CROSS_COMPILE:-arm-none-linux-gnueabihf-}" >/dev/null
-bash "$M03_ROOT/reviewer/grade_m03_gate.sh" "$M03_ROOT/gate/build/rootfs_gate.cpio.gz"
-echo "[PASS] Gate grading oracle successfully evaluated clean gate artifact"
+echo ""
+echo "===== [1/5] Learner/Reviewer Isolation Audit ====="
+bash reviewer/audit_learner_isolation.sh
 
-# 3. Mutation Testing
-echo "=== Step 3: Executing Adversarial Mutation Suite ==="
-bash "$M03_ROOT/reviewer/test_m03_mutations.sh"
+echo ""
+echo "===== [2/5] Materialize Assessment Fixtures (opaque) ====="
+bash reviewer/scripts/generate_m03_challenge_fixtures.sh challenge/fixtures "$CROSS_COMPILE"
+bash reviewer/scripts/generate_m03_gate_fixtures.sh gate/fixtures "$CROSS_COMPILE"
+echo "[PASS] M03 assessment fixtures materialized under challenge/ and gate/"
 
-echo "================================================================"
-echo "=== ALL P3-M03 REVIEWER CHECKS PASSED                        ==="
-echo "================================================================"
+echo ""
+echo "===== [3/5] Learner-Safe Module Check (no reviewer tooling) ====="
+make check CROSS_COMPILE="$CROSS_COMPILE"
+
+echo ""
+echo "===== [4/5] Component-Validator Negative Control Mutations ====="
+CROSS_COMPILE="$CROSS_COMPILE" bash reviewer/test_m03_mutations.sh
+
+echo ""
+echo "===== [5/5] Assessment Oracle Reference + Mutation Regression ====="
+bash reviewer/test_m03_oracle_mutations.sh
+
+echo ""
+echo "=== P3-M03 REVIEWER-CHECK COMPLETE: ALL STAGES PASSED ==="

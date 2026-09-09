@@ -1,59 +1,63 @@
 # Fault F07 — Init Missing / Unusable Path
 
+> Calibrated on real Linux 6.18.50 (`7cfc41f8e80f11ffa8382ed1a505154ceffb79c7`) + real BusyBox 1.36.1 initramfs. Source: `init/main.c` (`run_init_process`, `try_to_run_init_process`, `kernel_init`).
+
 ## 1. Symptom
 
-During boot, early console prints startup messages, unpacks the initramfs, but then crashes immediately with a kernel panic:
+When the requested init *passes* the kernel's early access check but *fails* at `execve()` time — and every fallback candidate is also unusable — the kernel walks the whole fallback list and then panics:
+
 ```text
-Failed to execute /sbin/myinit (error -2)
-Kernel panic - not syncing: No working init found.  Try passing init= option to kernel. See Linux Documentation/admin-guide/init.rst for guidance.
-CPU: 0 PID: 1 Comm: swapper/0 Not tainted 6.18.50 #1
-Hardware name: Generic DT based system
-[<c0312345>] (unwind_backtrace) from [<c030bcd1>] (show_stack+0xb/0xc)
-...
+[    1.168831] Run /sbin/myinit as init process
+[    1.171210] Failed to execute /sbin/myinit (error -2)
+[    1.171320] Run /sbin/init as init process
+[    1.171705] Run /etc/init as init process
+[    1.171935] Run /bin/init as init process
+[    1.172147] Run /bin/sh as init process
+[    1.172488] Kernel panic - not syncing: No working init found.  Try passing init= option to kernel. See Linux Documentation/admin-guide/init.rst for guidance.
 ```
+
+Reproduced with a real rootfs where `/sbin/myinit` exists (so the access check passes) but cannot execute — here a script whose interpreter is missing, so `execve()` returns `-ENOENT` (`-2`) — and `/sbin/init`, `/etc/init`, `/bin/init`, `/bin/sh` were all removed.
+
+## 1b. Why a Bad `rdinit=` Does Not Always Panic
+
+`kernel_init()` tries, in order: the `rdinit=` target, then `init=`, then `CONFIG_DEFAULT_INIT` (empty in our build), then the hardcoded fallback list `/sbin/init`, `/etc/init`, `/bin/init`, `/bin/sh`. A *failed* `rdinit=` exec only panics when **all** of those are unusable. On the canonical rootfs — which ships working `/sbin/init` and `/bin/sh` — a non-executable `/init` merely logs `Failed to execute /init (error -13)` and continues with `Run /sbin/init as init process` (BusyBox init, `Please press Enter to activate this console.`). Never assume `No working init found` from a bad `rdinit=` alone: check which fallback caught the boot.
+
+(If the `rdinit=` path does not exist at all, the failure happens even earlier — at the access check — and routes to the VFS block-root panic instead. See F04.)
 
 ---
 
 ## 2. Full Diagnostic Discipline Walkthrough
 
 ### Step 1: Own Description
-The kernel successfully uncompressed, initialized physical memory, set up interrupt controllers, and unpacked the root filesystem archive. However, when the kernel initialization thread (`kernel_init()`) attempted to execute the first userspace program (`/sbin/myinit`), the `kernel_execve()` system call failed with error code `-2` (`-ENOENT`, No such file or directory), causing the kernel to panic because no working fallback init could be found.
+The kernel unpacks the initramfs and attempts the requested init, which fails at exec time; every fallback also fails, so the kernel panics with no userspace ever starting.
 
 ### Step 2: 3–5 Hypotheses
-1. The kernel command-line parameter `rdinit=/sbin/myinit` specifies a path that does not exist inside the unpacked rootfs.
-2. The executable was placed in `/bin` or `/init` instead of `/sbin/myinit`.
-3. The initramfs archive failed to unpack, leaving the root directory empty.
-4. The executable exists, but it is dynamically linked and its required dynamic linker (`/lib/ld-linux-armhf.so.3`) does not exist on disk (which also returns `-ENOENT`).
+1. The requested init exists but its interpreter/loader is missing (bad shebang, missing dynamic linker) → `-ENOENT` at exec.
+2. The requested init lacks the executable bit → `-EACCES` (see F08).
+3. The archive genuinely lacks the requested path AND all fallbacks (check the access-check line: if present, this is the F04 VFS route instead).
+4. The initramfs failed to unpack, leaving an empty root.
 
 ### Step 3: Discriminating Experiment
-Inspect the actual table of contents of the initramfs archive on the host without running the kernel:
+Inspect archive contents and modes on the host:
 ```bash
-zcat rootfs.cpio.gz | cpio -tv | grep "init"
+zcat rootfs.cpio.gz | cpio -t 2>/dev/null | grep -E "init|bin/sh"
+python3 ../scripts/pycpio.py --list /tmp/a.cpio | grep -E "init|bin/sh"
 ```
 
 ### Step 4: Observable Evidence
-The archive listing shows:
-```text
--rwxr-xr-x   1 root     root       1423400 Jan  1 00:00 bin/busybox
-lrwxrwxrwx   1 root     root            11 Jan  1 00:00 init -> bin/busybox
-```
-Observation: The executable exists as `/init`, but the kernel command line specifically requested `rdinit=/sbin/myinit`. The path `/sbin/myinit` does NOT exist in the archive.
+The log names the exact failing stage: `Failed to execute /sbin/myinit (error -2)` is an *exec-time* failure (the `Run …` line precedes it), followed by one `Run …` line per fallback candidate, then the panic. Contrast F04, where `check access for rdinit=… failed` appears and no `Run …` line is ever printed for the bad path.
 
 ### Step 5: Narrow Scope
-The initramfs unpacks correctly and contains a valid executable at `/init`. The fault is isolated entirely to a mismatch between the requested `rdinit=` boot argument and the actual location of the binary.
+Unpacker, drivers, and archive are healthy. The fault is the unusable init content plus absent fallbacks.
 
 ### Step 6: Root Cause
-`rdinit=/sbin/myinit` points to a non-existent path. When `kernel_init()` calls `try_to_run_init_process("/sbin/myinit")`, it returns `-ENOENT` (-2).
+`execve()` on the requested init fails (`-2` here), and no fallback candidate exists to catch the boot.
 
 ### Step 7: Fix
-Pass the correct init path via bootargs:
+Provide a working init at the requested path (or point `rdinit=` at the real `/init`), and restore the canonical fallback applets:
 ```bash
--append "console=ttyAMA0,115200 earlycon=pl011,0x09000000 rdinit=/init"
+-append "earlycon=pl011,0x09000000 console=ttyAMA0,115200 rdinit=/init"
 ```
-Or create a symlink `/sbin/myinit -> ../bin/busybox` inside the root filesystem.
 
 ### Step 8: Regression Check
-Boot QEMU with the corrected command line. Verify:
-1. `Failed to execute ... (error -2)` disappears from serial logs;
-2. Kernel logs show `Run /init as init process`;
-3. Userspace shell prompt (`/ # `) appears cleanly.
+Boot in QEMU and verify `Run /init as init process` → `REAL-BUSYBOX-INIT-READY` → real BusyBox shell, with no `Failed to execute` line.

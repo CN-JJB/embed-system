@@ -1,17 +1,33 @@
 # Fault F09 — Pseudo-Filesystem Unmounted (`/proc` Missing)
 
+> Calibrated with the REAL BusyBox 1.36.1 rootfs on real Linux 6.18.50: shell reachable, `/proc` deliberately left unmounted. Real BusyBox `ps`/`mount` behavior below — not a synthetic approximation.
+
 ## 1. Symptom
 
-The system boots successfully to an interactive BusyBox shell prompt (`/ # `). However, standard diagnostic and process monitoring commands fail with errors:
+The system boots to a real BusyBox shell (`~ # `). Process and telemetry commands then misbehave in the specific way real BusyBox behaves without `procfs`:
+
 ```text
-/ # ps
-ps: /proc: No such file or directory
-
-/ # cat /proc/uptime
+~ # ps
+PID   USER     TIME  COMMAND
+~ # cat /proc/uptime
 cat: can't open '/proc/uptime': No such file or directory
+~ # mount
+mount: no /proc/mounts
+~ # ls /proc
+(empty output)
+```
 
-/ # cat /proc/cpuinfo
-cat: can't open '/proc/cpuinfo': No such file or directory
+Note the signature carefully: real BusyBox `ps` does **not** print an error — it prints the header row and an empty table (there is no process source to read). `mount` fails because it reads `/proc/mounts`. `/proc` exists as a directory but is empty.
+
+Repair is immediate and confirmatory:
+
+```text
+~ # mount -t proc none /proc
+~ # ps
+PID   USER     TIME  COMMAND
+    1 0         0:00 /bin/sh
+    2 0         0:00 [kthreadd]
+    ...
 ```
 
 ---
@@ -19,50 +35,45 @@ cat: can't open '/proc/cpuinfo': No such file or directory
 ## 2. Full Diagnostic Discipline Walkthrough
 
 ### Step 1: Own Description
-The kernel and userspace shell booted normally without panics. However, any utility attempting to read process information or kernel statistics from `/proc` fails because the virtual `procfs` pseudo-filesystem has not been mounted.
+Kernel and shell booted with no panic, but every consumer of process/kernel telemetry is blind: `ps` is empty, `/proc/*` reads fail, `mount` cannot list mounts.
 
 ### Step 2: 3–5 Hypotheses
-1. `/init` or `/etc/init.d/rcS` omitted the `mount -t proc none /proc` command.
-2. The `/proc` mount point directory was not created in the rootfs directory skeleton.
-3. The kernel configuration was compiled without `CONFIG_PROC_FS=y`.
-4. The mount command failed due to incorrect syntax or filesystem type spelling.
+1. `/init` or `/etc/init.d/rcS` omitted the `mount -t proc none /proc` command (or it never executed — comment/`echo` text does not mount).
+2. The `/proc` mount-point directory was not created in the rootfs skeleton.
+3. The kernel lacks `CONFIG_PROC_FS=y` (excluded here — our kernel serves `/proc` fine once mounted, as the repair proves).
+4. The mount failed from bad syntax or a wrong target (validator checks fstype↔target binding for exactly this reason).
 
 ### Step 3: Discriminating Experiment
-Check existing mount points and directory existence inside the guest:
+Inside the guest, distinguish *missing directory* from *unmounted filesystem* from *missing kernel support*:
 ```sh
-/ # ls -ld /proc
-drwxr-xr-x    2 root     root             0 Jan  1 00:00 /proc
+ls -ld /proc        # directory exists?
+ls /proc            # empty => mounted-nothing OR unmounted
+mount               # 'mount: no /proc/mounts' => procfs not mounted
+mount -t proc none /proc   # repair attempt
+ps                  # full table => kernel support present, mount was the gap
+```
 
-/ # ls /proc
-(empty output)
-
-/ # mount
-(no procfs listed)
+Mount-state evidence (healthy boot for comparison):
+```text
+~ # cat /proc/mounts
+rootfs / rootfs rw,size=211184k,nr_inodes=52796 0 0
+none /proc proc rw,relatime 0 0
+none /sys sysfs rw,relatime 0 0
+none /dev devtmpfs rw,relatime,size=211184k,nr_inodes=52796,mode=755 0 0
 ```
 
 ### Step 4: Observable Evidence
-1. The `/proc` directory exists on the filesystem.
-2. But `/proc` is completely empty (no process PID subdirectories, no `cpuinfo`, no `uptime`).
-3. Running `mount` shows no active `proc` mount.
-4. Manually typing `mount -t proc none /proc` succeeds instantly, and subsequent `ps` commands work properly:
-   ```sh
-   / # mount -t proc none /proc
-   / # ps
-     PID TTY          TIME CMD
-       1 ?        00:00:00 init
-      12 ttyAMA0  00:00:00 sh
-      15 ttyAMA0  00:00:00 ps
-   ```
+1. `/proc` exists but is empty; 2. `mount` reports `no /proc/mounts`; 3. manual `mount -t proc none /proc` instantly restores `ps`. The kernel side is proven healthy by the repair.
 
 ### Step 5: Narrow Scope
-The kernel has `CONFIG_PROC_FS=y` active and `/proc` exists. The failure is strictly due to the init startup script failing to execute the mount command during startup.
+Kernel config, skeleton directory, and shell are all fine. The failure is strictly the missing *active* mount command in the init path.
 
 ### Step 6: Root Cause
-`/init` or `/etc/init.d/rcS` failed to mount `procfs` at boot. Note the key pedagogical takeaway:
-> **The Linux kernel does NOT require `/proc` to boot to userspace.** However, standard userspace process management tools require `procfs` to function.
+Neither `/init` nor `/etc/init.d/rcS` executed `mount -t proc none /proc`. Takeaway:
+> **The Linux kernel does NOT require `/proc` to reach userspace.** But real BusyBox `ps`, `top`, `free`, and `mount` require a mounted `procfs` to function.
 
 ### Step 7: Fix
-Add the mount command to `/init` or `/etc/init.d/rcS`:
+Add ACTIVE mount commands (not comments, not `echo`) to `/init` or `/etc/init.d/rcS`:
 ```sh
 mount -t proc none /proc
 mount -t sysfs none /sys
@@ -70,6 +81,7 @@ mount -t devtmpfs none /dev 2>/dev/null || true
 ```
 
 ### Step 8: Regression Check
-Reboot the appliance in QEMU:
-- Run `ps`: Successfully lists PID 1, kernel threads, and shell.
-- Run `cat /proc/uptime`: Successfully prints system uptime.
+Reboot in QEMU with the real rootfs:
+- `ps` lists PID 1 (`/bin/sh`), `kthreadd`, and the shell itself;
+- `cat /proc/uptime` prints uptime;
+- `cat /proc/mounts` shows `proc` on `/proc`, `sysfs` on `/sys`, `devtmpfs` on `/dev`.

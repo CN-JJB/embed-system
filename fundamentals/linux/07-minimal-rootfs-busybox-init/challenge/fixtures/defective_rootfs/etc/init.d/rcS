@@ -1,0 +1,5 @@
+#!/bin/sh
+# startup mounts documented below (not yet active)
+# mount -t proc none /proc
+mount -t sysfs none /sys
+mount -t devtmpfs none /dev 2>/dev/null || true

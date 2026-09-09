@@ -39,9 +39,12 @@ In this module, you construct an Embedded Linux root filesystem **entirely by ha
 | 1. start_kernel() -> setup_arch() -> mm_init() -> console_init()              |
 | 2. rest_init() spawns PID 1 kernel thread: kernel_init()                      |
 | 3. Unpack initramfs archive into root tmpfs VFS (init/initramfs.c)             |
-| 4. Search for init candidate via try_to_run_init_process():                   |
-|    - rdinit= argument (default: /init)                                        |
-|    - /sbin/init, /etc/init, /bin/init, /bin/sh                                |
+| 4. Search for init candidate (`init/main.c: kernel_init()`):                  |
+|    - `rdinit=` access-checked first; missing path reroutes to block-      |
+|      root mount (VFS panic, see M04/F04);                                  |
+|    - existing-but-unexecutable target is attempted, then falls through    |
+|      to /sbin/init, /etc/init, /bin/init, /bin/sh;                         |
+|      `No working init found` needs EVERY candidate unusable (F07/F08).     |
 | 5. kernel_execve() transitions CPU from privileged PL1 (SVC) to PL0 (User)    |
 +-------------------------------------------------------------------------------+
                                       |
@@ -69,7 +72,7 @@ The Filesystem Hierarchy Standard defines standard locations for binaries and co
 
 - `/bin` & `/sbin`: Fundamental system commands and administration utilities provided by BusyBox applets.
 - `/etc`: Configuration files (`/etc/inittab`, `/etc/init.d/rcS`).
-- `/dev`: Hardware device node interface. Managed by `devtmpfs` under `CONFIG_DEVTMPFS_MOUNT=y`.
+- `/dev`: Hardware device node interface. Static `dev/console` + `dev/null` nodes ship in the archive for initial stdio; `devtmpfs` is mounted manually by userspace at boot — `CONFIG_DEVTMPFS_MOUNT=y` does NOT automount it on initramfs (see Lab 3.3 and `drivers/base/Kconfig`).
 - `/proc`: Kernel process statistics and system telemetry (`procfs`). Contains no disk files.
 - `/sys`: Kernel device hierarchy, drivers, and device tree (`sysfs`). Contains no disk files.
 - `/tmp` & `/run`: Ephemeral runtime memory filesystems (`tmpfs`).
@@ -129,35 +132,38 @@ To build rigorous engineering intuition, inspect the real source code:
 Practice the disciplined diagnostic loop:
 $$\text{Symptom} \longrightarrow \text{Own Description} \longrightarrow \text{3–5 Hypotheses} \longrightarrow \text{Experiment} \longrightarrow \text{Evidence} \longrightarrow \text{Narrow Scope} \longrightarrow \text{Root Cause} \longrightarrow \text{Fix} \longrightarrow \text{Regression}$$
 
-- **Fault F07 (`faults/F07-init-missing/`)**: Init path missing or unusable (`rdinit=/nonexistent`). Diagnose kernel panic and `-ENOENT` (-2).
-- **Fault F08 (`faults/F08-init-permissions/`)**: Init missing executable mode (`chmod 0644 /init`). Diagnose kernel `-EACCES` (-13).
-- **Fault F09 (`faults/F09-pseudofs-unmounted/`)**: Userspace shell reachable but `/proc` unmounted. Diagnose `ps` failure without kernel panic.
+- **Fault F07 (`faults/F07-init-missing/`)**: Init content unusable at `execve()` (`-ENOENT`, e.g. missing interpreter) with all fallbacks removed. Diagnose the fallback walk and `-ENOENT` (-2).
+- **Fault F08 (`faults/F08-init-permissions/`)**: Init missing executable mode (`chmod 0644 /init`) with all fallbacks removed. Diagnose kernel `-EACCES` (-13). With fallbacks present the same fault boots via `/sbin/init` instead of panicking.
+- **Fault F09 (`faults/F09-pseudofs-unmounted/`)**: Real BusyBox shell reachable but `/proc` unmounted. Diagnose the header-only empty real `ps` and `mount: no /proc/mounts` without kernel panic.
 
 ---
 
 ## 6. AI-Free Challenge: Production BusyBox Init
 
 Located in `challenge/README.md`:
-Transform the prototype `/init` shell script into a production-grade BusyBox `/sbin/init` configuration with `/etc/inittab`, `/etc/init.d/rcS`, and an interactive `askfirst` shell on `ttyAMA0`.
+Transform the opaque pre-provisioned candidate tree into a production-grade BusyBox `/sbin/init` configuration with `/etc/inittab`, `/etc/init.d/rcS`, and an interactive `askfirst` shell on `ttyAMA0`. Repair with `make provision`, package with `make package`, self-check with `make check`.
 
 ---
 
 ## 7. AI-Free Module Gate Exam
 
 Located in `gate/README.md`:
-Given a defective rootfs staging directory, execute the diagnostic loop, resolve all permission and symlink defects, package a clean initramfs, and prove interactive shell boot in QEMU.
+Given the opaque pre-provisioned defective rootfs staging tree, execute the diagnostic loop, resolve all permission, symlink, and mount defects, package `build/candidate.cpio.gz`, and prove interactive shell boot in QEMU.
 
 ---
 
 ## 8. Verification & Automation
 
 ```bash
-# Run learner-safe verification suite
+# Run learner-safe verification suite (SYNTHETIC teaching fixtures + static contracts)
 make check
 
 # Build real static BusyBox from upstream source
 make real-busybox-build-check
 
-# Execute strict actual-host QEMU boot to interactive shell
+# Stage + package the REAL BusyBox rootfs/initramfs (canonical device nodes)
+make real-rootfs-package
+
+# Execute strict actual-host QEMU boot to a REAL BusyBox shell
 make real-qemu-check
 ```

@@ -33,20 +33,16 @@ fi
 
 mkdir -p "$(dirname "$OUTPUT_ARCHIVE")"
 ARCHIVE_ABS=$(cd "$(dirname "$OUTPUT_ARCHIVE")" && pwd)/$(basename "$OUTPUT_ARCHIVE")
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
-# Deterministic packaging: sort filenames in C locale using cpio or pycpio fallback
-if command -v cpio >/dev/null 2>&1; then
-    (
-        cd "$ROOTFS_DIR"
-        find . -mindepth 1 | LC_ALL=C sort | cpio -o -H newc --reproducible 2>/dev/null || \
-        find . -mindepth 1 | LC_ALL=C sort | cpio -o -H newc
-    ) | gzip -9 -n > "$ARCHIVE_ABS"
-else
-    SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-    TMP_CPIO="${ARCHIVE_ABS%.gz}.raw"
-    python3 "$SCRIPT_DIR/pycpio.py" "$ROOTFS_DIR" "$TMP_CPIO"
-    gzip -9 -n -c "$TMP_CPIO" > "$ARCHIVE_ABS"
-    rm -f "$TMP_CPIO"
-fi
+# Hermetic deterministic packaging via pycpio.py (newc): sorted entries,
+# UID/GID 0, mtime 0, gzip -n. Host cpio is deliberately NOT used here:
+# its mtime handling is host-dependent (nondeterministic rebuild churn),
+# while pycpio is byte-reproducible. A device-node manifest
+# (devnodes.manifest) is consumed automatically when present.
+TMP_CPIO="${ARCHIVE_ABS%.gz}.raw"
+python3 "$SCRIPT_DIR/pycpio.py" "$ROOTFS_DIR" "$TMP_CPIO"
+gzip -9 -n -c "$TMP_CPIO" > "$ARCHIVE_ABS"
+rm -f "$TMP_CPIO"
 
 echo "[PASS] Packaged deterministic initramfs archive: $ARCHIVE_ABS ($(du -h "$ARCHIVE_ABS" | cut -f1))"

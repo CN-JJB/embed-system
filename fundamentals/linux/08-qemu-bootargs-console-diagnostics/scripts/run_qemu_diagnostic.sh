@@ -10,7 +10,9 @@ M04_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
 LINUX_DIR=$(cd "${M04_ROOT}/.." && pwd)
 LINUX_SRC="${LINUX_SRC:-/tmp/linux-6.18.50}"
 REAL_ZIMAGE="${REAL_ZIMAGE:-$LINUX_SRC/arch/arm/boot/zImage}"
-INITRD="${INITRD:-$LINUX_DIR/07-minimal-rootfs-busybox-init/fixtures/build/rootfs.cpio.gz}"
+# REAL BusyBox initramfs is the default runtime. The SYNTHETIC teaching
+# fixture (synthetic_rootfs.cpio.gz) is NEVER a valid diagnostic input.
+INITRD="${INITRD:-$LINUX_DIR/07-minimal-rootfs-busybox-init/fixtures/build/real_rootfs.cpio.gz}"
 
 QEMU_BIN="${QEMU_BIN:-qemu-system-arm}"
 TIMEOUT_SEC="${TIMEOUT_SEC:-10}"
@@ -35,7 +37,15 @@ fi
 
 rm -f "$OUTPUT_LOG"
 
+# Guest userspace probes. When the boot reaches a real BusyBox shell, these
+# commands produce the userspace response evidence the runtime verifier
+# binds to (BusyBox identity, ps, mounts). For fault runs (panic/hang/
+# silent console) the probes simply receive no response, which is itself
+# diagnostic. Set DIAG_PROBE=0 for a purely passive capture.
+DIAG_PROBE="${DIAG_PROBE:-1}"
+
 set +e
+if [ "$DIAG_PROBE" = "0" ]; then
 timeout "${TIMEOUT_SEC}s" "$QEMU_BIN" \
     -machine "$MACHINE" \
     -cpu "$CPU" \
@@ -48,6 +58,20 @@ timeout "${TIMEOUT_SEC}s" "$QEMU_BIN" \
     $EXTRA_QEMU_ARGS \
     < /dev/null > "$OUTPUT_LOG" 2>&1
 RC=$?
+else
+( sleep 5; echo "busybox | head -n 2"; sleep 1; echo "ps"; sleep 1; echo "cat /proc/mounts"; sleep 1; echo "exit"; sleep 1 ) | timeout "${TIMEOUT_SEC}s" "$QEMU_BIN" \
+    -machine "$MACHINE" \
+    -cpu "$CPU" \
+    -m "$MEM" \
+    -smp "$SMP" \
+    -nographic \
+    -kernel "$REAL_ZIMAGE" \
+    -initrd "$INITRD" \
+    -append "$BOOTARGS" \
+    $EXTRA_QEMU_ARGS \
+    > "$OUTPUT_LOG" 2>&1
+RC=$?
+fi
 set -e
 
 echo "[DIAGNOSTIC] QEMU finished with exit code $RC (Log: $OUTPUT_LOG)"

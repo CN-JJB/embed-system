@@ -37,14 +37,17 @@ A full Linux boot log contains hundreds of lines. Effective systems engineers do
               |
               v
 [Milestone 5] Userspace Transition & PID 1
-              Freeing unused kernel image (initmem) memory: 2048K
-              Run /init as init process
-              === Starting PID 1 Minimal Init Process (PID=1) ===
-              |
-              v
-[Milestone 6] Userspace Interactive Environment
-              [INIT] Mounted /proc, /sys, /dev
-              / #
+               Freeing unused kernel image (initmem) memory: 2048K
+               Run /init as init process
+               === REAL-BUSYBOX-INIT-START ===
+               === REAL-BUSYBOX-INIT-READY ===
+               |
+               v
+[Milestone 6] Real BusyBox Interactive Environment
+               BusyBox v1.36.1 (real multi-call identity)
+               PID   USER     TIME  COMMAND   (real 'ps' header)
+               none /proc proc ...            (active mounts)
+               ~ #                             (real ash prompt)
 ```
 
 ---
@@ -59,8 +62,8 @@ When a boot failure terminates with a hang or panic, locate the **last successfu
 | Linux version | Memory / Architecture Setup | Bad memory parameter (`mem=`), unsupported board DTB, MMU translation fault |
 | GIC / Timer | Hardware Driver Initialization | Device Tree IRQ or register typo, missing driver in kernel `.config` |
 | Console registration | Storage & VFS Mounting | Corrupted initramfs archive, bad `root=` partition, missing storage driver |
-| Trying to unpack rootfs... | Init Candidate Selection | `rdinit=` path typo (`-ENOENT` = -2), `init=` path missing on disk |
-| Run /init as init process | Userspace Execution | Missing execute bit (`-EACCES` = -13), missing dynamic loader, init exit crash |
+| Trying to unpack rootfs... | Init Candidate Selection | `rdinit=` typo reroutes to VFS panic (`-2` at access check), `init=` path typo (`-ENOENT` = -2), `init=` path missing on disk |
+| Run /init as init process | Userspace Execution | Unusable init content (`-ENOENT` = -2 at exec), missing execute bit (`-EACCES` = -13), missing dynamic loader, init exit crash |
 
 ---
 

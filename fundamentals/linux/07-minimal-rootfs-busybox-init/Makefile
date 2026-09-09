@@ -30,13 +30,22 @@ clean:
 	$(MAKE) -C challenge clean
 	$(MAKE) -C gate clean
 
-check: all
+check: fixtures
 	CROSS_COMPILE=$(CROSS_COMPILE) bash scripts/verify_m03.sh
 
 # Real BusyBox 1.36.1 build + static ELF & staging audit
 real-busybox-build-check:
 	CROSS_COMPILE=$(CROSS_COMPILE) bash scripts/build_real_busybox.sh $(BUSYBOX_SRC) /tmp/rootfs-busybox-staging
+	CROSS_COMPILE=$(CROSS_COMPILE) bash scripts/audit_busybox_elf.sh /tmp/rootfs-busybox-staging/bin/busybox
 
-# Strict actual-host QEMU runtime boot to interactive shell
-real-qemu-check:
+# Stage + package the REAL BusyBox rootfs/initramfs (deterministic, with
+# canonical /dev/console + /dev/null device nodes).
+real-rootfs-package:
+	bash scripts/stage_real_rootfs.sh /tmp/rootfs-busybox-staging fixtures/build/real_rootfs
+	bash scripts/package_initramfs.sh fixtures/build/real_rootfs fixtures/build/real_rootfs.cpio.gz
+	bash scripts/verify_rootfs_structure.sh fixtures/build/real_rootfs
+	bash scripts/verify_initramfs_nodes.sh fixtures/build/real_rootfs.cpio.gz
+
+# Strict actual-host QEMU runtime boot to REAL BusyBox shell
+real-qemu-check: real-rootfs-package
 	bash scripts/run_real_qemu_m03.sh $(LINUX_SRC)

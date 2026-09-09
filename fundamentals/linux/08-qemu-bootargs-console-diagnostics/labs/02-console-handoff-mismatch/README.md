@@ -10,14 +10,18 @@ Investigate how the Linux kernel selects and registers the primary system consol
 
 ### Multiple `console=` Parameter Semantics
 
-The kernel command line allows passing multiple `console=` arguments:
+The kernel command line allows passing multiple `console=` arguments, but the rules are NOT "last wins". Per `Documentation/admin-guide/serial-console.rst` (Linux 6.18.50):
+
+1. **Distinct device types**: `printk()` messages are broadcast to **all** registered consoles, and opening `/dev/console` reaches the **last-listed** device.
+2. **Repeated device types**: only the **FIRST** device of each repeated type emits output, and `/dev/console` binds to the **first registered** device (registration order is subsystem-dependent). The result is board-dependent and surprising — repeated `console=` lines are a configuration smell, not a selector.
+
+Because of rule 2, the Phase 3 canonical contract requires **exactly one** normal console token:
+
 ```text
-console=ttyAMA0,115200 console=tty0
+console=ttyAMA0,115200
 ```
-Linux handles multiple consoles as follows (`Documentation/admin-guide/serial-console.rst`):
-1. **Log distribution**: Kernel `printk()` messages are broadcast to **all** registered console devices.
-2. **The primary console**: The **last console listed on the command line** that successfully registers becomes `/dev/console`.
-3. **File descriptor 0, 1, 2 inheritance**: When the kernel runs PID 1, it opens `/dev/console` to establish standard input, standard output, and standard error.
+
+Any additional `console=` token — conflicting or duplicate — is rejected by `scripts/verify_boot_contract.sh`. The conflicting-console fault below is diagnosed against the real first-of-type rule: with `console=ttyS0` the kernel cannot bind any usable console on `virt`, producing `Warning: unable to open an initial console.`
 
 ### Console Mismatch Failure Mode
 

@@ -1,76 +1,64 @@
-# Fault F06 — Calibrated Low-Memory Failure & Early OOM Deadlock
+# Fault F06 — Calibrated Low-Memory Failure (REAL BusyBox initramfs)
 
-## 1. Symptom
+> Calibrated on real Linux 6.18.50 + REAL BusyBox 1.36.1 initramfs. Every boundary below records its terminal state as one of: QEMU-REFUSAL / TIMEOUT-HANG / OOM-PANIC / USERSPACE. A bare `cma: Failed to reserve` line alone never classifies a hang — the verdict requires exit/timeout status plus the last semantic milestone.
 
-During boot, the kernel crashes with an Out-of-Memory panic or hangs during early memory setup:
+## 1. Symptom (PRIMARY learner fault: `mem=32M` OOM deadlock panic)
 
-**Variant A (Kernel OOM Deadlock Panic — `mem=32M`):**
 ```text
-[    0.226995] [  pid  ]   uid  tgid total_vm      rss rss_anon rss_file rss_shmem pgtables_bytes swapents oom_score_adj name
-[    0.227050] Out of memory and no killable processes...
-[    0.227194] Kernel panic - not syncing: System is deadlocked on memory
-[    0.239620] CPU: 0 UID: 0 PID: 1 Comm: swapper/0 Not tainted 6.18.50 #1 NONE 
-[    0.239898] Hardware name: Generic DT based system
----[ end Kernel panic - not syncing: System is deadlocked on memory ]---
+[    0.208099] Out of memory and no killable processes...
+[    0.208243] Kernel panic - not syncing: System is deadlocked on memory
 ```
 
-**Variant B (Early CMA / Bootmem Reservation Hang — `mem=8M`):**
-```text
-[    0.000000] INITRD: 0x48000000+0x0003c000 is not a memory region - disabling initrd
-[    0.000000] cma: Failed to reserve 64 MiB
-(kernel hangs in early arch setup)
-```
+Terminal state: **OOM-PANIC**. The kernel restricted to 32 MB exhausts memory during slab/driver init and deadlocks. No `Run /init` line ever appears — userspace is never reached. This is the single deterministic runtime failure taught as F06.
 
-**Variant C (QEMU Hardware Refusal — `-m 8M`):**
-```text
-qemu-system-arm: kernel 'zImage' is too large to fit in RAM (kernel size 11817472, RAM size 8388608)
-```
+## 2. Boundary Contrast (same kernel, same real initramfs)
+
+| # | Constraint | Terminal state | Last semantic milestone |
+|---|---|---|---|
+| 1 | `-m 8M` (QEMU flag) | **QEMU-REFUSAL** (emulator exits, nonzero, before any kernel byte) | `qemu-system-arm: kernel 'zImage' is too large to fit in RAM` |
+| 2 | `mem=8M` (kernel arg, `-m 512M`) | **TIMEOUT-HANG** (timeout exit 124, no panic, no userspace) | `INITRD: … is not a memory region - disabling initrd` + `cma: Failed to reserve 64 MiB`, then silence |
+| 3 | `mem=32M` (kernel arg, `-m 512M`) | **OOM-PANIC** (deterministic deadlock panic) | `Out of memory and no killable processes...` → `System is deadlocked on memory` |
+| — | canonical `-m 512M`, no `mem=` | **USERSPACE** (control) | `REAL-BUSYBOX-INIT-READY` → real `~ # ` shell |
+
+Boundary 1 is a QEMU pre-boot contrast, not a kernel fault: keep it to teach the emulator/kernel boundary, never confuse it with OOM. Boundary 2's hang verdict rests on *timeout + warnings + absence of both panic and userspace*, not on the `cma:` line alone.
 
 ---
 
-## 2. Full Diagnostic Discipline Walkthrough
+## 3. Full Diagnostic Discipline Walkthrough
 
 ### Step 1: Own Description
-The kernel begins initialization, but memory allocations cannot be satisfied. Either the early Contiguous Memory Allocator (`CMA`) fails to reserve required memory blocks, or the page allocator runs completely out of memory during slab/driver initialization, triggering an OOM deadlock panic.
+With `mem=32M`, the kernel starts normally, then dies in the page allocator before userspace; with `mem=8M`, it stalls in early setup with CMA/initrd warnings and never progresses.
 
 ### Step 2: 3–5 Hypotheses
-1. An artificial `mem=` parameter on the kernel command line restricts visible RAM below the operational threshold.
-2. The virtual machine was provisioned with inadequate RAM via the QEMU `-m` flag.
-3. The kernel configuration has an oversized Contiguous Memory Allocator reservation (`CONFIG_CMA_SIZE_MBYTES`) exceeding available physical RAM.
-4. The initramfs image was loaded outside visible RAM boundaries.
+1. A `mem=` argument restricts visible RAM below the working set.
+2. The VM was provisioned short via `-m` (boundary 1 shape instead).
+3. Oversized CMA reservation vs available RAM.
+4. Initramfs loaded outside visible RAM (`INITRD: … disabling initrd`).
 
 ### Step 3: Discriminating Experiment
-1. Check the effective kernel command line for memory overrides:
-   ```bash
-   grep "Kernel command line:" /tmp/boot.log
-   ```
-2. Inspect early memory detection and CMA log messages:
-   ```bash
-   grep -E "Memory:|cma:|INITRD:" /tmp/boot.log
-   ```
+```bash
+grep "Kernel command line:" /tmp/boot.log     # mem= override present?
+grep -E "Memory:|cma:|INITRD:|Run /init|Kernel panic" /tmp/boot.log
+bash scripts/calibrate_f06_ram.sh              # reproduces all four states
+```
 
 ### Step 4: Observable Evidence
-The kernel log confirms:
-```text
-Kernel command line: console=ttyAMA0,115200 earlycon=pl011,0x09000000 rdinit=/init mem=32M
-cma: Failed to reserve 64 MiB
-Out of memory and no killable processes...
-Kernel panic - not syncing: System is deadlocked on memory
-```
-Observation: The kernel was restricted to 32 MB (`mem=32M`), while default subsystem initialization and CMA require more memory than available.
+`Kernel command line: … mem=32M` + `Out of memory and no killable processes...` + `System is deadlocked on memory`, with no `Run /init`. For `mem=8M`: `cma: Failed to reserve 64 MiB`, no panic, no `Run /init`, process times out.
 
 ### Step 5: Narrow Scope
-The memory controllers and kernel image are intact. The fault is strictly caused by the restrictive memory parameter restricting usable RAM.
+Image, drivers, and rootfs are intact. The fault is strictly the memory restriction.
 
 ### Step 6: Root Cause
-Passing `mem=32M` restricts the kernel address space below the minimum working set required by our Phase 3 kernel configuration.
+`mem=32M` starves the allocator below the minimum working set of this kernel configuration (PRIMARY). `mem=8M` additionally breaks early reservations and initrd placement, stalling before the allocator can even panic.
 
 ### Step 7: Fix
-Remove the artificial `mem=32M` boot argument, restoring the canonical platform memory contract (`-m 512M`).
+Remove the `mem=` override, restoring `-m 512M`:
+```bash
+-append "earlycon=pl011,0x09000000 console=ttyAMA0,115200 rdinit=/init"
+```
 
 ### Step 8: Regression Check
-Run the memory calibration script:
 ```bash
 bash scripts/calibrate_f06_ram.sh
+# expect: QEMU-REFUSAL / TIMEOUT-HANG / OOM-PANIC / USERSPACE, PRIMARY mem=32M deterministic
 ```
-Confirm all 3 boundaries reproduce deterministically, and standard boot with 512 MB passes cleanly.

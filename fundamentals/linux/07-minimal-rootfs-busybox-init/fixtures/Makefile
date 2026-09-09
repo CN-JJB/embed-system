@@ -3,40 +3,56 @@ CC := $(CROSS_COMPILE)gcc
 
 M03_ROOT := $(abspath ..)
 BUILD_DIR := $(CURDIR)/build
-ROOTFS_DIR := $(BUILD_DIR)/rootfs
-ARCHIVE := $(BUILD_DIR)/rootfs.cpio.gz
+# SYNTHETIC PEDAGOGICAL FIXTURE — NOT BUSYBOX. Fast static/component
+# teaching artifact only; never used as real BusyBox runtime evidence.
+SYNTHETIC_BIN := $(BUILD_DIR)/synthetic_multicall
+SYNTHETIC_ROOTFS := $(BUILD_DIR)/synthetic_rootfs
+SYNTHETIC_ARCHIVE := $(BUILD_DIR)/synthetic_rootfs.cpio.gz
+# Real BusyBox rootfs/initramfs (staged from real 1.36.1 build output).
+REAL_ROOTFS := $(BUILD_DIR)/real_rootfs
+REAL_ARCHIVE := $(BUILD_DIR)/real_rootfs.cpio.gz
+BUSYBOX_SRC ?= /tmp/busybox-1.36.1
+REAL_STAGING ?= /tmp/rootfs-busybox-staging
 
-.PHONY: all clean
+.PHONY: all clean synthetic real
 
-all: $(ARCHIVE)
+all: synthetic
 
-$(BUILD_DIR)/busybox: src/synthetic_init.c
+synthetic: $(SYNTHETIC_ARCHIVE)
+
+$(SYNTHETIC_BIN): src/synthetic_multicall.c
 	@mkdir -p $(BUILD_DIR)
-	$(CC) -static -Wall -Werror -O2 src/synthetic_init.c -o $@
+	$(CC) -static -Wall -Werror -O2 src/synthetic_multicall.c -o $@
 
-$(ARCHIVE): $(BUILD_DIR)/busybox
-	@rm -rf $(ROOTFS_DIR)
-	@mkdir -p $(ROOTFS_DIR)/bin $(ROOTFS_DIR)/sbin $(ROOTFS_DIR)/etc/init.d $(ROOTFS_DIR)/dev $(ROOTFS_DIR)/proc $(ROOTFS_DIR)/sys $(ROOTFS_DIR)/tmp $(ROOTFS_DIR)/run $(ROOTFS_DIR)/mnt $(ROOTFS_DIR)/root
-	@cp $(BUILD_DIR)/busybox $(ROOTFS_DIR)/bin/busybox
-	@chmod 755 $(ROOTFS_DIR)/bin/busybox
-	@ln -sf busybox $(ROOTFS_DIR)/bin/sh
-	@ln -sf busybox $(ROOTFS_DIR)/bin/ls
-	@ln -sf busybox $(ROOTFS_DIR)/bin/ps
-	@ln -sf busybox $(ROOTFS_DIR)/bin/mount
-	@ln -sf busybox $(ROOTFS_DIR)/bin/echo
-	@ln -sf busybox $(ROOTFS_DIR)/bin/cat
-	@ln -sf ../bin/busybox $(ROOTFS_DIR)/sbin/init
-	@ln -sf bin/busybox $(ROOTFS_DIR)/init
-	@echo "#!/bin/sh" > $(ROOTFS_DIR)/etc/init.d/rcS
-	@echo "mount -t proc none /proc" >> $(ROOTFS_DIR)/etc/init.d/rcS
-	@echo "mount -t sysfs none /sys" >> $(ROOTFS_DIR)/etc/init.d/rcS
-	@echo "mount -t devtmpfs none /dev 2>/dev/null || true" >> $(ROOTFS_DIR)/etc/init.d/rcS
-	@chmod 755 $(ROOTFS_DIR)/etc/init.d/rcS
-	@echo "::sysinit:/etc/init.d/rcS" > $(ROOTFS_DIR)/etc/inittab
-	@echo "::askfirst:-/bin/sh" >> $(ROOTFS_DIR)/etc/inittab
-	@echo "::ctrlaltdel:/sbin/reboot" >> $(ROOTFS_DIR)/etc/inittab
-	@echo "::shutdown:/bin/umount -a -r" >> $(ROOTFS_DIR)/etc/inittab
-	@bash $(M03_ROOT)/scripts/package_initramfs.sh $(ROOTFS_DIR) $(ARCHIVE)
+$(SYNTHETIC_ARCHIVE): $(SYNTHETIC_BIN)
+	@rm -rf $(SYNTHETIC_ROOTFS)
+	@mkdir -p $(SYNTHETIC_ROOTFS)/bin $(SYNTHETIC_ROOTFS)/sbin $(SYNTHETIC_ROOTFS)/etc/init.d $(SYNTHETIC_ROOTFS)/dev $(SYNTHETIC_ROOTFS)/proc $(SYNTHETIC_ROOTFS)/sys $(SYNTHETIC_ROOTFS)/tmp $(SYNTHETIC_ROOTFS)/run $(SYNTHETIC_ROOTFS)/mnt $(SYNTHETIC_ROOTFS)/root
+	@cp $(SYNTHETIC_BIN) $(SYNTHETIC_ROOTFS)/bin/synthetic_multicall
+	@chmod 755 $(SYNTHETIC_ROOTFS)/bin/synthetic_multicall
+	@ln -sf synthetic_multicall $(SYNTHETIC_ROOTFS)/bin/sh
+	@ln -sf synthetic_multicall $(SYNTHETIC_ROOTFS)/bin/ls
+	@ln -sf synthetic_multicall $(SYNTHETIC_ROOTFS)/bin/ps
+	@ln -sf synthetic_multicall $(SYNTHETIC_ROOTFS)/bin/mount
+	@ln -sf synthetic_multicall $(SYNTHETIC_ROOTFS)/bin/echo
+	@ln -sf synthetic_multicall $(SYNTHETIC_ROOTFS)/bin/cat
+	@ln -sf ../bin/synthetic_multicall $(SYNTHETIC_ROOTFS)/sbin/init
+	@ln -sf bin/synthetic_multicall $(SYNTHETIC_ROOTFS)/init
+	@echo "#!/bin/sh" > $(SYNTHETIC_ROOTFS)/etc/init.d/rcS
+	@echo "mount -t proc none /proc" >> $(SYNTHETIC_ROOTFS)/etc/init.d/rcS
+	@echo "mount -t sysfs none /sys" >> $(SYNTHETIC_ROOTFS)/etc/init.d/rcS
+	@echo "mount -t devtmpfs none /dev 2>/dev/null || true" >> $(SYNTHETIC_ROOTFS)/etc/init.d/rcS
+	@chmod 755 $(SYNTHETIC_ROOTFS)/etc/init.d/rcS
+	@echo "::sysinit:/etc/init.d/rcS" > $(SYNTHETIC_ROOTFS)/etc/inittab
+	@echo "::askfirst:-/bin/sh" >> $(SYNTHETIC_ROOTFS)/etc/inittab
+	@echo "::ctrlaltdel:/sbin/reboot" >> $(SYNTHETIC_ROOTFS)/etc/inittab
+	@echo "::shutdown:/bin/umount -a -r" >> $(SYNTHETIC_ROOTFS)/etc/inittab
+	@bash $(M03_ROOT)/scripts/package_initramfs.sh $(SYNTHETIC_ROOTFS) $(SYNTHETIC_ARCHIVE)
+
+# Real BusyBox rootfs staging + packaging. Requires a completed real
+# BusyBox 1.36.1 build (see scripts/build_real_busybox.sh).
+real:
+	@bash $(M03_ROOT)/scripts/stage_real_rootfs.sh $(REAL_STAGING) $(REAL_ROOTFS)
+	@bash $(M03_ROOT)/scripts/package_initramfs.sh $(REAL_ROOTFS) $(REAL_ARCHIVE)
 
 clean:
 	@rm -rf $(BUILD_DIR)

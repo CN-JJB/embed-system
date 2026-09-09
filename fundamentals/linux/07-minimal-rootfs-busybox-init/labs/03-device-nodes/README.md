@@ -2,7 +2,7 @@
 
 ## 1. Objective
 
-Understand how the Linux kernel maps physical hardware devices to userspace file paths under `/dev`. Distinguish between traditional static device nodes created with `mknod` and the modern dynamic kernel-managed `devtmpfs` filesystem enabled in our Phase 3 kernel configuration (`CONFIG_DEVTMPFS=y` and `CONFIG_DEVTMPFS_MOUNT=y`).
+Understand how the Linux kernel maps physical hardware devices to userspace file paths under `/dev`. Distinguish between traditional static device nodes created with `mknod` and the modern dynamic kernel-managed `devtmpfs` filesystem, and learn exactly what our Phase 3 kernel configuration (`CONFIG_DEVTMPFS=y`, `CONFIG_DEVTMPFS_MOUNT=y`) does — and does not — do on an **initramfs** boot.
 
 ---
 
@@ -22,37 +22,56 @@ mknod -m 666 dev/null c 1 3
 mknod -m 600 dev/console c 5 1
 ```
 
-### The Role of `CONFIG_DEVTMPFS_MOUNT=y`
+### What `CONFIG_DEVTMPFS_MOUNT=y` Actually Does (read carefully)
 
-In our frozen Phase 3 kernel configuration:
-- `CONFIG_DEVTMPFS=y`: Enables the kernel-space device filesystem driver.
-- `CONFIG_DEVTMPFS_MOUNT=y`: Instructs the kernel to automatically mount `devtmpfs` onto `/dev` *before* launching PID 1.
+Our Phase 3 kernel sets `CONFIG_DEVTMPFS=y` and `CONFIG_DEVTMPFS_MOUNT=y`. The Kconfig help for `DEVTMPFS_MOUNT` (`drivers/base/Kconfig`, Linux 6.18.50) states:
 
-When `CONFIG_DEVTMPFS_MOUNT=y` is active:
-1. The kernel creates and manages device nodes dynamically as hardware drivers register.
-2. Static nodes created on the storage media are hidden under the mounted `devtmpfs`.
-3. However, if the kernel is booted with `CONFIG_DEVTMPFS_MOUNT=n`, or if the early console is opened before `devtmpfs` mounts, a static `/dev/console` node in the rootfs is essential to prevent early userspace launch failure.
+> This will instruct the kernel to automatically mount the devtmpfs filesystem at `/dev`, directly after the kernel has mounted the root filesystem. […] **This option does not affect initramfs based booting, here the devtmpfs filesystem always needs to be mounted manually after the rootfs is mounted.**
+
+Consequences for this module's initramfs path:
+
+1. **No automatic `/dev` mount before PID 1.** On initramfs boot the kernel does NOT mount devtmpfs for you, even with `CONFIG_DEVTMPFS_MOUNT=y`. Userspace must run `mount -t devtmpfs none /dev` itself (as our `/init` and `/etc/init.d/rcS` do).
+2. **Static nodes still matter for initial stdio.** Before userspace mounts devtmpfs, the kernel's `console_on_rootfs()` opens `/dev/console` for PID 1's stdin/stdout/stderr. If the archive carries no static `/dev/console`, the kernel logs `Warning: unable to open an initial console.` Our canonical real rootfs therefore ships static `dev/console (c 5 1, 600)` and `dev/null (c 1 3, 666)` nodes, encoded deterministically (see below). Once userspace mounts devtmpfs over `/dev`, the dynamic nodes take over.
+3. **Block-root boots differ.** On a persistent block root filesystem the automount DOES apply after the kernel mounts the rootfs — one more reason to keep the two boot paths conceptually separate.
+
+### Deterministic Device Nodes Without Root
+
+Creating device nodes with `mknod` normally requires root, which would make packaging host-dependent. Our hermetic packager avoids that: list the nodes in a `devnodes.manifest` next to the staging tree:
+
+```text
+dev/console c 5 1 600
+dev/null c 1 3 666
+```
+
+`scripts/package_initramfs.sh` detects the manifest and routes packaging through `scripts/pycpio.py`, which encodes correct character-device type, major/minor, and mode directly into the `newc` headers — no root, fully deterministic. Validate the result from archive metadata (not from an unprivileged extraction, which cannot recreate nodes):
+
+```bash
+bash scripts/verify_initramfs_nodes.sh fixtures/build/real_rootfs.cpio.gz
+```
 
 ---
 
 ## 3. Hands-On Execution
 
-1. In your rootfs staging directory, inspect the `/dev` directory:
+1. In your rootfs staging directory, inspect the `/dev` mount point and manifest:
    ```bash
-   ls -la dev/
+   ls -la dev/ && cat devnodes.manifest
    ```
 
-2. If building an initramfs without relying on root privileges for `mknod`:
-   - Because creating physical device nodes requires `sudo` or `fakeroot`, our build workflow leverages `CONFIG_DEVTMPFS_MOUNT=y` or mounts `devtmpfs` in the startup script:
+2. Canonical userspace mount (in `/init` or `/etc/init.d/rcS`) — still required on initramfs:
    ```bash
-   # In /init or /etc/init.d/rcS
    mount -t devtmpfs none /dev
    ```
 
-3. If running in an environment with root access:
+3. Inspect encoded node metadata straight from the archive:
    ```bash
-   sudo mknod -m 600 dev/console c 5 1
-   sudo mknod -m 666 dev/null c 1 3
+   zcat rootfs.cpio.gz > /tmp/a.cpio
+   python3 ../scripts/pycpio.py --list /tmp/a.cpio | grep -E "dev/console|dev/null"
+   # expect: char 0600 5:1 dev/console, char 0666 1:3 dev/null
    ```
 
-4. Verify that `/dev` exists as a directory ready for kernel mounting.
+4. In the running guest, observe the handoff: static nodes at first console open, then the devtmpfs mount over `/dev`:
+   ```sh
+   cat /proc/mounts | grep /dev
+   # none /dev devtmpfs rw,relatime,... 0 0
+   ```

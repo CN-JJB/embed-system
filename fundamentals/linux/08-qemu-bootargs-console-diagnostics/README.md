@@ -79,10 +79,12 @@ The Linux boot process follows a deterministic sequence of milestones. Diagnosin
                                          |
                                          v
 +-----------------------------------------------------------------------------------+
-| Milestone 4: PID 1 Launch & Userland Execution                                    |
-| "Run /init as init process"                                                       |
-| "Starting PID 1 Minimal Init Process"                                             |
-| "/ # " (Interactive BusyBox Shell Prompt)                                         |
+| Milestone 4: PID 1 Launch & Real BusyBox Userland Execution                 |
+| "Run /init as init process"                                                 |
+| "=== REAL-BUSYBOX-INIT-START ===" / "=== REAL-BUSYBOX-INIT-READY ==="       |
+| "BusyBox v1.36.1 ..." (real multi-call identity)                            |
+| "PID   USER     TIME  COMMAND" (real 'ps' header)                           |
+| "~ # " (real BusyBox ash prompt)                                            |
 +-----------------------------------------------------------------------------------+
 ```
 
@@ -92,10 +94,10 @@ The Linux boot process follows a deterministic sequence of milestones. Diagnosin
 
 | Fault ID | Title | Symptom | Root Cause |
 |---|---|---|---|
-| **F04** | Bad Bootargs Root / Init | Kernel Panic: `Attempted to kill init!` or `Failed to execute ...` | Invalid `rdinit=` path or missing rootfs entry |
-| **F05** | Console Mismatch / Silent Boot | Silence after decompression or silence after earlycon | Incorrect `console=` device name or baud rate |
-| **F06** | Insufficient RAM | QEMU refusal (`-m 8M`), early boot hang (`mem=8M`), or OOM panic (`mem=32M`) | Physical or kernel-limited memory below runtime threshold |
-| **F07–F09** | Userland Init Integration Faults | Kernel panic, execution permission denied, or `ps` failure | Missing `/init`, non-executable bit, or unmounted `/proc` |
+| **F04** | Bad Bootargs Root / Init | `check access for rdinit=… failed` → VFS panic `Unable to mount root fs on unknown-block(0,0)` | Nonexistent `rdinit=` path reroutes to block-root mount |
+| **F05** | Console Mismatch / Silent Boot | Silence; with earlycon: `Warning: unable to open an initial console` then secondary shell-exit panic | `console=ttyS0` instead of `ttyAMA0` (nonexistent 8250 port) |
+| **F06** | Insufficient RAM | PRIMARY `mem=32M` OOM deadlock panic; `mem=8M` early timeout-hang; `-m 8M` QEMU refusal | Memory restriction below working set |
+| **F07–F09** | Userland Init Integration Faults | `Failed to execute …` across fallbacks → `No working init found`; or header-only empty `ps` | Unusable init + no fallbacks; missing `+x`; unmounted `/proc` |
 
 ---
 
@@ -116,12 +118,16 @@ The Linux boot process follows a deterministic sequence of milestones. Diagnosin
 
 ## 7. Verification
 
-Run module verification:
+Run module verification (learner-safe: static teaching checks + assessment provisioning):
+
 ```bash
 make check
 ```
 
-Run real QEMU boot test (requires cross-compiler, Linux kernel zImage, and rootfs archive):
+Run the real QEMU boot test (requires the pinned Linux zImage and the REAL BusyBox initramfs; binds runtime evidence to the actual execution):
+
 ```bash
 make real-bootargs-qemu-check
 ```
+
+> `scripts/audit_boot_milestones.sh` is the STATIC teaching-fixture auditor (ordered strings; a forged log passes it by design). Runtime certification uses `scripts/verify_runtime_boot.sh`, which rejects forged/concatenated logs.

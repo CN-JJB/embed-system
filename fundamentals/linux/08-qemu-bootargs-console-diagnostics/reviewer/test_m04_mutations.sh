@@ -75,6 +75,28 @@ assert_milestone_rejected() {
     fi
 }
 
+assert_runtime_rejected() {
+    local name="$1"
+    local file="$2"
+    local bootargs="${3:-earlycon=pl011,0x09000000 console=ttyAMA0,115200 rdinit=/init}"
+    MUTATION_COUNT=$((MUTATION_COUNT + 1))
+    echo -n "[TEST] Mutation $MUTATION_COUNT: $name ... "
+
+    set +e
+    OUTPUT=$(bash "$M04_ROOT/scripts/verify_runtime_boot.sh" "$file" "$bootargs" 2>&1)
+    RC=$?
+    set -e
+
+    if [ $RC -ne 0 ] && grep -q "REJECT" <<<"$OUTPUT"; then
+        echo "PASS (Intended Semantic REJECT)"
+        PASS_COUNT=$((PASS_COUNT + 1))
+    else
+        echo "FAIL (Unexpected Pass or Crash: RC=$RC)"
+        echo "$OUTPUT"
+        exit 1
+    fi
+}
+
 # 1. Mutation: Correct console in comment, but command uses wrong console (ttyS0)
 MUT1="$WORK_DIR/mut1_decoy_comment.sh"
 cat << 'EOF' > "$MUT1"
@@ -90,7 +112,9 @@ qemu-system-arm $MACHINE $CPU $MEM $SMP $DISPLAY_OPT -kernel "$KERNEL" -initrd "
 EOF
 assert_contract_rejected "Decoy console in comment with wrong effective console" "$MUT1"
 
-# 2. Mutation: Conflicting consoles with bad console last (effective ordering override)
+# 2. Mutation: Conflicting consoles (duplicate console= tokens). Canonical
+# contract requires exactly one console=ttyAMA0,115200; real Linux resolves
+# repeated same-type consoles first-of-type, not last-wins.
 MUT2="$WORK_DIR/mut2_conflicting_consoles.sh"
 cat << 'EOF' > "$MUT2"
 #!/bin/bash
@@ -102,7 +126,21 @@ DISPLAY_OPT="-nographic"
 BOOTARGS="earlycon=pl011,0x09000000 console=ttyAMA0,115200 console=ttyS0 rdinit=/init"
 qemu-system-arm $MACHINE $CPU $MEM $SMP $DISPLAY_OPT -kernel "$KERNEL" -initrd "$INITRD" -append "$BOOTARGS"
 EOF
-assert_contract_rejected "Conflicting consoles with bad console overriding last" "$MUT2"
+assert_contract_rejected "Duplicate console= tokens (canonical requires exactly one)" "$MUT2"
+
+# 2b. Mutation: Duplicate SAME console twice is still rejected (exactly-one).
+MUT2B="$WORK_DIR/mut2b_duplicate_same_console.sh"
+cat << 'EOF' > "$MUT2B"
+#!/bin/bash
+MACHINE="-machine virt,highmem=off,gic-version=2"
+CPU="-cpu cortex-a7"
+MEM="-m 512M"
+SMP="-smp 1"
+DISPLAY_OPT="-nographic"
+BOOTARGS="earlycon=pl011,0x09000000 console=ttyAMA0,115200 console=ttyAMA0,115200 rdinit=/init"
+qemu-system-arm $MACHINE $CPU $MEM $SMP $DISPLAY_OPT -kernel "$KERNEL" -initrd "$INITRD" -append "$BOOTARGS"
+EOF
+assert_contract_rejected "Duplicate identical console= tokens" "$MUT2B"
 
 # 3. Mutation: Missing highmem=off
 MUT3="$WORK_DIR/mut3_missing_highmem.sh"
@@ -170,6 +208,28 @@ MUT8_LOG="$WORK_DIR/mut8_inverted.log"
 tac "$VALID_LOG" > "$MUT8_LOG"
 assert_milestone_rejected "Chronological milestone ordering inversion" "$MUT8_LOG"
 
+# 8b. Mutation: Forged/concatenated milestone text (ordered strings only).
+# Passes the STATIC teaching auditor by design, but the RUNTIME verifier
+# must REJECT it (no cmdline binding, handoff, memory, userspace response).
+MUT8B_LOG="$WORK_DIR/mut8b_forged_milestones.log"
+printf '%s\n' \
+    "Linux version 6.18.50" \
+    "CPU: ARMv7 Processor" \
+    "Kernel command line: console=ttyAMA0,115200 earlycon=pl011,0x09000000 rdinit=/init" \
+    "printk: console [ttyAMA0] enabled" \
+    "Trying to unpack rootfs image as initramfs" \
+    "Run /init as init process" \
+    "REAL-BUSYBOX-INIT-READY" > "$MUT8B_LOG"
+assert_runtime_rejected "Forged concatenated milestone text (no runtime binding)" "$MUT8B_LOG"
+
+# 8c. Mutation: Valid kernel prefix but wrong command line (log/config
+# mismatch). Runtime verifier must REJECT when the logged cmdline lacks
+# the expected tokens.
+MUT8C_LOG="$WORK_DIR/mut8c_wrong_cmdline.log"
+cp "$VALID_LOG" "$MUT8C_LOG"
+sed -i 's/console=ttyAMA0,115200/console=ttyS0,115200/' "$MUT8C_LOG"
+assert_runtime_rejected "Logged command line mismatches expected bootargs" "$MUT8C_LOG"
+
 # 9. Positive Reference Control: Unmodified reference configuration must PASS
 echo -n "[TEST] Positive Reference Control: Valid boot configuration ... "
 set +e
@@ -185,7 +245,7 @@ else
     exit 1
 fi
 
-# 10. Positive Reference Control: Unmodified reference log must PASS
+# 10. Positive Reference Control: Unmodified reference log must PASS (static)
 echo -n "[TEST] Positive Reference Control: Valid boot log ... "
 set +e
 LOG_OUTPUT=$(bash "$M04_ROOT/scripts/audit_boot_milestones.sh" "$VALID_LOG" 2>&1)
@@ -197,6 +257,21 @@ if [ $LOG_RC -eq 0 ] && echo "$LOG_OUTPUT" | grep -q "boot milestones verified";
 else
     echo "FAIL (Valid reference log failed to pass!)"
     echo "$LOG_OUTPUT"
+    exit 1
+fi
+
+# 11. Positive Reference Control: Unmodified reference log must PASS (runtime)
+echo -n "[TEST] Positive Reference Control: Valid runtime boot evidence ... "
+set +e
+RT_OUTPUT=$(bash "$M04_ROOT/scripts/verify_runtime_boot.sh" "$VALID_LOG" "earlycon=pl011,0x09000000 console=ttyAMA0,115200 rdinit=/init" 2>&1)
+RT_RC=$?
+set -e
+if [ $RT_RC -eq 0 ] && echo "$RT_OUTPUT" | grep -q "Runtime boot evidence VERIFIED"; then
+    echo "PASS"
+    PASS_COUNT=$((PASS_COUNT + 1))
+else
+    echo "FAIL (Valid reference log failed runtime verification!)"
+    echo "$RT_OUTPUT"
     exit 1
 fi
 
