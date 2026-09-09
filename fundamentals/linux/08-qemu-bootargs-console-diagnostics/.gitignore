@@ -1,0 +1,5 @@
+# Ignore generated diagnostic and gate run artifacts
+challenge/build/
+gate/build/
+*.log
+!fixtures/reference_boot.log

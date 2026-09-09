@@ -1,0 +1,8 @@
+# Ignore generated rootfs and binary artifacts (built deterministically by Makefile)
+fixtures/build/
+challenge/build/
+gate/build/
+*.o
+*.elf
+*.cpio
+*.cpio.gz
