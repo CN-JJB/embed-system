@@ -1,0 +1,11 @@
+# Ignore generated lab/fault binaries
+hello_target
+hello_host
+dynamic_app
+static_app
+app_faulty
+app_fixed
+audit_tool
+rootfs_fixture/
+*.o
+*.elf

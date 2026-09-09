@@ -1,0 +1,8 @@
+# Ignore generated kernel artifacts (built locally, never committed)
+fixtures/artifacts/vmlinux
+fixtures/artifacts/System.map
+fixtures/artifacts/stale_System.map
+fixtures/artifacts/arch/
+faults/F03-stale-system-map/fixtures/
+*.o
+*.elf

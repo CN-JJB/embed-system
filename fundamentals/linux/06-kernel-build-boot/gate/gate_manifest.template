@@ -1,0 +1,35 @@
+# P3-M02 Module Gate Evaluation Manifest
+
+Learner Name: 
+Date: 
+
+## 0. Deviations from Canonical Phase 3 Platform Rules
+Audit `gate_effective.config` against the full canonical Phase 3 delta documented in the module README.
+List **every** deviation found, with the exact config line as evidence:
+
+## 1. Effective Kernel Configuration Verification
+- `CONFIG_ARCH_VIRT` status: 
+- `CONFIG_ARM_LPAE` status: 
+- `CONFIG_VMSPLIT_3G` status: 
+- `CONFIG_PAGE_OFFSET` value: 
+- `CONFIG_SERIAL_AMBA_PL011` status: 
+- `CONFIG_PRINTK` status: 
+
+## 2. Kernel Artifact Analysis
+- `gate_vmlinux` Machine type: 
+- `gate_vmlinux` Entry point address: 
+- `gate_zImage` 32-bit Magic at offset 0x24 (hex): 
+- `gate_zImage` Magic Verdict (Valid ARM boot magic / Invalid): 
+- Virtual address of `start_kernel` in `gate_vmlinux`: 
+- Virtual address of `start_kernel` in `gate_System.map`: 
+- Virtual address of `rest_init` in `gate_vmlinux`: 
+- Virtual address of `rest_init` in `gate_System.map`: 
+- Synchronization Verdict (Synchronized / Drifted / Stale): 
+
+## 3. Canonical QEMU Launch Contract & Evidence Boundaries
+State the complete canonical QEMU launch command line for booting `gate_zImage` and explain:
+1. Why `highmem=off` is mandatory for non-LPAE kernels:
+2. How the Device Tree Blob (DTB) address is communicated to the Linux kernel during direct boot (and why it is not hardcoded to `0x40000000`):
+3. Why `cortex-a7` is explicitly set:
+4. Why direct kernel boot without a root filesystem terminates in a VFS root mount panic, and why this is expected proof of early boot success:
+5. Why the absence of dynamic loader dependencies (`PT_INTERP`) in a static binary does NOT guarantee universal execution across any ARM Linux kernel:

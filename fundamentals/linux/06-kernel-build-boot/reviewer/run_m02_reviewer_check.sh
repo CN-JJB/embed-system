@@ -1,0 +1,46 @@
+#!/bin/bash
+set -euo pipefail
+
+# P3-M02 Reviewer-Only Full Authoring Regression (REVIEWER-ONLY)
+# Orchestrates, in order:
+#   1. learner/reviewer isolation audit
+#   2. assessment fixture materialization (opaque, committed separately)
+#   3. learner-safe check re-run (must pass without reviewer tooling)
+#   4. component-validator negative control mutation suite
+#   5. assessment oracle reference + mutation regression
+# Learner workflows must never invoke this script.
+
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+M02_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+cd "$M02_ROOT"
+
+CROSS_COMPILE="${CROSS_COMPILE:-arm-none-linux-gnueabihf-}"
+
+echo "##################################################################"
+echo "# P3-M02 REVIEWER-CHECK — AUTHORING REGRESSION (REVIEWER-ONLY)  #"
+echo "##################################################################"
+
+echo ""
+echo "===== [1/5] Learner/Reviewer Isolation Audit ====="
+bash reviewer/audit_learner_isolation.sh
+
+echo ""
+echo "===== [2/5] Materialize Assessment Fixtures (opaque) ====="
+bash reviewer/scripts/generate_m02_challenge_fixtures.sh challenge/fixtures "$CROSS_COMPILE"
+bash reviewer/scripts/generate_m02_gate_fixtures.sh gate/fixtures "$CROSS_COMPILE"
+echo "[PASS] M02 assessment fixtures materialized under challenge/ and gate/"
+
+echo ""
+echo "===== [3/5] Learner-Safe Module Check (no reviewer tooling) ====="
+make check CROSS_COMPILE="$CROSS_COMPILE"
+
+echo ""
+echo "===== [4/5] Component-Validator Negative Control Mutations ====="
+CROSS_COMPILE="$CROSS_COMPILE" bash reviewer/test_m02_mutations.sh
+
+echo ""
+echo "===== [5/5] Assessment Oracle Reference + Mutation Regression ====="
+bash reviewer/test_m02_oracle_mutations.sh
+
+echo ""
+echo "=== P3-M02 REVIEWER-CHECK COMPLETE: ALL STAGES PASSED ==="

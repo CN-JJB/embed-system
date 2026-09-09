@@ -1,0 +1,30 @@
+# P3-M01 Module Gate Evaluation Manifest
+
+Learner Name: 
+Date: 
+
+## 1. Candidate Alpha
+- Architecture (`readelf -h` Machine): 
+- Linkage Type (Static / Dynamic): 
+- Dynamic Interpreter Path (`readelf -l` INTERP): 
+- Shared Library Dependencies (`readelf -d` NEEDED): 
+- Verdict (Wrong Arch / Missing Loader / Ready for Minimal Rootfs): 
+
+## 2. Candidate Beta
+- Architecture (`readelf -h` Machine): 
+- Linkage Type (Static / Dynamic): 
+- Dynamic Interpreter Path (`readelf -l` INTERP): 
+- Shared Library Dependencies (`readelf -d` NEEDED): 
+- Verdict (Wrong Arch / Missing Loader / Ready for Minimal Rootfs): 
+
+## 3. Candidate Gamma
+- Architecture (`readelf -h` Machine): 
+- Linkage Type (Static / Dynamic): 
+- Dynamic Interpreter Path (`readelf -l` INTERP): 
+- Shared Library Dependencies (`readelf -d` NEEDED): 
+- Verdict (Wrong Arch / Missing Loader / Ready for Minimal Rootfs): 
+
+## 4. Root Cause and Explanations
+Explain why running each candidate under the following conditions either succeeds or fails:
+1. Candidate on target ARM Linux rootfs with no `/lib`:
+2. Candidate on host x86-64 Linux workstation:
