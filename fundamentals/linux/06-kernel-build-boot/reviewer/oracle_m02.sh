@@ -8,7 +8,7 @@ set -euo pipefail
 # seeded assessment design and must never be referenced by or copied into
 # learner-facing material.
 #
-# Hardening contract (Round 3):
+# Hardening contract (Round 3 + Round 4):
 # - Kconfig symbols are graded by EXACT effective state, not substring
 #   presence: exactly one state line per constrained symbol
 #   (`CONFIG_X=<value>` OR `# CONFIG_X is not set`, exact full line);
@@ -16,6 +16,9 @@ set -euo pipefail
 # - Drift grading first PROVES each audited symbol exists exactly once in
 #   vmlinux and exactly once in System.map; missing/duplicate/unparseable
 #   symbols are REJECTed, never mistaken for drift.
+# - Symbol existence failures MUST be recorded by fail() in the parent
+#   shell. Helpers invoked via $(...) run in a subshell and cannot be
+#   used to increment FAILURES.
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 M02_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
@@ -86,56 +89,56 @@ norm_hex() {
     echo "$1" | sed 's/^0x//; s/^0*//' | tr '[:upper:]' '[:lower:]'
 }
 
-# Existence-proof symbol lookups. Each returns the single address on stdout,
-# or nothing (having already recorded a REJECT via fail()) when the symbol is
-# missing, duplicated, or unparseable. A missing symbol is NEVER a drift.
-sym_addr_vmlinux() {
+# Collect matching symbol addresses (one per line). Output-only: these
+# helpers never call fail() and never mutate FAILURES. Command
+# substitution is safe here because the parent grades the count.
+collect_vmlinux_addrs() {
     local vmlinux="$1" sym="$2"
-    local addrs count
-    addrs=$("$NM" -n "$vmlinux" 2>/dev/null | awk -v s="$sym" '$3 == s {print $1}')
-    count=$(printf '%s\n' "$addrs" | grep -c . || true)
-    if [ "$count" -eq 0 ]; then
-        fail "$vmlinux: symbol $sym MISSING — cannot grade MATCH/DRIFT (missing is not drift)"
-        return 0
-    fi
-    if [ "$count" -gt 1 ]; then
-        fail "$vmlinux: symbol $sym has $count entries — ambiguous, cannot grade MATCH/DRIFT"
-        return 0
-    fi
-    printf '%s\n' "$addrs"
+    "$NM" -n "$vmlinux" 2>/dev/null | awk -v s="$sym" '$3 == s {print $1}'
 }
 
-sym_addr_map() {
+collect_map_addrs() {
     local map="$1" sym="$2"
-    local addrs count
-    addrs=$(awk -v s="$sym" '$3 == s {print $1}' "$map")
-    count=$(printf '%s\n' "$addrs" | grep -c . || true)
-    if [ "$count" -eq 0 ]; then
-        fail "$map: symbol $sym MISSING — cannot grade MATCH/DRIFT (missing is not drift)"
-        return 0
-    fi
-    if [ "$count" -gt 1 ]; then
-        fail "$map: symbol $sym has $count entries — ambiguous, cannot grade MATCH/DRIFT"
-        return 0
-    fi
-    printf '%s\n' "$addrs"
+    awk -v s="$sym" '$3 == s {print $1}' "$map"
 }
 
 # Expect the exact set of drifted symbols in a System.map vs vmlinux.
 # Every audited symbol must first be proven to exist exactly once on BOTH
-# sides; only then are normalized addresses compared.
+# sides in THIS parent-shell function (fail() is never invoked from a
+# command-substitution subshell); only then are normalized addresses
+# compared. Missing/duplicate symbols never reach MATCH/DRIFT.
 expect_drift_profile() {
-    local vmlinux="$1" map="$2" shift
+    local vmlinux="$1"
+    local map="$2"
     shift 2
     local -a expected=("$@")
     local sym drifted=()
     for sym in stext start_kernel setup_arch console_init rest_init kernel_init; do
-        local vaddr maddr nv nmap
-        vaddr=$(sym_addr_vmlinux "$vmlinux" "$sym")
-        maddr=$(sym_addr_map "$map" "$sym")
-        if [ -z "$vaddr" ] || [ -z "$maddr" ]; then
-            continue # existence failure already recorded
+        local vaddrs maddrs vcount mcount vaddr maddr nv nmap
+        vaddrs=$(collect_vmlinux_addrs "$vmlinux" "$sym")
+        maddrs=$(collect_map_addrs "$map" "$sym")
+        vcount=$(printf '%s\n' "$vaddrs" | grep -c . || true)
+        mcount=$(printf '%s\n' "$maddrs" | grep -c . || true)
+
+        if [ "$vcount" -eq 0 ]; then
+            fail "$vmlinux: symbol $sym MISSING — cannot grade MATCH/DRIFT (missing is not drift)"
+            continue
         fi
+        if [ "$vcount" -gt 1 ]; then
+            fail "$vmlinux: symbol $sym has $vcount entries — ambiguous, cannot grade MATCH/DRIFT"
+            continue
+        fi
+        if [ "$mcount" -eq 0 ]; then
+            fail "$map: symbol $sym MISSING — cannot grade MATCH/DRIFT (missing is not drift)"
+            continue
+        fi
+        if [ "$mcount" -gt 1 ]; then
+            fail "$map: symbol $sym has $mcount entries — ambiguous, cannot grade MATCH/DRIFT"
+            continue
+        fi
+
+        vaddr=$vaddrs
+        maddr=$maddrs
         nv=$(norm_hex "$vaddr")
         nmap=$(norm_hex "$maddr")
         if ! [[ "$nv" =~ ^[0-9a-f]+$ ]]; then

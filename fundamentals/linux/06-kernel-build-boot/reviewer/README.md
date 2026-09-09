@@ -19,8 +19,11 @@
   `System.map`; missing symbols are rejected, never accepted as drift.
 - Oracle reference + mutation regression: `reviewer/test_m02_oracle_mutations.sh`
   (reference PASS; decoy-comment REJECT; contradictory-duplicate REJECT;
-  missing-drift-symbol REJECT; profile/zImage mutations REJECT;
-  unrelated-failure guard).
+  missing-drift-symbol REJECT; missing-non-drift-symbol REJECT;
+  duplicate-non-drift-symbol REJECT; profile/zImage mutations REJECT;
+  unrelated-failure guard). Existence failures are recorded in the parent
+  shell so a missing/duplicate MATCH symbol cannot false-pass when the
+  remaining drift set still matches.
 - Fixture generators: `reviewer/scripts/generate_m02_challenge_fixtures.sh`, `reviewer/scripts/generate_m02_gate_fixtures.sh`.
   Materialized opaque fixtures are committed under `challenge/fixtures/` and `gate/fixtures/` for learner consumption.
 
