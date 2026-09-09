@@ -6,6 +6,14 @@ set -euo pipefail
 #   REFERENCE fixture  -> intended PASS
 #   mutated artifact   -> intended semantic REJECT
 #   crash / unrelated failure -> must NOT be counted as a successful reject
+#
+# Round 3 adversarial additions:
+#   - expected config text present ONLY as a decoy/comment while the
+#     effective state is wrong -> REJECT
+#   - contradictory duplicate states for one constrained symbol -> REJECT
+#   - expected-drift symbol missing from vmlinux -> REJECT (missing, not drift)
+#
+# Every test is graded as PREP PASS / ORACLE EXECUTION PASS / INTENDED RESULT.
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 M02_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
@@ -24,7 +32,7 @@ PASS_PATTERN="ASSESSMENT REFERENCE PASS"
 GEN_CHALLENGE="reviewer/scripts/generate_m02_challenge_fixtures.sh"
 GEN_GATE="reviewer/scripts/generate_m02_gate_fixtures.sh"
 
-TOTAL_TESTS=7
+TOTAL_TESTS=10
 PASSED_TESTS=0
 
 materialize() {
@@ -32,11 +40,75 @@ materialize() {
     bash "$GEN_GATE" gate/fixtures "$CROSS_COMPILE"
 }
 
+# Rebuild the challenge vmlinux WITHOUT the symbol the seed expects to drift,
+# while leaving the System.map untouched. The oracle must REJECT for a
+# missing symbol, not accept the empty comparison as drift.
+prep_missing_drift_symbol() {
+    materialize
+    local tmpd
+    tmpd=$(mktemp -d)
+    cat > "$tmpd/mut_syms.S" << 'EOF'
+/* SYNTHETIC PEDAGOGICAL STATIC FIXTURE — NOT A LINUX KERNEL BUILD */
+	.arm
+	.section .head.text, "ax"
+	.globl stext
+stext:
+	b	__create_page_tables
+
+	.globl __create_page_tables
+__create_page_tables:
+	bx	lr
+
+	.globl __enable_mmu
+__enable_mmu:
+	b	__mmap_switched
+
+	.globl __mmap_switched
+__mmap_switched:
+	b	start_kernel
+
+	.section .text, "ax"
+	.globl start_kernel
+start_kernel:
+	bl	setup_arch
+	b	rest_init
+
+	.globl setup_arch
+setup_arch:
+	bx	lr
+
+	.globl rest_init
+rest_init:
+	b	kernel_init
+
+	.globl kernel_init
+kernel_init:
+	bx	lr
+EOF
+    cat > "$tmpd/mut.lds" << 'EOF'
+OUTPUT_ARCH(arm)
+ENTRY(stext)
+SECTIONS
+{
+	. = 0xC0008000;
+	.head.text : { *(.head.text) }
+	. = 0xC0800000;
+	.text : { *(.text) }
+	.rodata : { *(.rodata*) }
+	.data : { *(.data*) }
+	.bss : { *(.bss*) }
+}
+EOF
+    "${CROSS_COMPILE}gcc" -c "$tmpd/mut_syms.S" -o "$tmpd/mut.o"
+    "${CROSS_COMPILE}gcc" -nostdlib -static -Wl,--build-id=none -T "$tmpd/mut.lds" "$tmpd/mut.o" -o challenge/fixtures/candidate_vmlinux
+    rm -rf "$tmpd"
+}
+
 run_oracle_expect() {
     local test_id="$1"
     local desc="$2"
     local prep_cmd="$3"
-    local expect_kind="$4"   # PASS | REJECT | GUARD
+    local expect_kind="$4"   # PASS | REJECT
     local out=""
     local rc=0
 
@@ -59,6 +131,7 @@ run_oracle_expect() {
         echo "$out"
         return 1
     fi
+    echo "  ORACLE EXECUTION: PASS (no crash, exit $rc)"
 
     case "$expect_kind" in
         PASS)
@@ -97,48 +170,69 @@ run_oracle_expect \
     "materialize" \
     "PASS"
 
-# Test 2: challenge config mutated — expected deviation removed
+# Test 2: challenge config mutated — seeded deviation removed (state replaced)
 run_oracle_expect \
     2 \
     "Challenge config mutated (seeded deviation removed)" \
     "materialize; sed -i 's/^CONFIG_ARM_LPAE=y/# CONFIG_ARM_LPAE is not set/' challenge/fixtures/candidate_effective.config" \
     "REJECT"
 
-# Test 3: challenge System.map mutated — expected drift repaired
+# Test 3: expected text present only as decoy/comment, effective state wrong
 run_oracle_expect \
     3 \
+    "Challenge config decoy: expected text only in a comment while effective state is wrong" \
+    "materialize; sed -i 's/^CONFIG_ARM_LPAE=y$/# CONFIG_ARM_LPAE=y (decoy note)/' challenge/fixtures/candidate_effective.config; printf '# CONFIG_ARM_LPAE is not set\n' >> challenge/fixtures/candidate_effective.config" \
+    "REJECT"
+
+# Test 4: contradictory duplicate states for one constrained symbol
+run_oracle_expect \
+    4 \
+    "Challenge config contradictory duplicate states for one symbol" \
+    "materialize; printf '# CONFIG_ARM_LPAE is not set\n' >> challenge/fixtures/candidate_effective.config" \
+    "REJECT"
+
+# Test 5: expected-drift symbol missing from vmlinux -> REJECT as missing, not drift
+run_oracle_expect \
+    5 \
+    "Challenge vmlinux missing the expected-drift symbol" \
+    "prep_missing_drift_symbol" \
+    "REJECT"
+
+# Test 6: challenge System.map mutated — expected drift repaired
+run_oracle_expect \
+    6 \
     "Challenge System.map mutated (seeded drift repaired)" \
     "materialize; \$(command -v ${CROSS_COMPILE}nm || echo nm) -n challenge/fixtures/candidate_vmlinux | awk '{print \$1, \$2, \$3}' > challenge/fixtures/candidate_System.map" \
     "REJECT"
 
-# Test 4: gate config mutated — expected deviation removed
+# Test 7: gate config mutated — expected deviation removed
 run_oracle_expect \
-    4 \
+    7 \
     "Gate config mutated (seeded deviation removed)" \
     "materialize; sed -i 's/^# CONFIG_VIRTIO_BLK is not set/CONFIG_VIRTIO_BLK=y/' gate/fixtures/gate_effective.config" \
     "REJECT"
 
-# Test 5: gate System.map mutated — drift moved to a different symbol
+# Test 8: gate System.map mutated — drift moved to a different symbol
 run_oracle_expect \
-    5 \
+    8 \
     "Gate System.map mutated (drift moved to an unintended symbol)" \
     "materialize; \$(command -v ${CROSS_COMPILE}nm || echo nm) -n gate/fixtures/gate_vmlinux | awk '{if (\$3 == \"start_kernel\") print \"c0809000\", \$2, \$3; else print \$1, \$2, \$3}' > gate/fixtures/gate_System.map" \
     "REJECT"
 
-# Test 6: gate zImage mutated — magic corrupted
+# Test 9: gate zImage mutated — magic corrupted
 run_oracle_expect \
-    6 \
+    9 \
     "Gate zImage mutated (boot magic corrupted)" \
     "materialize; python3 -c 'import struct; b = bytearray(64); struct.pack_into(\"<I\", b, 0x24, 0xdeadbeef); open(\"gate/fixtures/gate_zImage\", \"wb\").write(b)'" \
     "REJECT"
 
-# Test 7: guard — unrelated oracle failure must not be counted as a semantic reject
+# Test 10: guard — unrelated oracle failure must not be counted as a semantic reject
 # (bogus toolchain makes the oracle exit nonzero with an environment error that
 #  does NOT carry the semantic reject pattern)
 echo "------------------------------------------------------------------"
-echo "Test 7: Unrelated oracle failure must not count as semantic reject"
+echo "Test 10: Unrelated oracle failure must not count as semantic reject"
 if ! materialize >/dev/null 2>&1; then
-    echo "[TEST 7 FAIL] Fixture prep stage failed!"
+    echo "[TEST 10 FAIL] Fixture prep stage failed!"
     exit 1
 fi
 echo "  PREP: PASS"
@@ -149,17 +243,17 @@ GUARD_RC=$?
 set -e
 
 if [ "$GUARD_RC" -ge 128 ]; then
-    echo "[TEST 7 FAIL] Oracle crashed with signal $((GUARD_RC - 128))!"
+    echo "[TEST 10 FAIL] Oracle crashed with signal $((GUARD_RC - 128))!"
     echo "$GUARD_OUT"
     exit 1
 fi
 if [ "$GUARD_RC" -eq 0 ]; then
-    echo "[TEST 7 FAIL] Oracle falsely PASSED a broken environment!"
+    echo "[TEST 10 FAIL] Oracle falsely PASSED a broken environment!"
     echo "$GUARD_OUT"
     exit 1
 fi
 if echo "$GUARD_OUT" | grep -Eq "$REJECT_PATTERN"; then
-    echo "[TEST 7 FAIL] Unrelated failure was miscounted as a semantic reject!"
+    echo "[TEST 10 FAIL] Unrelated failure was miscounted as a semantic reject!"
     echo "$GUARD_OUT"
     exit 1
 fi

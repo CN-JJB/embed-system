@@ -14,6 +14,9 @@ CC="${CROSS_COMPILE}gcc"
 mkdir -p "$OUT_DIR"
 
 # Opaque candidate set (fresh variant; mapping is reviewer-only):
-printf '#include <stdio.h>\nint main(void){puts("gate-probe");return 211;}\n' | "$CC" -x c - -O2 -o "$OUT_DIR/candidate_alpha"
+# -no-pie pins the dynamic candidate to ET_EXEC form across canonical and
+# distro toolchains (Ubuntu gcc defaults to PIE/ET_DYN, which is not the
+# assessment's intended "executable form").
+printf '#include <stdio.h>\nint main(void){puts("gate-probe");return 211;}\n' | "$CC" -x c - -no-pie -O2 -o "$OUT_DIR/candidate_alpha"
 echo 'int main(void){return 222;}' | "$CC" -x c - -static -O2 -o "$OUT_DIR/candidate_beta"
 echo 'int main(void){return 233;}' | "$HOST_CC" -x c - -O2 -o "$OUT_DIR/candidate_gamma"

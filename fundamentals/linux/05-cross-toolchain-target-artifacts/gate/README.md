@@ -2,6 +2,8 @@
 
 > **AI Policy:** Strict AI-Free. Official man-pages and Binutils docs allowed.
 
+> **Scoring rule:** During the scored AI-Free attempt, you must not inspect reviewer-only materials until scoring is complete.
+
 ## Instructions
 1. Run `make all` inside `gate/` to verify that the three provisioned blind candidate binaries are in place:
    - `fixtures/candidate_alpha`

@@ -17,7 +17,15 @@
 
 ## Assessment Oracle & Regression
 - Grading oracle: `reviewer/oracle_m01.sh` (single source of truth for the mapping).
-- Oracle reference + mutation regression: `reviewer/test_m01_oracle_mutations.sh`.
+  Classification uses semantic ELF headers/segments only: `TARGET_STATIC` requires
+  ARM + `ET_EXEC` + no `PT_INTERP` + no `PT_DYNAMIC`/dynamic section;
+  `TARGET_DYNAMIC` requires ARM + `ET_EXEC` + `PT_INTERP`, with the requested
+  interpreter bound to the intended loader contract; `HOST_OR_NON_ARM` is bound
+  to the actual ELF machine identity. `ET_DYN` artifacts can never satisfy the
+  static or dynamic classes.
+- Oracle reference + mutation regression: `reviewer/test_m01_oracle_mutations.sh`
+  (reference PASS; ET_DYN-as-static REJECT; unintended-interpreter REJECT;
+  host-replacement REJECT; unrelated-failure guard).
 - Fixture generators: `reviewer/scripts/generate_m01_challenge_fixtures.sh`, `reviewer/scripts/generate_m01_gate_fixtures.sh`.
   Materialized opaque fixtures are committed under `challenge/fixtures/` and `gate/fixtures/` for learner consumption.
 

@@ -2,6 +2,8 @@
 
 > **AI Policy:** Strict AI-Free. Official Linux Documentation and ARM manuals allowed.
 
+> **Scoring rule:** During the scored AI-Free attempt, you must not inspect reviewer-only materials until scoring is complete.
+
 ## Instructions
 1. Run `make all` inside `gate/` to verify the provisioned evaluation artifacts are in place:
    - `fixtures/gate_effective.config`

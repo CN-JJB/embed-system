@@ -12,7 +12,15 @@
 
 ## Assessment Oracle & Regression
 - Grading oracle: `reviewer/oracle_m02.sh` (single source of truth for the seeded assessment design).
-- Oracle reference + mutation regression: `reviewer/test_m02_oracle_mutations.sh`.
+  Config grading uses exact Kconfig effective states: exactly one full-line state
+  per constrained symbol (`CONFIG_X=<value>` or `# CONFIG_X is not set`);
+  contradictory duplicates and decoy/comment text are rejected. Drift grading
+  first proves each audited symbol exists exactly once in `vmlinux` and in
+  `System.map`; missing symbols are rejected, never accepted as drift.
+- Oracle reference + mutation regression: `reviewer/test_m02_oracle_mutations.sh`
+  (reference PASS; decoy-comment REJECT; contradictory-duplicate REJECT;
+  missing-drift-symbol REJECT; profile/zImage mutations REJECT;
+  unrelated-failure guard).
 - Fixture generators: `reviewer/scripts/generate_m02_challenge_fixtures.sh`, `reviewer/scripts/generate_m02_gate_fixtures.sh`.
   Materialized opaque fixtures are committed under `challenge/fixtures/` and `gate/fixtures/` for learner consumption.
 

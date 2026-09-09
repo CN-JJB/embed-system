@@ -14,6 +14,9 @@ CC="${CROSS_COMPILE}gcc"
 mkdir -p "$OUT_DIR"
 
 # Opaque candidate set (fresh variant; mapping is reviewer-only):
+# -no-pie pins the dynamic candidate to ET_EXEC form across canonical and
+# distro toolchains (Ubuntu gcc defaults to PIE/ET_DYN, which is not the
+# assessment's intended "executable form").
 echo 'int main(void){return 111;}' | "$HOST_CC" -x c - -O2 -o "$OUT_DIR/unknown_1"
-printf '#include <stdio.h>\nint main(void){puts("artifact-probe");return 122;}\n' | "$CC" -x c - -O2 -o "$OUT_DIR/unknown_2"
+printf '#include <stdio.h>\nint main(void){puts("artifact-probe");return 122;}\n' | "$CC" -x c - -no-pie -O2 -o "$OUT_DIR/unknown_2"
 echo 'int main(void){return 133;}' | "$CC" -x c - -static -O2 -o "$OUT_DIR/unknown_3"
