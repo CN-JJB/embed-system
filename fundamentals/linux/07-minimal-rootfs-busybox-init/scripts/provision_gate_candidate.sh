@@ -41,7 +41,17 @@ if [ ! -f "$LAYER" ]; then
 fi
 
 # 1. Provision the verified real BusyBox base tree (validates staging identity).
-bash "$M03_ROOT/scripts/provision_real_busybox_tree.sh" "$OUT" >/dev/null
+# Fail closed here too: an infrastructure error during base materialization
+# must not leave a partial directory that a later learner `make provision`
+# could mistake for an existing candidate.
+if bash "$M03_ROOT/scripts/provision_real_busybox_tree.sh" "$OUT" >/dev/null; then
+    :
+else
+    rc=$?
+    rm -rf "$OUT"
+    echo "ERROR: base BusyBox candidate materialization failed." >&2
+    exit "$rc"
+fi
 
 # 2. Apply the opaque assignment input (generic applicator, fail closed).
 # On failure the partial tree is removed so a retry starts clean. The
