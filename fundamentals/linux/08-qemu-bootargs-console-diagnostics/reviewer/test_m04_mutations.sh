@@ -171,6 +171,19 @@ MUT11="$WORK_DIR/mut11_wrong_rdinit.conf"
 mutate_manifest "$MUT11" 's#^BOOTARGS=.*#BOOTARGS=earlycon=pl011,0x09000000 console=ttyAMA0,115200 rdinit=/init-bad#'
 assert_contract_rejected "rdinit selector is not the canonical /init" "$MUT11"
 
+# 7b. Exact-BOOTARGS controls (Round 3): the scored canonical manifest must
+#     carry exactly the three canonical tokens with no extras. A
+#     harmless-looking extra token and a behavior-changing extra token must
+#     both REJECT, while the canonical three-token reference PASSES (positive
+#     control at the end of this suite).
+MUT11B="$WORK_DIR/mut11b_extra_harmless.conf"
+mutate_manifest "$MUT11B" 's#^BOOTARGS=.*#BOOTARGS=earlycon=pl011,0x09000000 console=ttyAMA0,115200 rdinit=/init loglevel=8#'
+assert_contract_rejected "Extra harmless token (loglevel=8) beyond the canonical set" "$MUT11B"
+
+MUT11C="$WORK_DIR/mut11c_extra_behavior.conf"
+mutate_manifest "$MUT11C" 's#^BOOTARGS=.*#BOOTARGS=earlycon=pl011,0x09000000 console=ttyAMA0,115200 rdinit=/init init=/bin/sh#'
+assert_contract_rejected "Extra behavior-changing token (init=/bin/sh) beyond the canonical set" "$MUT11C"
+
 # 8. Manifest-integrity defects: an unknown key, a duplicate key, and
 #    non-declarative shell content (an invocation smuggled next to correct
 #    declarations) must all REJECT.

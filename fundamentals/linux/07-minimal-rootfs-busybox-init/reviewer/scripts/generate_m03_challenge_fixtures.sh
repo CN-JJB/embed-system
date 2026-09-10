@@ -3,14 +3,17 @@ set -euo pipefail
 
 # Reviewer-isolated fixture generator for P3-M03 Challenge (REVIEWER-ONLY).
 #
-# Materializes:
-#   <OUT_DIR>/defective_rootfs     opaque defective REAL-BusyBox tree
-#   reviewer/reference/challenge_rootfs   reviewer-only fixed reference
+# Materializes (both gitignored, on demand from verified local staging):
+#   <OUT_DIR>/defective_rootfs           defective REAL-BusyBox candidate
+#   reviewer/reference/challenge_rootfs  reviewer-only fixed reference
 #
-# Both trees are built from the verified REAL BusyBox 1.36.1 staging artifact
-# (scripts/provision_real_busybox_tree.sh). The synthetic pedagogical fixture
-# is NEVER used for scored assessment material. The hidden defect set is
-# encoded only here and must never reach learner-facing material.
+# Both trees are built from the verified REAL BusyBox 1.36.1 staging artifact.
+# The synthetic pedagogical fixture is NEVER used for scored assessment
+# material. The defective state is the small learner-visible assessment delta
+# (challenge/fixtures/defects.manifest + defective_overlay/), instantiated via
+# the learner-safe scripts/provision_challenge_candidate.sh so the reviewer
+# defective is byte-identical to the learner provision output. The fixed
+# reference is reviewer-only and is never tracked in Git.
 
 OUT_DIR="${1:-challenge/fixtures}"
 CROSS_COMPILE="${2:-arm-none-linux-gnueabihf-}"
@@ -56,30 +59,14 @@ printf '%s\n' \
 rm -rf "$REF_DIR"
 cp -a "$GOOD" "$REF_DIR"
 
-# 3. Apply the hidden defective variant (rotated Round 2; distinct from the
-# Gate family). Constraint: never seed missing directories (git cannot store
-# empty mount-point dirs and provisioning scaffolds the FHS skeleton), and
-# never damage /bin/busybox itself (the real artifact is not reparaphraseable
-# by hand -- only applet wiring, permissions, and init configuration may be
-# defective).
-BAD="$WORK/bad"
-cp -a "$GOOD" "$BAD"
-# --- hidden defect set: encoded here only (reviewer-only) ---
-ln -sf stale_target "$BAD/bin/ls"
-chmod 644 "$BAD/etc/init.d/rcS"
-printf '%s\n' \
-    '::sysinit:/etc/init.d/rcS' \
-    'console::askfirst:-/bin/sh' \
-    '::ctrlaltdel:/sbin/reboot' \
-    '::shutdown:/bin/umount -a -r' \
-    > "$BAD/etc/inittab"
-printf '#!/bin/sh\n# startup mounts documented below (not yet active)\n# mount -t proc none /proc\nmount -t sysfs none /sys\nmount -t devtmpfs none /dev 2>/dev/null || true\n' \
-    > "$BAD/etc/init.d/rcS"
-chmod 644 "$BAD/etc/init.d/rcS"
-# --- end hidden defect set ---
-
+# 3. Materialize the defective variant via the learner-safe provisioner so
+# the reviewer defective is byte-identical to the learner workspace.
+# Constraint: never damage /bin/busybox itself (the real artifact is not
+# reparable by hand -- only applet wiring, permissions, and init
+# configuration may be defective). The exact defective content lives in the
+# small tracked assessment delta, not in this generator.
 rm -rf "$OUT_DIR/defective_rootfs"
-cp -a "$BAD" "$OUT_DIR/defective_rootfs"
+bash "$M03_ROOT/scripts/provision_challenge_candidate.sh" "$OUT_DIR/defective_rootfs" >/dev/null
 
 # 4. Audit both published trees for REAL BusyBox identity (static).
 bash "$M03_ROOT/scripts/validate_real_busybox.sh" "$REF_DIR" >/dev/null

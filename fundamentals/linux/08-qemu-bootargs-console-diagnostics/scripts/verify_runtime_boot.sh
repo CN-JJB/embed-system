@@ -65,6 +65,20 @@ if [ "$NCONS" -ne 1 ]; then
     exit 2
 fi
 echo "[PASS] Logged command line bound to expected bootargs ($NCONS console token)."
+# Exact binding: no extra tokens beyond the expected canonical set
+# (order-insensitive). Closes the harmless-extra-arg false-pass at runtime.
+# Note: QEMU serial captures carry trailing CR characters; strip them before
+# the set comparison (the subset check above is CR-insensitive via grep -F).
+LOGGED_ARGS=$(echo "$CMDLINE" | tr -d '\r' | sed -n 's/.*Kernel command line:[[:space:]]*//p' | tr -s ' ' | sed 's/^ *//;s/ *$//')
+if [ -n "$LOGGED_ARGS" ]; then
+    EXPECT_SORTED=$(echo "$EXPECTED_BOOTARGS" | tr -d '\r' | tr ' ' '\n' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ *$//')
+    LOGGED_SORTED=$(echo "$LOGGED_ARGS" | tr ' ' '\n' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ *$//')
+    if [ "$EXPECT_SORTED" != "$LOGGED_SORTED" ]; then
+        echo "REJECT: Logged kernel command line carries extra/mismatched tokens (expected '$EXPECTED_BOOTARGS', logged '$LOGGED_ARGS')." >&2
+        exit 2
+    fi
+    echo "[PASS] Logged command line exactly matches the expected bootargs token set."
+fi
 
 expect_after "memory detection" "Memory: .* available"
 expect_after "console driver handoff (ttyAMA0 enabled)" "printk: console \[ttyAMA0\] enabled"

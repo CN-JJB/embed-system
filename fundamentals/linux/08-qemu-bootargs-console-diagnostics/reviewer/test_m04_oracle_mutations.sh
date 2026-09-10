@@ -268,6 +268,21 @@ sed -i 's#^MEM=512M$#MEM=$(echo 256M)#' "$MUTWORK/subst.conf"
 run_oracle_expect "21" "Manifest value uses command substitution" \
     "REJECT" "$MUTWORK/subst.conf"
 
+# 21b. Exact-BOOTARGS (Round 3): canonical three tokens + harmless-looking
+#      extra token (loglevel=8) -> REJECT. The scored manifest allows no
+#      additional kernel args.
+sed 's#^BOOTARGS=.*#BOOTARGS=earlycon=pl011,0x09000000 console=ttyAMA0,115200 rdinit=/init loglevel=8#' \
+    "$REF_MANIFEST" > "$MUTWORK/extra_harmless.conf"
+run_oracle_expect "21b" "Canonical BOOTARGS plus harmless extra token (loglevel=8)" \
+    "REJECT" "$MUTWORK/extra_harmless.conf"
+
+# 21c. Exact-BOOTARGS (Round 3): canonical three tokens + behavior-changing
+#      extra token (init=/bin/sh) -> REJECT.
+sed 's#^BOOTARGS=.*#BOOTARGS=earlycon=pl011,0x09000000 console=ttyAMA0,115200 rdinit=/init init=/bin/sh#' \
+    "$REF_MANIFEST" > "$MUTWORK/extra_behavior.conf"
+run_oracle_expect "21c" "Canonical BOOTARGS plus behavior-changing extra token (init=/bin/sh)" \
+    "REJECT" "$MUTWORK/extra_behavior.conf"
+
 # ------------------------------------------- infrastructure failure control
 # 22. Unrelated tool failure must NOT be reported as a semantic REJECT.
 TOTAL_TESTS=$((TOTAL_TESTS + 1))

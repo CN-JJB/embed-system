@@ -3,16 +3,19 @@ set -euo pipefail
 
 # Reviewer-isolated fixture generator for P3-M03 Gate (REVIEWER-ONLY).
 #
-# Materializes:
-#   <OUT_DIR>/defective_rootfs        opaque defective REAL-BusyBox tree
+# Materializes (both gitignored, on demand from verified local staging):
+#   <OUT_DIR>/defective_rootfs        defective REAL-BusyBox candidate
 #   reviewer/reference/gate_rootfs    reviewer-only fixed reference
 #
-# Both trees are built from the verified REAL BusyBox 1.36.1 staging artifact
-# (scripts/provision_real_busybox_tree.sh). The synthetic pedagogical fixture
-# is NEVER used for scored assessment material: the scored Gate candidate must
-# contain the real /bin/busybox, real applet symlinks, and a real BusyBox
-# /sbin/init, and the reviewer runtime boots the learner's packaged archive.
-# The hidden defect set is encoded only here.
+# Both trees are built from the verified REAL BusyBox 1.36.1 staging artifact.
+# The synthetic pedagogical fixture is NEVER used for scored assessment
+# material: the scored Gate candidate must contain the real /bin/busybox,
+# real applet symlinks, and a real BusyBox /sbin/init, and the reviewer
+# runtime boots the learner's packaged archive. The defective state is the
+# small learner-visible assessment delta (gate/fixtures/defects.manifest +
+# defective_overlay/), instantiated via the learner-safe
+# scripts/provision_gate_candidate.sh so the reviewer defective is
+# byte-identical to the learner provision output.
 
 OUT_DIR="${1:-gate/fixtures}"
 CROSS_COMPILE="${2:-arm-none-linux-gnueabihf-}"
@@ -62,28 +65,13 @@ rm -rf "$REF_DIR"
 cp -a "$GOOD" "$REF_DIR"
 bash "$M03_ROOT/scripts/package_initramfs.sh" "$REF_DIR" "$M03_ROOT/reviewer/reference/gate_rootfs.cpio.gz" >/dev/null
 
-# 3. Apply the hidden defective variant (rotated Round 2, distinct from the
-# Challenge family). Same constraints: no seeded missing directories, no
-# damage to the real /bin/busybox artifact, and the /init shell-script path
-# stays intact so the defects must be reasoned about rather than guessed.
-BAD="$WORK/bad"
-cp -a "$GOOD" "$BAD"
-# --- hidden defect set: encoded here only (reviewer-only) ---
-rm -f "$BAD/bin/ps"
-ln -sf stale_target "$BAD/bin/mount"
-printf '%s\n' \
-    '::sysinit:/etc/init.d/rcS' \
-    'ttyS0::askfirst:-/bin/sh' \
-    '::ctrlaltdel:/sbin/reboot' \
-    '::shutdown:/bin/umount -a -r' \
-    > "$BAD/etc/inittab"
-printf '#!/bin/sh\nmount -t proc none /proc\n# mount -t sysfs none /sys\necho "mount -t sysfs none /sys"\nmount -t devtmpfs none /dev 2>/dev/null || true\necho "=== Embedded Linux System Initialized (real BusyBox) ==="\n' \
-    > "$BAD/etc/init.d/rcS"
-chmod 644 "$BAD/etc/init.d/rcS"
-# --- end hidden defect set ---
-
+# 3. Materialize the defective variant via the learner-safe provisioner so
+# the reviewer defective is byte-identical to the learner workspace.
+# Same constraints: no damage to the real /bin/busybox artifact, and the
+# /init shell-script path stays intact. The exact defective content lives in
+# the small tracked assessment delta, not in this generator.
 rm -rf "$OUT_DIR/defective_rootfs"
-cp -a "$BAD" "$OUT_DIR/defective_rootfs"
+bash "$M03_ROOT/scripts/provision_gate_candidate.sh" "$OUT_DIR/defective_rootfs" >/dev/null
 
 # 4. Audit the reviewer reference for REAL BusyBox identity (static).
 bash "$M03_ROOT/scripts/validate_real_busybox.sh" "$REF_DIR" >/dev/null

@@ -1,10 +1,12 @@
 CROSS_COMPILE ?= arm-none-linux-gnueabihf-
 M03_ROOT := $(abspath ..)
 
-# Opaque pre-provisioned defective REAL-BusyBox tree (reviewer-authored,
-# rotated). It contains the verified real /bin/busybox and genuine applet
-# symlinks; only wiring, permissions and init configuration are damaged.
-FIXTURE := $(CURDIR)/fixtures/defective_rootfs
+# Learner-visible assessment delta (small, tracked): the verified real
+# BusyBox base comes from BUSYBOX_STAGING, and only wiring/configuration
+# deltas are applied from fixtures/defective_overlay/ + defects.manifest.
+# The expanded BusyBox binary + applet forest are never tracked in Git.
+OVERLAY := $(CURDIR)/fixtures/defective_overlay
+MANIFEST := $(CURDIR)/fixtures/defects.manifest
 # Learner working copy. Repair defects here; never edit fixtures/ in place.
 CANDIDATE := $(CURDIR)/build/candidate_rootfs
 CANDIDATE_ARCHIVE := $(CURDIR)/build/candidate.cpio.gz
@@ -13,17 +15,20 @@ CANDIDATE_ARCHIVE := $(CURDIR)/build/candidate.cpio.gz
 
 all: provision
 
-# Copy the opaque defective tree into the learner workspace (never
-# overwrites an in-progress repair). The mkdir scaffolds the standard FHS
-# skeleton because git cannot store empty mount-point directories; it is
-# generic Lab 3.1 scaffolding, never a scored fix.
+# Provision the defective candidate from verified local staging plus the
+# small assessment delta (never overwrites an in-progress repair). Requires
+# BUSYBOX_STAGING (default /tmp/rootfs-busybox-staging) from:
+#   CROSS_COMPILE=<prefix> bash ../scripts/build_real_busybox.sh
+# The mkdir scaffolds the standard FHS skeleton because git cannot store
+# empty mount-point directories; it is generic Lab 3.1 scaffolding, never
+# a scored fix.
 provision:
 	@mkdir -p $(CURDIR)/build
 	@if [ ! -d "$(CANDIDATE)" ]; then \
-		cp -a $(FIXTURE) $(CANDIDATE); \
+		BUSYBOX_STAGING="$${BUSYBOX_STAGING:-/tmp/rootfs-busybox-staging}" bash $(M03_ROOT)/scripts/provision_gate_candidate.sh $(CANDIDATE); \
 		chmod -R u+rwX $(CANDIDATE); \
 		mkdir -p $(CANDIDATE)/bin $(CANDIDATE)/sbin $(CANDIDATE)/etc/init.d $(CANDIDATE)/dev $(CANDIDATE)/proc $(CANDIDATE)/sys $(CANDIDATE)/tmp $(CANDIDATE)/run $(CANDIDATE)/mnt $(CANDIDATE)/root; \
-		echo "[GATE] Provisioned opaque candidate tree at $(CANDIDATE)"; \
+		echo "[GATE] Provisioned defective candidate tree at $(CANDIDATE)"; \
 		echo "[GATE] Diagnose, repair, then run: make package && make check"; \
 		echo "[GATE] Runtime grading boots YOUR packaged candidate.cpio.gz: make package is required."; \
 	else \

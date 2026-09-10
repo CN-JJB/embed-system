@@ -180,6 +180,22 @@ else
     else
         pass "logged kernel command line bound to the executed bootargs (1 console token)"
     fi
+    # Exact binding: the logged command line must carry exactly the executed
+    # bootargs token set (order-insensitive, no extras). The manifest parser
+    # already rejects extra tokens; this closes the runtime half where a
+    # valid manifest is paired with a foreign log carrying extras.
+    # Note: QEMU serial captures carry trailing CR characters; strip them
+    # before the set comparison.
+    LOGGED_ARGS=$(echo "$CMDLINE" | tr -d '\r' | sed -n 's/.*Kernel command line:[[:space:]]*//p' | tr -s ' ' | sed 's/^ *//;s/ *$//')
+    if [ -n "$LOGGED_ARGS" ] && [ -n "$P_BOOTARGS" ]; then
+        EXPECT_SORTED=$(echo "$P_BOOTARGS" | tr -d '\r' | tr ' ' '\n' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ *$//')
+        LOGGED_SORTED=$(echo "$LOGGED_ARGS" | tr ' ' '\n' | LC_ALL=C sort | tr '\n' ' ' | sed 's/ *$//')
+        if [ "$EXPECT_SORTED" != "$LOGGED_SORTED" ]; then
+            reject "logged kernel command line token set differs from executed bootargs (expected '$P_BOOTARGS', logged '$LOGGED_ARGS')"
+        else
+            pass "logged kernel command line exactly matches the executed bootargs token set"
+        fi
+    fi
 fi
 
 # Guest-visible RAM must match the executed -m value.

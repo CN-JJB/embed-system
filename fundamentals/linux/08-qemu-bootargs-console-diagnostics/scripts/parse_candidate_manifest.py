@@ -130,7 +130,15 @@ def parse_manifest(path):
 
 
 def validate_bootargs(bootargs):
-    """Semantic canonical bootargs contract: exact tokens, exactly one console."""
+    """Semantic canonical bootargs contract: exact three-token set, no extras.
+
+    The scored M04 candidate manifest must carry exactly the canonical
+    semantic token set (order-insensitive):
+      earlycon=pl011,0x09000000 console=ttyAMA0,115200 rdinit=/init
+    No additional kernel command-line tokens are permitted in the scored
+    manifest. Optional debug args belong in a separate non-scored
+    diagnostic profile, never silently in the canonical Gate manifest.
+    """
     for meta in SHELL_METACHAR_RE.findall(bootargs):
         reject(f"BOOTARGS contains shell metacharacter {meta!r}")
     tokens = bootargs.split()
@@ -165,6 +173,24 @@ def validate_bootargs(bootargs):
     if len(tokens) != len(set(tokens)):
         dupes = sorted({t for t in tokens if tokens.count(t) > 1})
         reject(f"BOOTARGS contains duplicate tokens: {dupes}")
+
+    # Exact canonical semantic token set, actively enforced via
+    # CANONICAL_BOOTARGS (order-insensitive set comparison, no extras).
+    canonical_set = set(CANONICAL_BOOTARGS.split())
+    token_set = set(tokens)
+    if token_set != canonical_set:
+        extras = sorted(token_set - canonical_set)
+        if extras:
+            reject(
+                "BOOTARGS carries extra non-canonical token(s) %r; scored "
+                "canonical manifest requires exactly '%s' (no additional "
+                "kernel args)" % (extras, CANONICAL_BOOTARGS))
+    if len(tokens) != len(canonical_set):
+        if len(tokens) > len(canonical_set):
+            reject(
+                "BOOTARGS carries %d tokens; scored canonical manifest "
+                "requires exactly %d ('%s')" % (
+                    len(tokens), len(canonical_set), CANONICAL_BOOTARGS))
 
 
 def validate_machine(value):

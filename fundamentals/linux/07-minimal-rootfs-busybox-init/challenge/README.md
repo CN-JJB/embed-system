@@ -4,7 +4,7 @@
 
 In Lab 3.4, you used a simple shell script (`/init`) to bootstrap userspace. Production Embedded Linux systems typically use a dedicated init supervisor like **BusyBox `/sbin/init`** configured through `/etc/inittab`.
 
-A defective candidate tree has been pre-provisioned for you (opaque, reviewer-authored). It is a **real BusyBox 1.36.1 tree**: `/bin/busybox` is the verified static ARM build artifact and the applet entries are genuine BusyBox applet links. Only the *wiring and configuration* are damaged, drawn from the families you practiced in the labs and faults:
+A defective candidate is provisioned for you from your verified local BusyBox staging plus a small assessment delta. It is a **real BusyBox 1.36.1 tree**: `/bin/busybox` is the verified static ARM build artifact and the applet entries are genuine BusyBox applet links. Only the *wiring and configuration* are damaged, drawn from the families you practiced in the labs and faults:
 
 - file permissions;
 - applet symlink targets;
@@ -13,11 +13,19 @@ A defective candidate tree has been pre-provisioned for you (opaque, reviewer-au
 
 Your mission:
 
-1. Provision the working copy:
+1. Build the verified staging once (if not already present):
+   ```bash
+   CROSS_COMPILE=<prefix> bash ../scripts/build_real_busybox.sh
+   ```
+   This produces `BUSYBOX_STAGING` (default `/tmp/rootfs-busybox-staging`).
+2. Provision the working copy:
    ```bash
    make provision
    ```
-2. Apply the disciplined diagnostic loop (symptom → hypotheses → evidence → root cause → fix → regression) to find every defect in `build/candidate_rootfs/`.
+   This injects the verified real BusyBox base plus the small assessment
+   delta into `build/candidate_rootfs/` (the expanded binary + applet
+   forest are never tracked in Git).
+3. Apply the disciplined diagnostic loop (symptom → hypotheses → evidence → root cause → fix → regression) to find every defect in `build/candidate_rootfs/`.
 3. Repair all defects so the tree satisfies the production contract below.
 4. Package and self-check:
    ```bash
@@ -42,13 +50,13 @@ Your repaired candidate must satisfy:
 
 > [!IMPORTANT]
 > - **AI-Free Mode**: You may consult official upstream documentation (BusyBox FAQ, Linux kernel documentation, man pages `inittab(5)`), but you must NOT use automated AI code generation.
-> - **Assessment Integrity**: You must NOT inspect grading reference solutions or hidden test fixtures until your attempt is submitted and scored. The exact defect set is hidden; do not look for it outside `fixtures/defective_rootfs/` and your working copy.
+> - **Assessment Integrity**: You must NOT inspect grading reference solutions or hidden test fixtures until your attempt is submitted and scored. Diagnose only your working copy plus the small learner-visible assessment delta under `fixtures/`; the reviewer reference stays hidden.
 > - **Verification Evidence**: A valid submission requires the repaired `build/candidate_rootfs/` tree plus the packaged `build/candidate.cpio.gz`.
 
 ## 4. Commands
 
 ```bash
-make provision   # stage the opaque defective tree (no answers inside)
+make provision   # stage the defective candidate from verified staging + small delta (no answers inside)
 make package     # package your repaired candidate
 make check       # learner-safe structure + real-BusyBox identity self-check
 ```

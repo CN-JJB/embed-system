@@ -6,3 +6,14 @@ gate/build/
 *.elf
 *.cpio
 *.cpio.gz
+# Generated real-BusyBox assessment/reference trees (Round 3):
+# provisioned on demand from the verified local BUSYBOX_STAGING via
+# scripts/provision_*_candidate.sh and reviewer/scripts/generate_*_fixtures.sh.
+# Only the small assessment deltas (defects.manifest + defective_overlay/)
+# are tracked; the expanded binary + applet forest must never be committed.
+challenge/fixtures/defective_rootfs/
+gate/fixtures/defective_rootfs/
+reviewer/reference/challenge_rootfs/
+reviewer/reference/gate_rootfs/
+reviewer/reference/*.cpio.gz
+reviewer/reference/*.cpio

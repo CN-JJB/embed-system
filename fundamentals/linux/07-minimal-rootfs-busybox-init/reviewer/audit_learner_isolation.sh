@@ -19,6 +19,8 @@ echo "=================================================================="
 VIOLATIONS=0
 
 # --- Rule 1: no learner-facing file may contain a direct "reviewer/" path ---
+# Note: .gitignore hygiene entries (ignoring generated reviewer reference
+# trees) are not code dependencies and are exempt.
 while IFS= read -r file; do
     if grep -Il -- "reviewer/" "$file" >/dev/null 2>&1; then
         echo "[ISOLATION VIOLATION] Learner-facing file contains direct 'reviewer/' dependency:"
@@ -34,6 +36,7 @@ done < <(find "$MODULE_ROOT" -type f \
     -not -path "$MODULE_ROOT/gate/build/*" \
     -not -path "$MODULE_ROOT/challenge/fixtures/*" \
     -not -path "$MODULE_ROOT/gate/fixtures/*" \
+    -not -name ".gitignore" \
     -not -name "*.o" -not -name "*.elf")
 
 # --- Rule 2: no learner-facing file may carry a reviewer-only filename ---
