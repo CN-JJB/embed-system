@@ -40,6 +40,12 @@
 3. **Synthetic vs Real Evidence Contract**:
    - `fixtures/src/synthetic_multicall.c` builds `SYNTHETIC PEDAGOGICAL FIXTURE — NOT BUSYBOX` (`synthetic_rootfs.cpio.gz`) for fast static/component teaching only.
    - Real runtime evidence always comes from `scripts/stage_real_rootfs.sh` + `package_initramfs.sh` over the real BusyBox 1.36.1 staging (`real_rootfs.cpio.gz`) and is gated by `run_real_qemu_m03.sh` (real ash/ps/mount markers; synthetic strings rejected).
-3. **Heavyweight Build Isolation Contract**:
+4. **Scored Assessment Real-BusyBox Contract (Round 2)**:
+   - Scored M03 Challenge/Gate candidates are REAL BusyBox trees: `scripts/provision_real_busybox_tree.sh` installs the verified `bin/busybox` artifact and its genuine applet symlinks from the real build staging; the reviewer fixture generators derive both the reference and the opaque defective fixture from that same lane. The synthetic multicall is never scored material.
+   - `scripts/validate_real_busybox.sh` enforces artifact identity (static ARM ELF, `BusyBox v1.36.1` identity string, upstream multi-call banner, applet-table coverage, applet entries resolving to `bin/busybox`, `/sbin/init` wiring, active `/init` mounts, and staging-vs-packaged-archive equivalence including modes, symlink targets and contents).
+   - The scored production boot path is `rdinit=/sbin/init` (real BusyBox init consuming `/etc/inittab`); `/init` (the Lab 3.4 shell-script PID 1 for `rdinit=/init`) remains part of the tree contract but is not the scored production init path.
+   - `scripts/run_real_busybox_candidate.sh` boots ONLY the submitted packaged archive against the pinned Linux 6.18.50 `zImage` and records archive-bound provenance (archive/kernel digests plus the pinned invocation). `scripts/verify_busybox_candidate_runtime.sh` requires real BusyBox as PID 1, the submitted `rcS` executed via the submitted inittab `::sysinit` line, the `askfirst` console handoff, active proc/sysfs/devtmpfs mounts, a real BusyBox process table, and a live interactive shell; synthetic strings and evidence captured for a different archive are rejected.
+   - Reviewer Gate grading performs static grading of the repaired tree plus a FRESH boot of the learner's packaged archive: a canonical/stock rootfs is never booted in place of a submission.
+5. **Heavyweight Build Isolation Contract**:
    - Default `make check` executes deterministic semantic validators, ELF header audits, directory permission checks, and synthetic QEMU launch validations without forcing heavyweight external source downloads.
    - Opt-in targets `real-busybox-build-check` and `real-qemu-check` test actual compiled binaries and QEMU boots.

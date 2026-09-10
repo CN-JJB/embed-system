@@ -1,1 +1,10 @@
-bin/synthetic_multicall
+#!/bin/sh
+# Minimal shell PID 1 (rdinit=/init) mounting the kernel pseudo-filesystems.
+# CONFIG_DEVTMPFS_MOUNT does not automount devtmpfs for initramfs boot, so
+# userspace mounts /dev itself.
+echo '=== REAL-BUSYBOX-INIT-START ==='
+mount -t proc none /proc
+mount -t sysfs none /sys
+mount -t devtmpfs none /dev 2>/dev/null || true
+echo '=== REAL-BUSYBOX-INIT-READY ==='
+exec /bin/sh

@@ -12,7 +12,7 @@ endif
 BUSYBOX_SRC ?= /tmp/busybox-1.36.1
 LINUX_SRC ?= /tmp/linux-6.18.50
 
-.PHONY: all clean check fixtures challenge-build gate-build real-busybox-build-check real-qemu-check
+.PHONY: all clean check fixtures challenge-build gate-build real-busybox-build-check real-rootfs-package real-qemu-check run-candidate-boot
 
 all: fixtures challenge-build gate-build
 
@@ -40,12 +40,21 @@ real-busybox-build-check:
 
 # Stage + package the REAL BusyBox rootfs/initramfs (deterministic, with
 # canonical /dev/console + /dev/null device nodes).
-real-rootfs-package:
+real-rootfs-package: real-busybox-build-check
 	bash scripts/stage_real_rootfs.sh /tmp/rootfs-busybox-staging fixtures/build/real_rootfs
 	bash scripts/package_initramfs.sh fixtures/build/real_rootfs fixtures/build/real_rootfs.cpio.gz
 	bash scripts/verify_rootfs_structure.sh fixtures/build/real_rootfs
+	bash scripts/validate_real_busybox.sh fixtures/build/real_rootfs
 	bash scripts/verify_initramfs_nodes.sh fixtures/build/real_rootfs.cpio.gz
 
-# Strict actual-host QEMU runtime boot to REAL BusyBox shell
-real-qemu-check: real-rootfs-package
+# Strict actual-host QEMU runtime boot to REAL BusyBox shell (reference lane)
+real-qemu-check:
 	bash scripts/run_real_qemu_m03.sh $(LINUX_SRC)
+
+# Pinned real-BusyBox candidate boot harness (submission-bound): boots the
+# archive you pass and records archive-bound runtime provenance.
+#   make run-candidate-boot CANDIDATE_ARCHIVE=<path.cpio.gz>
+CANDIDATE_ARCHIVE ?= fixtures/build/real_rootfs.cpio.gz
+run-candidate-boot:
+	bash scripts/run_real_busybox_candidate.sh $(CANDIDATE_ARCHIVE) /tmp/m03_candidate_boot.log /tmp/m03_candidate_boot.argv
+	bash scripts/verify_busybox_candidate_runtime.sh /tmp/m03_candidate_boot.log /tmp/m03_candidate_boot.argv $(CANDIDATE_ARCHIVE)

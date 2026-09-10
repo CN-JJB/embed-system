@@ -2,43 +2,38 @@
 set -euo pipefail
 
 # Reviewer Grading Oracle for P3-M04 Gate (REVIEWER-ONLY entry point).
+#
 # Grades the learner's candidate submission:
-#   gate/build/candidate_boot_config.sh (+ gate/build/candidate_boot.log)
-# and then RE-EXECUTES the candidate launch itself against the pinned real
-# kernel + real BusyBox initramfs, capturing a fresh log that must also
-# verify. A stock repository reference log can NEVER satisfy the runtime
-# portion: both the submitted log and the fresh capture are bound to the
-# candidate's own BOOTARGS.
+#   gate/build/candidate_boot_manifest.conf   (data-only launch manifest)
+#   gate/build/candidate_boot.argv            (executed-argv provenance)
+#   gate/build/candidate_boot.log             (fresh console capture)
+#
+# The reviewer RE-EXECUTES the candidate's manifest through the trusted
+# runner, so the fresh capture is produced from the candidate's OWN
+# machine/CPU/RAM/SMP/nographic/bootargs argv. A stock reference log, a
+# declaration that was never executed, or a canonical substitution by the
+# runner can therefore never satisfy the runtime portion.
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 M04_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
 LINUX_DIR=$(cd "${M04_ROOT}/.." && pwd)
 
-CONFIG_FILE="${1:-$M04_ROOT/gate/build/candidate_boot_config.sh}"
-LOG_FILE="${2:-$M04_ROOT/gate/build/candidate_boot.log}"
+MANIFEST="${1:-$M04_ROOT/gate/build/candidate_boot_manifest.conf}"
+SUBMITTED_LOG="${2:-$M04_ROOT/gate/build/candidate_boot.log}"
+SUBMITTED_ARGV="${3:-$M04_ROOT/gate/build/candidate_boot.argv}"
 
-if [ ! -f "$CONFIG_FILE" ]; then
-    echo "REJECT: Gate candidate configuration '$CONFIG_FILE' does not exist." >&2
+if [ ! -f "$MANIFEST" ]; then
+    echo "REJECT: Gate candidate manifest '$MANIFEST' does not exist." >&2
     echo "        Provision and author first: make -C gate provision" >&2
     exit 2
 fi
 
-echo "=== Grading P3-M04 Gate Submission ==="
-
-# 1. Grade the submitted artifacts (config + submitted-log binding).
-if [ -f "$LOG_FILE" ]; then
-    bash "$M04_ROOT/reviewer/oracle_m04.sh" "$CONFIG_FILE" "$LOG_FILE"
-else
-    echo "[GRADE] No submitted log at $LOG_FILE; grading config only, then capturing fresh runtime evidence."
-    bash "$M04_ROOT/reviewer/oracle_m04.sh" "$CONFIG_FILE"
-fi
-
-# 2. Preferred path: re-execute the candidate launch and verify fresh evidence.
 LINUX_SRC="${LINUX_SRC:-/tmp/linux-6.18.50}"
-REAL_ZIMAGE="$LINUX_SRC/arch/arm/boot/zImage"
-REAL_INITRD="$LINUX_DIR/07-minimal-rootfs-busybox-init/fixtures/build/real_rootfs.cpio.gz"
+REAL_ZIMAGE="${LINUX_SRC}/arch/arm/boot/zImage"
+REAL_INITRD="${M04_ROOT}/../07-minimal-rootfs-busybox-init/fixtures/build/real_rootfs.cpio.gz"
 if [ ! -f "$REAL_ZIMAGE" ] || [ ! -f "$REAL_INITRD" ]; then
-    echo "REJECT: Re-execution requires the pinned real kernel ($REAL_ZIMAGE) and real initramfs ($REAL_INITRD)." >&2
+    echo "REJECT: Re-execution requires the pinned real kernel ($REAL_ZIMAGE)" >&2
+    echo "        and the real BusyBox initramfs ($REAL_INITRD)." >&2
     exit 2
 fi
 if ! command -v qemu-system-arm >/dev/null 2>&1; then
@@ -46,18 +41,42 @@ if ! command -v qemu-system-arm >/dev/null 2>&1; then
     exit 2
 fi
 
-STRIPPED=$(grep -v '^[[:space:]]*#' "$CONFIG_FILE" || true)
-CAND_BOOTARGS=""
-if echo "$STRIPPED" | grep -Eq 'BOOTARGS='; then
-    CAND_BOOTARGS=$(echo "$STRIPPED" | grep -E 'BOOTARGS=' | tail -n 1 | sed -E 's/^[[:space:]]*BOOTARGS=["'"'"']?([^"'"'"']+)["'"'"']?.*$/\1/')
-fi
-[ -n "$CAND_BOOTARGS" ] || { echo "REJECT: Cannot extract candidate BOOTARGS for re-execution." >&2; exit 2; }
+echo "=== Grading P3-M04 Gate Submission ==="
 
-FRESH_LOG=$(mktemp /tmp/m04_gate_fresh_XXXXXX.log)
-trap 'rm -f "$FRESH_LOG"' EXIT
-echo "[GRADE] Re-executing candidate launch (fresh capture)..."
-TIMEOUT_SEC=40 BOOTARGS="$CAND_BOOTARGS" OUTPUT_LOG="$FRESH_LOG" \
-    bash "$M04_ROOT/scripts/run_qemu_diagnostic.sh" "$CAND_BOOTARGS" "$FRESH_LOG" >/dev/null 2>&1 || true
-bash "$M04_ROOT/scripts/verify_runtime_boot.sh" "$FRESH_LOG" "$CAND_BOOTARGS"
+# 1. Grade the submitted artifacts: declarations + submitted argv provenance
+#    + submitted console log, all bound to the same manifest.
+if [ -f "$SUBMITTED_ARGV" ] && [ -f "$SUBMITTED_LOG" ]; then
+    bash "$M04_ROOT/reviewer/oracle_m04.sh" "$MANIFEST" "$SUBMITTED_ARGV" "$SUBMITTED_LOG"
+elif [ -f "$SUBMITTED_LOG" ]; then
+    echo "[GRADE] Submitted log present without executed-argv provenance; a log"
+    echo "        alone cannot prove which argv produced it: REJECT."
+    bash "$M04_ROOT/reviewer/oracle_m04.sh" "$MANIFEST" "$SUBMITTED_ARGV" "$SUBMITTED_LOG"
+else
+    echo "[GRADE] No submitted runtime evidence at $SUBMITTED_LOG; grading the manifest contract only, then capturing fresh reviewer-owned evidence."
+    bash "$M04_ROOT/reviewer/oracle_m04.sh" "$MANIFEST"
+fi
+
+# 2. Reviewer re-execution: run the CANDIDATE's own manifest through the
+#    trusted runner and verify the fresh provenance + console evidence.
+GRADE_DIR=$(mktemp -d /tmp/m04_gate_grade_XXXXXX)
+trap 'rm -rf "$GRADE_DIR"' EXIT
+FRESH_LOG="$GRADE_DIR/fresh_boot.log"
+FRESH_ARGV="$GRADE_DIR/fresh_boot.argv"
+
+echo "[GRADE] Re-executing the candidate manifest (fresh reviewer capture)..."
+TIMEOUT_SEC="${TIMEOUT_SEC:-60}" \
+    bash "$M04_ROOT/scripts/run_candidate_manifest.sh" \
+    "$MANIFEST" "$FRESH_LOG" "$FRESH_ARGV" > "$GRADE_DIR/runner.out" 2>&1 || true
+sed 's/^/    /' "$GRADE_DIR/runner.out"
+
+if [ ! -f "$FRESH_ARGV" ] || [ ! -f "$FRESH_LOG" ]; then
+    echo "[FAIL] ASSESSMENT MISMATCH: fresh candidate-bound runtime capture was not produced." >&2
+    exit 1
+fi
+if ! bash "$M04_ROOT/scripts/verify_candidate_runtime.sh" \
+        "$FRESH_ARGV" "$FRESH_LOG" "$MANIFEST"; then
+    echo "[FAIL] ASSESSMENT MISMATCH: fresh reviewer runtime evidence for the submitted candidate is not bound to its executed argv." >&2
+    exit 1
+fi
 
 echo "[PASS] P3-M04 Gate Submission: VERIFIED (100/100)"

@@ -118,6 +118,37 @@ if [ -f "fixtures/build/real_rootfs.cpio.gz" ]; then
     bash scripts/verify_initramfs_nodes.sh fixtures/build/real_rootfs.cpio.gz
 fi
 
+# 5c. Real-BusyBox artifact identity for the real canonical rootfs and for any
+# provisioned assessment candidate tree (learner-safe: static identity only,
+# never reveals hidden defect values).
+if [ -d "fixtures/build/real_rootfs" ]; then
+    echo "=== Step 5c: Auditing REAL BusyBox artifact identity (canonical rootfs) ==="
+    bash scripts/validate_real_busybox.sh fixtures/build/real_rootfs
+fi
+for cand in challenge/build/candidate_rootfs gate/build/candidate_rootfs; do
+    if [ -d "$cand" ]; then
+        echo "=== Step 5c: Auditing REAL BusyBox artifact identity ($cand) ==="
+        if ! bash scripts/validate_real_busybox.sh "$cand"; then
+            echo "REJECT: provisioned assessment candidate does not carry a real BusyBox artifact: $cand" >&2
+            exit 2
+        fi
+    fi
+done
+# Guard: the SYNTHETIC teaching binary may never be presented as a BusyBox
+# submission inside an assessment workspace.
+for cand in challenge/build/candidate_rootfs gate/build/candidate_rootfs; do
+    for bb in "$cand/bin/busybox" "$cand/usr/bin/busybox"; do
+        if [ -f "$bb" ]; then
+            SYN_GUARD=$(strings -a "$bb" 2>/dev/null || true)
+            if [[ "$SYN_GUARD" == *"SYNTHETIC PEDAGOGICAL FIXTURE"* ]]; then
+                echo "REJECT: synthetic teaching fixture present as $bb (not BusyBox)." >&2
+                exit 2
+            fi
+        fi
+    done
+done
+echo "[PASS] Real-BusyBox assessment artifact guard verified (synthetic never scored)."
+
 # 6. Audit QEMU Launch Contract
 echo "=== Step 6: Verifying Canonical QEMU Launch Contract ==="
 REQUIRED_QEMU_ARGS=(
@@ -133,6 +164,17 @@ for arg in "${REQUIRED_QEMU_ARGS[@]}"; do
     }
 done
 echo "[PASS] Canonical QEMU machine, CPU, memory, and console contracts verified in documentation"
+
+# 7. New Round 2 harness availability (learner-safe static presence checks).
+echo "=== Step 7: Verifying Real-BusyBox Assessment Harness Availability ==="
+for f in scripts/validate_real_busybox.sh \
+         scripts/provision_real_busybox_tree.sh \
+         scripts/run_real_busybox_candidate.sh \
+         scripts/verify_busybox_candidate_runtime.sh; do
+    [ -f "$f" ] || { echo "ERROR: required real-BusyBox harness script missing: $f" >&2; exit 1; }
+    bash -n "$f" || { echo "ERROR: $f has a shell syntax error." >&2; exit 1; }
+    echo "[PASS] Harness present: $f"
+done
 
 echo "================================================================"
 echo "=== ALL P3-M03 LEARNER-SAFE VERIFICATION CHECKS PASSED       ==="

@@ -27,13 +27,17 @@ REQUIRED_FILES=(
     "faults/integration-F07-F09/README.md"
     "challenge/README.md"
     "gate/README.md"
-    "challenge/fixtures/broken_launch.sh"
-    "gate/fixtures/starter_launch.sh"
+    "challenge/fixtures/broken_manifest.conf"
+    "gate/fixtures/starter_manifest.conf"
     "fixtures/reference_boot.log"
     "scripts/audit_boot_milestones.sh"
     "scripts/verify_boot_contract.sh"
     "scripts/verify_runtime_boot.sh"
     "scripts/run_qemu_diagnostic.sh"
+    "scripts/run_candidate_manifest.sh"
+    "scripts/parse_candidate_manifest.py"
+    "scripts/verify_candidate_runtime.sh"
+    "scripts/verify_m04_candidate.sh"
     "scripts/calibrate_f06_ram.sh"
 )
 
@@ -50,17 +54,45 @@ done
 echo "=== Step 2: Auditing Boot Milestones on Reference Boot Log (static) ==="
 bash "$M04_ROOT/scripts/audit_boot_milestones.sh" "$M04_ROOT/fixtures/reference_boot.log"
 
-# 3. Audit Assessment Workspace Provisioning (presence, not validity).
+# 3. Audit Assessment Workspace Provisioning (presence + data-only schema,
+#    never validity: the provisioned starters are deliberately non-canonical).
 echo "=== Step 3: Auditing Assessment Workspace Provisioning ==="
 make -C "$M04_ROOT/gate" provision >/dev/null
 make -C "$M04_ROOT/challenge" provision >/dev/null
-for candidate in "$M04_ROOT/gate/build/candidate_boot_config.sh" \
-                 "$M04_ROOT/challenge/build/candidate_launch.sh"; do
+for candidate in "$M04_ROOT/gate/build/candidate_boot_manifest.conf" \
+                 "$M04_ROOT/challenge/build/candidate_launch_manifest.conf"; do
     [ -f "$candidate" ] || { echo "REJECT: Provisioned candidate missing: $candidate" >&2; exit 1; }
-    grep -Eq 'BOOTARGS=' "$candidate" || { echo "REJECT: Provisioned candidate has no BOOTARGS: $candidate" >&2; exit 1; }
-    echo "[PASS] Provisioned: $candidate"
+    for key in MACHINE CPU MEM SMP NOGRAPHIC BOOTARGS; do
+        grep -Eq "^$key=" "$candidate" \
+            || { echo "REJECT: Provisioned candidate lacks '$key': $candidate" >&2; exit 1; }
+    done
+    echo "[PASS] Provisioned data-only manifest: $candidate"
 done
 echo "[NOTE] Provisioned starters are deliberately non-canonical; validity is reviewer-graded."
+
+# 4. Audit the manifest interpreter wiring (single source of truth).
+echo "=== Step 4: Auditing Candidate Manifest Parser Availability ==="
+PARSER_SELFTEST=$(mktemp /tmp/m04_parser_selftest_XXXXXX.conf)
+printf '%s\n' \
+    'MACHINE=virt,highmem=off,gic-version=2' \
+    'CPU=cortex-a7' \
+    'MEM=512M' \
+    'SMP=1' \
+    'NOGRAPHIC=true' \
+    'BOOTARGS=earlycon=pl011,0x09000000 console=ttyAMA0,115200 rdinit=/init' \
+    > "$PARSER_SELFTEST"
+if ! python3 "$M04_ROOT/scripts/parse_candidate_manifest.py" \
+        --manifest "$PARSER_SELFTEST" >/dev/null; then
+    rm -f "$PARSER_SELFTEST"
+    echo "REJECT: parser does not accept a canonical launch manifest." >&2
+    exit 1
+fi
+rm -f "$PARSER_SELFTEST"
+echo "[PASS] Parser accepts a canonical launch manifest."
+
+grep -Eq 'run_candidate_manifest\.sh' "$M04_ROOT/gate/Makefile" \
+    || { echo "REJECT: Gate capture does not run candidates through the trusted manifest runner." >&2; exit 1; }
+echo "[PASS] Gate capture executes the learner manifest through the trusted runner."
 
 echo "================================================================"
 echo "=== ALL P3-M04 LEARNER-SAFE CHECKS PASSED                    ==="

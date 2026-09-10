@@ -143,12 +143,16 @@ $$\text{Symptom} \longrightarrow \text{Own Description} \longrightarrow \text{3â
 Located in `challenge/README.md`:
 Transform the opaque pre-provisioned candidate tree into a production-grade BusyBox `/sbin/init` configuration with `/etc/inittab`, `/etc/init.d/rcS`, and an interactive `askfirst` shell on `ttyAMA0`. Repair with `make provision`, package with `make package`, self-check with `make check`.
 
+The scored candidate is a **real BusyBox 1.36.1 tree**: `/bin/busybox` is the verified build artifact and the applets are genuine BusyBox applet links. The synthetic teaching multicall is reserved for fast component tests and is rejected as a scored BusyBox submission.
+
 ---
 
 ## 7. AI-Free Module Gate Exam
 
 Located in `gate/README.md`:
-Given the opaque pre-provisioned defective rootfs staging tree, execute the diagnostic loop, resolve all permission, symlink, and mount defects, package `build/candidate.cpio.gz`, and prove interactive shell boot in QEMU.
+Given the opaque pre-provisioned defective real-BusyBox rootfs staging tree, execute the diagnostic loop, resolve all permission, symlink, mount, and init-configuration defects, package `build/candidate.cpio.gz`, and prove interactive shell boot in QEMU.
+
+Gate grading has two halves: static artifact/contract grading of the repaired tree plus archive, and a **fresh QEMU boot of the learner's packaged archive** against the pinned real Linux 6.18.50 `zImage` with `rdinit=/sbin/init`. A canonical/stock rootfs is never booted in place of the submission.
 
 ---
 
@@ -166,4 +170,17 @@ make real-rootfs-package
 
 # Execute strict actual-host QEMU boot to a REAL BusyBox shell
 make real-qemu-check
+
+# Boot an arbitrary packaged candidate archive with archive-bound runtime
+# provenance and verify it (real BusyBox init as PID 1, submitted inittab/rcS,
+# interactive shell):
+make run-candidate-boot CANDIDATE_ARCHIVE=path/to/candidate.cpio.gz
 ```
+
+### Assessment evidence classes
+
+| Lane | Artifact | Evidence class |
+|---|---|---|
+| Synthetic teaching fixture | `fixtures/build/synthetic_rootfs.cpio.gz` | component tests only â€” never BusyBox evidence |
+| Real canonical rootfs | `fixtures/build/real_rootfs.cpio.gz` | real BusyBox reference runtime (round-1 accepted) |
+| Scored Challenge/Gate candidate | reviewer-provisioned real-BusyBox tree | static identity + fresh packaged-archive QEMU boot |

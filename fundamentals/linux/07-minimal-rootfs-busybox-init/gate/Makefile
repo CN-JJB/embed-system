@@ -1,7 +1,9 @@
 CROSS_COMPILE ?= arm-none-linux-gnueabihf-
 M03_ROOT := $(abspath ..)
 
-# Opaque pre-provisioned defective tree (reviewer-authored, rotated).
+# Opaque pre-provisioned defective REAL-BusyBox tree (reviewer-authored,
+# rotated). It contains the verified real /bin/busybox and genuine applet
+# symlinks; only wiring, permissions and init configuration are damaged.
 FIXTURE := $(CURDIR)/fixtures/defective_rootfs
 # Learner working copy. Repair defects here; never edit fixtures/ in place.
 CANDIDATE := $(CURDIR)/build/candidate_rootfs
@@ -23,6 +25,7 @@ provision:
 		mkdir -p $(CANDIDATE)/bin $(CANDIDATE)/sbin $(CANDIDATE)/etc/init.d $(CANDIDATE)/dev $(CANDIDATE)/proc $(CANDIDATE)/sys $(CANDIDATE)/tmp $(CANDIDATE)/run $(CANDIDATE)/mnt $(CANDIDATE)/root; \
 		echo "[GATE] Provisioned opaque candidate tree at $(CANDIDATE)"; \
 		echo "[GATE] Diagnose, repair, then run: make package && make check"; \
+		echo "[GATE] Runtime grading boots YOUR packaged candidate.cpio.gz: make package is required."; \
 	else \
 		echo "[GATE] Candidate already exists at $(CANDIDATE) (not overwritten)."; \
 	fi
@@ -31,13 +34,21 @@ provision:
 package:
 	@bash $(M03_ROOT)/scripts/package_initramfs.sh $(CANDIDATE) $(CANDIDATE_ARCHIVE)
 
-# Learner-safe self-check: generic structure contract only. This does NOT
-# grade hidden scored answers and does NOT reveal the defect mapping.
+# Learner-safe self-check: generic structure contract plus real-BusyBox
+# artifact identity of YOUR tree. This does NOT grade hidden scored answers,
+# does NOT reveal the defect mapping, and does NOT call reviewer assets.
 check:
 	@if [ ! -d "$(CANDIDATE)" ]; then \
 		echo "[GATE] Notice: $(CANDIDATE) not yet provisioned. Run: make provision"; \
 	else \
 		bash $(M03_ROOT)/scripts/verify_rootfs_structure.sh $(CANDIDATE); \
+		bash $(M03_ROOT)/scripts/validate_real_busybox.sh $(CANDIDATE); \
+		if [ -f "$(CANDIDATE_ARCHIVE)" ]; then \
+			bash $(M03_ROOT)/scripts/validate_real_busybox.sh $(CANDIDATE_ARCHIVE) $(CANDIDATE); \
+			echo "[GATE] Packaged archive present at $(CANDIDATE_ARCHIVE) (final grading boots it)."; \
+		else \
+			echo "[GATE] Notice: $(CANDIDATE_ARCHIVE) not yet packaged. Run: make package"; \
+		fi \
 	fi
 
 clean:

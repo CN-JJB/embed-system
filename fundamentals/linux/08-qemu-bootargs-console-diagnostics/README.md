@@ -114,6 +114,8 @@ The Linux boot process follows a deterministic sequence of milestones. Diagnosin
 - **AI-Free Challenge**: Silent Boot Failure Isolation (`challenge/README.md`)
 - **Module Gate**: Canonical Boot Configuration & Milestone Certification (`gate/README.md`)
 
+Both assessments submit a **data-only candidate launch manifest** (`KEY=value`, exactly one definition per key). One trusted runner (`scripts/parse_candidate_manifest.py` + `scripts/run_candidate_manifest.sh`) parses it, validates it, builds the real `qemu-system-arm` argv from those values, records the normalized argv as provenance, and executes exactly that configuration. Declarations, execution and grading therefore share a single source of truth: a correct-looking declaration that is not executed cannot pass, and a machine/CPU/RAM/SMP override that contradicts the declaration is rejected.
+
 ---
 
 ## 7. Verification
@@ -130,4 +132,13 @@ Run the real QEMU boot test (requires the pinned Linux zImage and the REAL BusyB
 make real-bootargs-qemu-check
 ```
 
-> `scripts/audit_boot_milestones.sh` is the STATIC teaching-fixture auditor (ordered strings; a forged log passes it by design). Runtime certification uses `scripts/verify_runtime_boot.sh`, which rejects forged/concatenated logs.
+Boot an arbitrary candidate manifest with full executed-argv runtime binding:
+
+```bash
+TIMEOUT_SEC=60 bash scripts/run_candidate_manifest.sh \
+    gate/build/candidate_boot_manifest.conf /tmp/candidate_boot.log /tmp/candidate_boot.argv
+bash scripts/verify_candidate_runtime.sh /tmp/candidate_boot.argv /tmp/candidate_boot.log \
+    gate/build/candidate_boot_manifest.conf
+```
+
+> `scripts/audit_boot_milestones.sh` is the STATIC teaching-fixture auditor (ordered strings; a forged log passes it by design). Runtime certification uses `scripts/verify_runtime_boot.sh` (canonical-config runtime evidence) and `scripts/verify_candidate_runtime.sh` (candidate-argv-bound runtime evidence), both of which reject forged/concatenated logs.
