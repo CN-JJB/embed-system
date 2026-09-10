@@ -44,8 +44,12 @@ fi
 bash "$M03_ROOT/scripts/provision_real_busybox_tree.sh" "$OUT" >/dev/null
 
 # 2. Apply the opaque assignment input (generic applicator, fail closed).
-# On failure the partial tree is removed so a retry starts clean.
-if ! python3 "$M03_ROOT/scripts/apply_candidate_layer.py" "$LAYER" "$OUT"; then
+# On failure the partial tree is removed so a retry starts clean. The
+# applicator status is captured without negation so the original exit class
+# (0 applied / 2 semantic REJECT / 1 materialization failure) propagates.
+if python3 "$M03_ROOT/scripts/apply_candidate_layer.py" "$LAYER" "$OUT"; then
+    :
+else
     rc=$?
     rm -rf "$OUT"
     if [ "$rc" -eq 2 ]; then

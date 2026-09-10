@@ -12,6 +12,11 @@ set -euo pipefail
 #      equivalence: paths, file contents, symlink targets, relevant modes,
 #      BusyBox payload identity) for both rotated variants, and both fresh
 #      defectives are REJECTed by the static oracle.
+#   D. learner wrapper exit-status propagation (fail-closed, both variants):
+#      valid layer -> exit 0 with candidate kept; semantic-invalid layer ->
+#      exit 2 with partial tree removed; corrupt/truncated layer -> exit 1
+#      with partial tree removed; missing layer -> nonzero with no candidate
+#      created; no stale candidate may survive a failed provision.
 #
 # Every test is graded as PREP PASS / EXECUTION PASS / INTENDED RESULT.
 
@@ -285,6 +290,103 @@ for variant in challenge gate; do
         || fail_test "$ORACLE_ID" "fresh $variant rejection carries a semantic pattern" "$OUT"
     pass_test "$ORACLE_ID" "fresh $variant defective is rejected by the oracle"
 done
+
+# ---- D: wrapper exit-status propagation (fail-closed, both variants) ----
+# Each case is graded as PREP PASS / WRAPPER EXECUTION PASS / INTENDED
+# NONZERO RESULT PASS. Substitute layers are hostile but neutral (kept in
+# /tmp, never tracked); the active scored layers are backed up, swapped,
+# and restored byte-identical, and are never printed or decoded.
+CH_LAYER="challenge/fixtures/candidate.layer"
+GATE_LAYER="gate/fixtures/candidate.layer"
+CH_BAK="$MUTWORK/challenge.layer.bak"
+GATE_BAK="$MUTWORK/gate.layer.bak"
+cp "$CH_LAYER" "$CH_BAK"
+cp "$GATE_LAYER" "$GATE_BAK"
+CH_SUM=$(sha256sum "$CH_BAK" | awk '{print $1}')
+GATE_SUM=$(sha256sum "$GATE_BAK" | awk '{print $1}')
+echo "[PREP] Active opaque layers backed up (restored byte-identical on exit)."
+trap 'cp "$CH_BAK" "$CH_LAYER" 2>/dev/null; cp "$GATE_BAK" "$GATE_LAYER" 2>/dev/null; rm -rf "$MUTWORK"' EXIT
+
+# Hostile substitute layers (neutral values, /tmp only, never tracked).
+$BUILD --out "$MUTWORK/wrap_invalid.layer" \
+    --file "/etc/evil:644:$NEUTRAL_B64" >/dev/null
+head -c 40 "$MUTWORK/neutral.layer" > "$MUTWORK/wrap_truncated.layer"
+
+# run_wrapper_case <id> <desc> <variant> <want-rc> <want-exists> <preseed>
+# want-exists: yes (candidate kept) or no (candidate removed/absent).
+# preseed: yes (pre-seed a stale marker to prove cleanup) or no.
+run_wrapper_case() {
+    local id="$1" desc="$2" variant="$3" want="$4" want_exists="$5" preseed="$6"
+    local dest="$MUTWORK/wrap_$id"
+    echo "------------------------------------------------------------------"
+    echo "Test $id: wrapper $variant $desc"
+    echo "  PREP: PASS (verified staging ready; layer substitute in place)"
+    rm -rf "$dest"
+    if [ "$preseed" = "yes" ]; then
+        mkdir -p "$dest"
+        echo "stale" > "$dest/STALE_MARKER"
+    fi
+    local out rc
+    set +e
+    out=$(bash "scripts/provision_${variant}_candidate.sh" "$dest" 2>&1)
+    rc=$?
+    set -e
+    if [ "$rc" -ge 128 ]; then
+        fail_test "$id" "wrapper $variant $desc crashed with signal $((rc - 128))" "$out"
+    fi
+    echo "  WRAPPER EXECUTION: PASS (no crash, exit $rc)"
+    if [ "$rc" -ne "$want" ]; then
+        fail_test "$id" "wrapper $variant $desc wanted exit $want, got $rc" "$out"
+    fi
+    if [ "$want_exists" = "yes" ]; then
+        [ -d "$dest" ] || fail_test "$id" "wrapper $variant $desc: candidate missing" "$out"
+        [ ! -e "$dest/STALE_MARKER" ] \
+            || fail_test "$id" "wrapper $variant $desc: stale marker survived" "$out"
+    else
+        [ ! -e "$dest" ] \
+            || fail_test "$id" "wrapper $variant $desc: stale candidate left behind" "$out"
+    fi
+    if [ "$want" -ne 0 ] && [ "$rc" -eq 0 ]; then
+        fail_test "$id" "wrapper $variant $desc returned success on failure" "$out"
+    fi
+    echo "  INTENDED NONZERO RESULT: PASS (exit $want, candidate kept: $want_exists)"
+    pass_test "$id" "wrapper $variant $desc"
+}
+
+# D1/D5: valid active layer -> exit 0, candidate kept, stale marker gone.
+run_wrapper_case "D1" "valid layer provisions" "challenge" 0 "yes" "yes"
+run_wrapper_case "D5" "valid layer provisions" "gate" 0 "yes" "yes"
+
+# D2/D6: semantic-invalid substitute -> exit 2, partial tree removed.
+cp "$MUTWORK/wrap_invalid.layer" "$CH_LAYER"
+run_wrapper_case "D2" "semantic-invalid layer propagates REJECT" "challenge" 2 "no" "yes"
+cp "$CH_BAK" "$CH_LAYER"
+cp "$MUTWORK/wrap_invalid.layer" "$GATE_LAYER"
+run_wrapper_case "D6" "semantic-invalid layer propagates REJECT" "gate" 2 "no" "yes"
+cp "$GATE_BAK" "$GATE_LAYER"
+
+# D3/D7: corrupt/truncated substitute -> exit 1, partial tree removed.
+cp "$MUTWORK/wrap_truncated.layer" "$CH_LAYER"
+run_wrapper_case "D3" "corrupt layer propagates materialization failure" "challenge" 1 "no" "yes"
+cp "$CH_BAK" "$CH_LAYER"
+cp "$MUTWORK/wrap_truncated.layer" "$GATE_LAYER"
+run_wrapper_case "D7" "corrupt layer propagates materialization failure" "gate" 1 "no" "yes"
+cp "$GATE_BAK" "$GATE_LAYER"
+
+# D4/D8: missing layer -> nonzero, no candidate created.
+mv "$CH_LAYER" "$MUTWORK/challenge.layer.hold"
+run_wrapper_case "D4" "missing layer fails without candidate" "challenge" 1 "no" "no"
+mv "$MUTWORK/challenge.layer.hold" "$CH_LAYER"
+mv "$GATE_LAYER" "$MUTWORK/gate.layer.hold"
+run_wrapper_case "D8" "missing layer fails without candidate" "gate" 1 "no" "no"
+mv "$MUTWORK/gate.layer.hold" "$GATE_LAYER"
+
+# D9: active scored layers restored byte-identical (no test residue).
+[ "$(sha256sum "$CH_LAYER" | awk '{print $1}')" = "$CH_SUM" ] \
+    || fail_test "D9" "challenge layer not restored byte-identical" ""
+[ "$(sha256sum "$GATE_LAYER" | awk '{print $1}')" = "$GATE_SUM" ] \
+    || fail_test "D9" "gate layer not restored byte-identical" ""
+pass_test "D9" "active scored layers restored byte-identical"
 
 echo "=================================================================="
 echo "=== ALL $PASSED_TESTS ASSIGNMENT-LAYER SAFETY CHECKS PASSED ($TOTAL_TESTS/$TOTAL_TESTS) ==="
