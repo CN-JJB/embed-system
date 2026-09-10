@@ -169,10 +169,17 @@ echo "[PASS] Canonical QEMU machine, CPU, memory, and console contracts verified
 echo "=== Step 7: Verifying Real-BusyBox Assessment Harness Availability ==="
 for f in scripts/validate_real_busybox.sh \
          scripts/provision_real_busybox_tree.sh \
+         scripts/provision_challenge_candidate.sh \
+         scripts/provision_gate_candidate.sh \
          scripts/run_real_busybox_candidate.sh \
          scripts/verify_busybox_candidate_runtime.sh; do
     [ -f "$f" ] || { echo "ERROR: required real-BusyBox harness script missing: $f" >&2; exit 1; }
     bash -n "$f" || { echo "ERROR: $f has a shell syntax error." >&2; exit 1; }
+    echo "[PASS] Harness present: $f"
+done
+for f in scripts/apply_candidate_layer.py; do
+    [ -f "$f" ] || { echo "ERROR: required real-BusyBox harness script missing: $f" >&2; exit 1; }
+    PYTHONDONTWRITEBYTECODE=1 python3 -m py_compile "$f" || { echo "ERROR: $f has a Python syntax error." >&2; exit 1; }
     echo "[PASS] Harness present: $f"
 done
 

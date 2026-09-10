@@ -6,6 +6,9 @@ set -euo pipefail
 #   1. contains a direct "reviewer/" path dependency (make/shell/markdown/etc.)
 #   2. carries a reviewer-only filename outside reviewer/
 #   3. leaks hidden assessment mapping tokens (defect seeds, reference paths)
+#   4. ships a human-readable scored mutation recipe in the fixture inputs
+#      (the assignment inputs must stay opaque; only the provisioned
+#      candidate tree itself is diagnosed)
 # The reviewer/ subtree itself is exempt. Learner workflows must never
 # depend on reviewer generators, oracles, mutation suites, or solutions.
 
@@ -44,6 +47,10 @@ REVIEWER_ONLY_NAMES=(
     "generate_*_fixtures.sh"
     "test_*_mutations.sh"
     "test_*_oracle_mutations.sh"
+    "test_*_layer_safety.sh"
+    "check_repo_hygiene.sh"
+    "scan_recipe_text.sh"
+    "make_candidate_layer.py"
     "oracle_*.sh"
     "run_*_reviewer_check.sh"
     "audit_learner_isolation.sh"
@@ -87,6 +94,37 @@ done < <(find "$MODULE_ROOT/challenge" "$MODULE_ROOT/gate" -type f \
     -not -path "$MODULE_ROOT/challenge/build/*" \
     -not -path "$MODULE_ROOT/gate/build/*" \
     -not -path "*/.git/*" 2>/dev/null)
+
+# --- Rule 4: no human-readable scored mutation recipe in fixture inputs ---
+# The retired plaintext recipe names (operation manifest, overlay tree) and
+# any recipe/decoy cleartext under the scored fixture inputs are rejected.
+# The opaque candidate.layer assignment inputs are binary and pass the text
+# scan below (grep -I skips non-text).
+for recipe in "$MODULE_ROOT/challenge/fixtures/defects.manifest" \
+              "$MODULE_ROOT/gate/fixtures/defects.manifest"; do
+    if [ -e "$recipe" ]; then
+        echo "[ISOLATION VIOLATION] Retired human-readable mutation recipe present:"
+        echo "    $recipe"
+        VIOLATIONS=$((VIOLATIONS + 1))
+    fi
+done
+for overlay in "$MODULE_ROOT/challenge/fixtures/defective_overlay" \
+               "$MODULE_ROOT/gate/fixtures/defective_overlay"; do
+    if [ -e "$overlay" ]; then
+        echo "[ISOLATION VIOLATION] Retired plaintext assessment overlay present:"
+        echo "    $overlay"
+        VIOLATIONS=$((VIOLATIONS + 1))
+    fi
+done
+if ! bash "$MODULE_ROOT/reviewer/scripts/scan_recipe_text.sh" \
+        "$MODULE_ROOT/challenge/fixtures" \
+        "$MODULE_ROOT/gate/fixtures" >/dev/null 2>&1; then
+    echo "[ISOLATION VIOLATION] Learner-visible fixture inputs carry recipe cleartext:"
+    bash "$MODULE_ROOT/reviewer/scripts/scan_recipe_text.sh" \
+        "$MODULE_ROOT/challenge/fixtures" \
+        "$MODULE_ROOT/gate/fixtures" 2>&1 | sed 's/^/    /' || true
+    VIOLATIONS=$((VIOLATIONS + 1))
+fi
 
 if [ "$VIOLATIONS" -eq 0 ]; then
     echo "=== ISOLATION AUDIT PASS: zero learner->reviewer dependencies ==="

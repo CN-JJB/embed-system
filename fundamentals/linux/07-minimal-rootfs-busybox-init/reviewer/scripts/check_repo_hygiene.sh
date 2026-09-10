@@ -5,9 +5,10 @@ set -euo pipefail
 #
 # Rejects re-vendoring of the generated real BusyBox staging tree into Git:
 # the scored real-BusyBox runtime is provisioned on demand from the verified
-# local BUSYBOX_STAGING, and the repository tracks only small assessment
-# deltas (defects.manifest + defective_overlay/). A future generator run must
-# not accidentally re-add the full binary + applet forest.
+# local BUSYBOX_STAGING, and the repository tracks only small opaque
+# assignment inputs (fixtures/candidate.layer). A future generator run must
+# not accidentally re-add the full binary + applet forest, and no
+# human-readable mutation recipe may return to the fixture inputs.
 #
 # Checks (all on TRACKED files via `git ls-files`, never the working tree):
 #   1. no tracked bin/busybox under assessment/reference trees;
@@ -15,7 +16,10 @@ set -euo pipefail
 #      those trees;
 #   3. no tracked real-BusyBox reference archive;
 #   4. bounded tracked file counts for scored fixture directories;
-#   5. materialization + cleanup produces zero unintended git churn
+#   5. opaque assignment inputs present, bounded, and recipe-free; the
+#      retired plaintext recipe names are gone; learner provisioning source
+#      carries no assessment-specific defect list.
+#   6. materialization + cleanup produces zero unintended git churn
 #      (covered by the caller re-running `git status --porcelain`).
 #
 # Usage: check_repo_hygiene.sh
@@ -50,12 +54,9 @@ for pat in \
         fail "tracked generated payload present: $pat"
     fi
 done
-# Generic: any tracked bin/busybox under the scored trees.
-if tracked | grep -E "07-minimal-rootfs-busybox-init/(challenge/fixtures/defective_rootfs|gate/fixtures/defective_rootfs|reviewer/reference)/.*busybox" | grep -qv "defects.manifest"; then
-    # Filter to actual binary paths (exclude the manifest/overlay docs).
-    hits=$(tracked | grep -E "07-minimal-rootfs-busybox-init/(challenge/fixtures/defective_rootfs|gate/fixtures/defective_rootfs|reviewer/reference)/.*busybox" | grep -v "defects.manifest" || true)
-    # Overlay/manifest must never carry a busybox binary; any hit is a violation
-    # unless it is the small manifest text itself (already excluded).
+# Generic: any tracked busybox-named payload under the scored trees.
+if tracked | grep -Eq "07-minimal-rootfs-busybox-init/(challenge/fixtures/defective_rootfs|gate/fixtures/defective_rootfs|reviewer/reference)/.*busybox"; then
+    hits=$(tracked | grep -E "07-minimal-rootfs-busybox-init/(challenge/fixtures/defective_rootfs|gate/fixtures/defective_rootfs|reviewer/reference)/.*busybox" || true)
     if echo "$hits" | grep -Eq "/bin/busybox|\\.cpio"; then
         fail "tracked BusyBox binary/archive under assessment/reference trees:"
         echo "$hits" | sed 's/^/    /' >&2
@@ -105,44 +106,92 @@ if [ "$n_chal_def" -eq 0 ] && [ "$n_gate_def" -eq 0 ] && [ "$n_ref" -eq 0 ]; the
     pass "no tracked generated assessment/reference trees (all materialized on demand)"
 fi
 
-# 4. Bounded small assessment deltas remain tracked.
+# 4. Bounded small assignment inputs remain tracked.
 n_chal_fixtures=$(tracked | grep -c -F "07-minimal-rootfs-busybox-init/challenge/fixtures/" || true)
 n_gate_fixtures=$(tracked | grep -c -F "07-minimal-rootfs-busybox-init/gate/fixtures/" || true)
 sec_start=$FAILURES
 if [ "$n_chal_fixtures" -gt 15 ]; then
-    fail "challenge/fixtures/ tracks $n_chal_fixtures files (expected <=15 small delta files)"
+    fail "challenge/fixtures/ tracks $n_chal_fixtures files (expected <=15 small input files)"
 else
-    pass "challenge/fixtures/ tracks $n_chal_fixtures small delta files (bounded)"
+    pass "challenge/fixtures/ tracks $n_chal_fixtures small input files (bounded)"
 fi
 if [ "$n_gate_fixtures" -gt 15 ]; then
-    fail "gate/fixtures/ tracks $n_gate_fixtures files (expected <=15 small delta files)"
+    fail "gate/fixtures/ tracks $n_gate_fixtures files (expected <=15 small input files)"
 else
-    pass "gate/fixtures/ tracks $n_gate_fixtures small delta files (bounded)"
+    pass "gate/fixtures/ tracks $n_gate_fixtures small input files (bounded)"
 fi
 
-# 5. Required small deltas are present and tiny (no binary payload smuggled).
+# Blob access prefers the Git index (so staged updates verify before
+# commit), then HEAD, then the working tree as a last resort.
+blob_of() {  # blob_of <repo-rel-path> <work-path>
+    git cat-file -p ":$1" 2>/dev/null || git cat-file -p "HEAD:$1" 2>/dev/null \
+        || cat "$2" 2>/dev/null || true
+}
+blob_size() {  # blob_size <repo-rel-path> <work-path>
+    git cat-file -s ":$1" 2>/dev/null || git cat-file -s "HEAD:$1" 2>/dev/null \
+        || wc -c < "$2" 2>/dev/null || echo 999999
+}
+# 5. Opaque assignment inputs present, bounded, and recipe-free.
 sec_start=$FAILURES
 for f in \
-    "challenge/fixtures/defects.manifest" \
-    "challenge/fixtures/defective_overlay/etc/inittab" \
-    "challenge/fixtures/defective_overlay/etc/init.d/rcS" \
-    "gate/fixtures/defects.manifest" \
-    "gate/fixtures/defective_overlay/etc/inittab" \
-    "gate/fixtures/defective_overlay/etc/init.d/rcS" \
+    "challenge/fixtures/candidate.layer" \
+    "gate/fixtures/candidate.layer" \
+    "scripts/apply_candidate_layer.py" \
     ; do
     rel="fundamentals/linux/07-minimal-rootfs-busybox-init/$f"
     if ! tracked | grep -qxF "$rel"; then
-        fail "required small assessment delta not tracked: $f"
+        fail "required opaque assignment input not tracked: $f"
         continue
     fi
-    # Size bound: each delta file must be < 8 KiB (text overlay, not a binary).
-    sz=$(git cat-file -s "HEAD:$rel" 2>/dev/null || wc -c < "$M03_ROOT/$f" 2>/dev/null || echo 999999)
-    if [ "$sz" -gt 8192 ]; then
-        fail "assessment delta too large ($sz bytes): $f (expected <8 KiB text)"
+    # Size bound: each layer must stay small (binary assignment input,
+    # never a BusyBox payload or an applet forest).
+    sz=$(blob_size "$rel" "$M03_ROOT/$f")
+    if [ "$sz" -gt 32768 ]; then
+        fail "assignment input too large ($sz bytes): $f (expected <=32 KiB)"
+    fi
+done
+# The retired plaintext recipe must be gone from Git.
+for f in \
+    "challenge/fixtures/defects.manifest" \
+    "gate/fixtures/defects.manifest" \
+    ; do
+    rel="fundamentals/linux/07-minimal-rootfs-busybox-init/$f"
+    if tracked | grep -qxF "$rel"; then
+        fail "retired human-readable mutation recipe still tracked: $f"
+    fi
+done
+if tracked | grep -E -q "07-minimal-rootfs-busybox-init/(challenge|gate)/fixtures/defective_overlay/"; then
+    fail "retired plaintext assessment overlay still tracked under fixtures/"
+fi
+# No recipe cleartext in tracked fixture inputs (text scan skips the
+# binary layers themselves).
+for dir in challenge/fixtures gate/fixtures; do
+    while IFS= read -r file; do
+        case "$file" in
+            *.layer) continue ;;
+        esac
+        if blob_of "fundamentals/linux/07-minimal-rootfs-busybox-init/$file" "$M03_ROOT/$file" \
+            | grep -I -E -q 'overlay|symlink|remove|chmod|stale_target|nonexistent_target|sysinit|askfirst'; then
+            fail "recipe cleartext in tracked fixture input: $file"
+        fi
+    done < <(tracked | grep -F "07-minimal-rootfs-busybox-init/$dir/" \
+        | sed 's|.*07-minimal-rootfs-busybox-init/||' || true)
+done
+# Learner provisioning source must stay generic: no assessment-specific
+# defect list may live in the learner-visible provision path.
+for f in \
+    "scripts/apply_candidate_layer.py" \
+    "scripts/provision_challenge_candidate.sh" \
+    "scripts/provision_gate_candidate.sh" \
+    ; do
+    rel="fundamentals/linux/07-minimal-rootfs-busybox-init/$f"
+    body=$(blob_of "$rel" "$M03_ROOT/$f")
+    if echo "$body" | grep -E -q 'stale_target|nonexistent_target|defects.manifest|defective_overlay|sysinit|askfirst'; then
+        fail "assessment-specific defect content in learner provisioning source: $f"
     fi
 done
 if [ "$FAILURES" -eq "$sec_start" ]; then
-    pass "required small assessment deltas present and bounded (<8 KiB each)"
+    pass "opaque assignment inputs present, bounded, and recipe-free"
 fi
 
 echo "------------------------------------------------------------------"

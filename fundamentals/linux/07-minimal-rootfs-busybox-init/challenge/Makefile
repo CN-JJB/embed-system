@@ -1,12 +1,11 @@
 CROSS_COMPILE ?= arm-none-linux-gnueabihf-
 M03_ROOT := $(abspath ..)
 
-# Learner-visible assessment delta (small, tracked): the verified real
-# BusyBox base comes from BUSYBOX_STAGING, and only wiring/configuration
-# deltas are applied from fixtures/defective_overlay/ + defects.manifest.
+# Learner-visible assignment input (small, tracked, opaque): the verified
+# real BusyBox base comes from BUSYBOX_STAGING, and the assigned candidate
+# state is applied from fixtures/candidate.layer by a generic applicator.
 # The expanded BusyBox binary + applet forest are never tracked in Git.
-OVERLAY := $(CURDIR)/fixtures/defective_overlay
-MANIFEST := $(CURDIR)/fixtures/defects.manifest
+LAYER := $(CURDIR)/fixtures/candidate.layer
 # Learner working copy. Repair defects here; never edit fixtures/ in place.
 CANDIDATE := $(CURDIR)/build/candidate_rootfs
 CANDIDATE_ARCHIVE := $(CURDIR)/build/candidate.cpio.gz
@@ -15,8 +14,8 @@ CANDIDATE_ARCHIVE := $(CURDIR)/build/candidate.cpio.gz
 
 all: provision
 
-# Provision the defective candidate from verified local staging plus the
-# small assessment delta (never overwrites an in-progress repair). Requires
+# Provision the assigned candidate from verified local staging plus the
+# small opaque assignment input (never overwrites an in-progress repair). Requires
 # BUSYBOX_STAGING (default /tmp/rootfs-busybox-staging) from:
 #   CROSS_COMPILE=<prefix> bash ../scripts/build_real_busybox.sh
 # The mkdir scaffolds the standard FHS skeleton because git cannot store

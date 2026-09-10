@@ -9,9 +9,9 @@ set -euo pipefail
 #
 # Both trees are built from the verified REAL BusyBox 1.36.1 staging artifact.
 # The synthetic pedagogical fixture is NEVER used for scored assessment
-# material. The defective state is the small learner-visible assessment delta
-# (challenge/fixtures/defects.manifest + defective_overlay/), instantiated via
-# the learner-safe scripts/provision_challenge_candidate.sh so the reviewer
+# material. The assigned candidate state is the small opaque assignment
+# input (challenge/fixtures/candidate.layer), instantiated via the
+# learner-safe scripts/provision_challenge_candidate.sh so the reviewer
 # defective is byte-identical to the learner provision output. The fixed
 # reference is reviewer-only and is never tracked in Git.
 
@@ -63,8 +63,8 @@ cp -a "$GOOD" "$REF_DIR"
 # the reviewer defective is byte-identical to the learner workspace.
 # Constraint: never damage /bin/busybox itself (the real artifact is not
 # reparable by hand -- only applet wiring, permissions, and init
-# configuration may be defective). The exact defective content lives in the
-# small tracked assessment delta, not in this generator.
+# configuration may be defective). The assigned candidate content lives in
+# the small opaque assignment input, not in this generator.
 rm -rf "$OUT_DIR/defective_rootfs"
 bash "$M03_ROOT/scripts/provision_challenge_candidate.sh" "$OUT_DIR/defective_rootfs" >/dev/null
 

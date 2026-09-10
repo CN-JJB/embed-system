@@ -9,6 +9,7 @@ set -euo pipefail
 #   4. learner-safe check re-run (must pass without reviewer tooling)
 #   5. component-validator negative control mutation suite
 #   6. assessment oracle reference + mutation regression
+#   7. assignment-layer safety + learner/reviewer equivalence regression
 # Learner workflows must never invoke this script.
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -44,8 +45,12 @@ echo "===== [5/6] Component-Validator Negative Control Mutations ====="
 CROSS_COMPILE="$CROSS_COMPILE" bash reviewer/test_m03_mutations.sh
 
 echo ""
-echo "===== [6/6] Assessment Oracle Reference + Mutation Regression ====="
+echo "===== [6/7] Assessment Oracle Reference + Mutation Regression ====="
 bash reviewer/test_m03_oracle_mutations.sh
+
+echo ""
+echo "===== [7/7] Assignment-Layer Safety + Equivalence Regression ====="
+bash reviewer/test_m03_layer_safety.sh
 
 echo ""
 echo "=== P3-M03 REVIEWER-CHECK COMPLETE: ALL STAGES PASSED ==="

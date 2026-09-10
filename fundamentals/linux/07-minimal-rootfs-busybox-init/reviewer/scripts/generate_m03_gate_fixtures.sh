@@ -11,11 +11,10 @@ set -euo pipefail
 # The synthetic pedagogical fixture is NEVER used for scored assessment
 # material: the scored Gate candidate must contain the real /bin/busybox,
 # real applet symlinks, and a real BusyBox /sbin/init, and the reviewer
-# runtime boots the learner's packaged archive. The defective state is the
-# small learner-visible assessment delta (gate/fixtures/defects.manifest +
-# defective_overlay/), instantiated via the learner-safe
-# scripts/provision_gate_candidate.sh so the reviewer defective is
-# byte-identical to the learner provision output.
+# runtime boots the learner's packaged archive. The assigned candidate state
+# is the small opaque assignment input (gate/fixtures/candidate.layer),
+# instantiated via the learner-safe scripts/provision_gate_candidate.sh so
+# the reviewer defective is byte-identical to the learner provision output.
 
 OUT_DIR="${1:-gate/fixtures}"
 CROSS_COMPILE="${2:-arm-none-linux-gnueabihf-}"
@@ -68,8 +67,8 @@ bash "$M03_ROOT/scripts/package_initramfs.sh" "$REF_DIR" "$M03_ROOT/reviewer/ref
 # 3. Materialize the defective variant via the learner-safe provisioner so
 # the reviewer defective is byte-identical to the learner workspace.
 # Same constraints: no damage to the real /bin/busybox artifact, and the
-# /init shell-script path stays intact. The exact defective content lives in
-# the small tracked assessment delta, not in this generator.
+# /init shell-script path stays intact. The assigned candidate content lives
+# in the small opaque assignment input, not in this generator.
 rm -rf "$OUT_DIR/defective_rootfs"
 bash "$M03_ROOT/scripts/provision_gate_candidate.sh" "$OUT_DIR/defective_rootfs" >/dev/null
 

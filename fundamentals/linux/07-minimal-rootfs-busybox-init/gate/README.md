@@ -4,7 +4,7 @@
 
 This is the official competency Gate for **P3-M03: Manual Minimal Rootfs, BusyBox, Pseudo-Filesystems & PID 1 Init Lifecycle**.
 
-A defective root filesystem candidate is provisioned for you from your verified local BusyBox staging plus a small assessment delta (rotated from the Challenge family). It is a **real BusyBox 1.36.1 tree**: the multi-call binary at `/bin/busybox` is the verified build artifact, and the applets are genuine BusyBox applet links. Only the *wiring and configuration* are damaged, across:
+A defective root filesystem candidate is provisioned for you from your verified local BusyBox staging plus a small opaque assignment input (rotated from the Challenge family). It is a **real BusyBox 1.36.1 tree**: the multi-call binary at `/bin/busybox` is the verified build artifact, and the applets are genuine BusyBox applet links. Only the *wiring and configuration* are damaged, across:
 
 1. file permissions;
 2. applet symlink targets;
@@ -21,8 +21,8 @@ Your mission:
    ```bash
    make provision
    ```
-   This injects the verified real BusyBox base plus the small assessment
-   delta into `build/candidate_rootfs/` (the expanded binary + applet
+   This injects the verified real BusyBox base plus the opaque assignment
+   input into `build/candidate_rootfs/` (the expanded binary + applet
    forest are never tracked in Git).
 2. Audit the damaged staging tree, formulate hypotheses, and collect observable evidence.
 3. Repair all structural, permission, and initialization defects in `build/candidate_rootfs/`.
@@ -52,7 +52,7 @@ The scored capability is **production BusyBox init**, not a shell-script init:
 
 > [!CAUTION]
 > - **AI-Free Exam Mode**: No AI coding assistants or pre-generated answers permitted.
-> - **Strict Assessment Isolation**: Do NOT access or import grading references or hidden evaluation suites. The exact defect set is hidden.
+> - **Strict Assessment Isolation**: Do NOT access or import grading references or hidden evaluation suites. Diagnose only your working copy; do NOT decode, decompress, or otherwise inspect the internals of the opaque assignment input under `fixtures/` during the scored first attempt. The exact defect set is hidden.
 > - **Pass Criteria**:
 >   - Rootfs structure strictly adheres to minimal FHS layout;
 >   - The multi-call/init provider is a **real BusyBox 1.36.1 artifact** — a synthetic teaching multicall or any other binary is not a BusyBox submission;
