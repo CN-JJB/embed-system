@@ -2,80 +2,141 @@
 
 ## Principle
 
-The curriculum should combine four complementary resource classes:
+`embed-system` is now **resource-first**.
 
-1. **Official specifications and documentation** — define what is true.
-2. **High-quality open-source projects** — show how real systems are implemented.
-3. **Classic books** — build stable mental models and conceptual continuity.
-4. **High-quality courses/labs** — provide proven teaching sequences and exercises.
+The default curriculum artifact is a high-quality learning map, not an AI-authored replacement textbook. For each topic, identify the smallest set of strong resources that together provide:
 
-No single class is sufficient by itself.
+1. **truth** — specification, vendor TRM/datasheet, official upstream documentation;
+2. **implementation reality** — current upstream source code;
+3. **teaching sequence** — a maintained expert course/lab or a durable classic book;
+4. **practice direction** — a learner-built experiment/project that exposes the mechanism.
 
-## Open-Source Project Use
+No single class is sufficient for every topic, but do not force all four when two are enough.
 
-Open-source projects are not decorative references. They may be used for:
+## Resource selection order
 
-- source-reading assignments;
-- architecture walkthroughs;
-- debugging exercises;
-- patch archaeology;
-- API/ABI study;
-- test strategy;
-- build-system study;
-- contribution practice.
+Prefer, in order:
 
-When studying a project, record:
+1. official architecture/vendor/project documentation;
+2. exact upstream source code for version-sensitive behavior;
+3. maintained training material from recognized engineering organizations/projects;
+4. classic books with durable mental models;
+5. reputable secondary material;
+6. AI explanation.
 
-- upstream repository;
-- license;
-- tag/commit used;
-- relevant paths;
-- why the code is pedagogically useful;
-- whether the code is representative or unusually specialized.
+AI summaries are navigation aids. They are not the authority when a primary source is available.
 
-Do not copy large blocks into the tutorial when a small excerpt, diagram, or direct upstream reference is enough.
-
-## Classic Book Use
-
-Books are used to establish durable mental models and to cross-check teaching structure.
-
-Rules:
-
-- do not reproduce copyrighted chapters or long passages;
-- cite the book and specific chapter/section;
-- explain concepts in original wording;
-- verify version-sensitive engineering claims against current official sources;
-- convert book concepts into original labs and observable experiments.
-
-## Resource Selection Criteria
+## Resource selection criteria
 
 Prefer resources with:
 
-- strong technical reputation;
-- clear provenance;
-- stable availability;
-- pedagogical depth;
-- direct relevance to the target skill tree;
-- practical experiments or source code;
-- a maintenance history when the topic is version-sensitive.
+- clear technical authority;
+- stable or maintained availability;
+- direct relevance to the target capability;
+- source code, labs or observable examples where useful;
+- good scope boundaries;
+- explicit versioning for version-sensitive topics;
+- a strong maintenance/contribution history;
+- licensing that permits linking and reasonable educational use.
 
-## Resource Roles
+Avoid resource lists that are long merely to look comprehensive. A small ranked list is better than twenty undifferentiated links.
 
-A single topic may intentionally use different resources for different jobs:
+## Required annotation
 
-- **specification** for truth;
-- **source code** for implementation;
-- **book** for conceptual model;
-- **course** for teaching sequence;
-- **lab** for verification;
-- **job descriptions** for career relevance.
+A recommended resource should ideally state:
 
-## Anti-Pattern
+- **role**: primary truth / implementation / teaching / reference / optional depth;
+- **use it for**: exact topics or chapters;
+- **do not use it for**: where it is stale, too broad, or not authoritative;
+- **priority**: MUST / SHOULD / LATER;
+- **version sensitivity**: stable concept vs current implementation detail.
 
-Avoid designing a chapter as:
+## Upstream source reading
+
+Open-source projects are not decorative references. When source reading is valuable, point the learner to exact paths/functions/data structures rather than saying “read the kernel”.
+
+Record when practical:
+
+- upstream repository;
+- relevant tag/release if a frozen teaching baseline matters;
+- relevant paths/functions;
+- why those paths are pedagogically useful;
+- whether the observation is architecture/API stable or implementation-specific.
+
+Do not copy large source blocks into the curriculum when a direct upstream link plus a small explanation is enough.
+
+## Books
+
+Books are for durable mental models, not current-version truth.
+
+Rules:
+
+- never assign a large book cover-to-cover unless there is a strong reason;
+- map topics to selected chapters/sections;
+- verify version-sensitive kernel/toolchain/build-system claims against current upstream sources;
+- do not reproduce copyrighted chapters, figures or long passages;
+- use books to explain *why*, primary sources to confirm *what is true now*.
+
+## Courses and labs
+
+Prefer courses that are:
+
+- maintained;
+- openly inspectable where possible;
+- taught by recognized upstream contributors/engineering organizations;
+- rich in practical labs;
+- explicit about target platform and assumptions.
+
+Current high-value families include Bootlin training, Linux Kernel Labs, OSTEP, vendor training and official project manuals.
+
+## Experiments
+
+The curriculum should usually **suggest** experiments rather than provide a fully solved bespoke framework.
+
+A good experiment description contains:
+
+```text
+question
+→ setup
+→ what to observe
+→ what evidence would discriminate hypotheses
+→ what the observation does not prove
+```
+
+The learner should implement and debug the experiment unless a small reference implementation is explicitly useful.
+
+## Existing verified artifacts
+
+Earlier Phase 1–3 authoring contains substantial labs, scripts and validation infrastructure. Preserve verified, technically useful work as optional exemplars.
+
+Do not clone that level of scaffolding into future phases by default.
+
+Unverified material may remain when clearly labelled and still pedagogically useful, but it must not be represented as runtime or hardware proof.
+
+## Anti-patterns
+
+Avoid:
 
 > one blog post + AI summary + copied code
 
+Also avoid:
+
+> specification + upstream source + 20 custom scripts + hidden Gate + mutation oracle + synthetic framework for every small topic
+
 Prefer:
 
-> primary source + upstream code + classic explanation + original lab + measured evidence.
+> authoritative source + clear learning objective + exact reading target + one good course/book + learner-built experiment
+
+## Maintenance
+
+For current software ecosystems, periodically re-check:
+
+- Linux kernel documentation;
+- Bootlin course revisions;
+- Buildroot stable/LTS releases;
+- Yocto Project documentation;
+- U-Boot documentation;
+- FreeRTOS documentation/kernel releases;
+- vendor reference manuals/errata.
+
+Do not churn stable conceptual resources simply because a newer edition exists; update when the engineering meaning changes.
