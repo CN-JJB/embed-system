@@ -1,0 +1,55 @@
+{
+  "_comment": "P3-M07 Module Gate starter. Well-formed combined fixture: short descriptors, a process-map listing, an SVC disassembly listing and an effective-configuration binding. Author the canonical candidate, then run: make check.",
+  "arch_binding": {
+    "effective_config_text": "# appliance bring-up notes\n# split: 3G user / 1G kernel, page offset 0xC0000000\n# LPAE not used on this target\n",
+    "vas": [
+      {
+        "addr": "0x00400100",
+        "class": "user"
+      },
+      {
+        "addr": "0xC0100000",
+        "class": "user"
+      }
+    ]
+  },
+  "assumption_stamp": "TRE=1 PRRR=0xff0a81a8 NMRR=0x40e040e0 AFE=0 DACR=Client",
+  "descriptors": [
+    {
+      "claimed": "Normal",
+      "id": "gate-L1-dram",
+      "level": 1,
+      "word": "0x40211402"
+    },
+    {
+      "claimed": "Device",
+      "id": "gate-L2-mmio",
+      "level": 2,
+      "word": "0x0A000643"
+    }
+  ],
+  "maps": {
+    "candidate_vas": [
+      {
+        "addr": "0x00400100",
+        "claimed": "user"
+      },
+      {
+        "addr": "0xC0100000",
+        "claimed": "user"
+      }
+    ],
+    "maps_lines": [
+      "00400000-0040b000 r-xp 00000000 b3:02 12345      /home/root/addrspace.elf",
+      "0041b000-0041c000 r--p 0000a000 b3:02 12345      /home/root/addrspace.elf",
+      "0041c000-0041d000 rw-p 0000b000 b3:02 12345      /home/root/addrspace.elf",
+      "0041d000-0043e000 rw-p 00000000 00:00 0          [heap]",
+      "b6ec7000-b6fcf000 r-xp 00000000 b3:02 23456      /lib/libc.so.6",
+      "befdf000-bf000000 rw-p 00000000 00:00 0          [stack]"
+    ]
+  },
+  "svc": {
+    "disasm_text": "Disassembly of section .text:\n\n00000000 <getpid_wrapper>:\n   0:\te3a07014 \tmov\tr7, #20\n   4:\te12fff1e \tbx\tlr\n",
+    "elf_machine": "ARM"
+  }
+}

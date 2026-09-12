@@ -1,0 +1,23 @@
+{
+  "assessment": "challenge",
+  "expected_repair": "restore the B field so the section decodes to Normal with valid permissions",
+  "fault_family": "F14-family memory-attribute single-field defect (TEX/C/B)",
+  "note": "Inside the taught profile by design: the taught decoder REJECTs n=110. The learner-facing tooling can confirm the repair without revealing it.",
+  "oracle_invariants": [
+    "desc.ap.valid",
+    "desc.memtype.normal"
+  ],
+  "seeded_edits": [
+    {
+      "base": "0x40100000 vs taught 0x40000000",
+      "field": "B",
+      "from": 1,
+      "note": "single-field B defect turns taught-like n=111 Normal into n=110 reserved; well-formed section, semantically REJECT",
+      "op": "clear-bit",
+      "to": 0,
+      "word": "0x4011140A"
+    }
+  ],
+  "taught_profile_detects": true,
+  "variant": "L1 DRAM-adjacent section at an unfamiliar base with one B-field defect (n=110 IMPLEMENTATION-DEFINED); same family as the device-attribute tutorial, different instance and values (not the taught DRAM golden 0x4001140E, not the PL011 window 0x09000453, not F13 0xC0008000)"
+}

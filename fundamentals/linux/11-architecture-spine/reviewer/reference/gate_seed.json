@@ -1,0 +1,44 @@
+{
+  "assessment": "gate",
+  "expected_repair": "restore Normal/Device types with valid AP, user-only maps classification, an executed svc mnemonic in .text, and frozen effective assignments with correct user/kernel labels",
+  "fault_family": "combined unfamiliar variant: descriptor memory-type + descriptor permission + maps classification + svc executed-path + split binding",
+  "note": "The taught profile passes the combined aspect by design (each defect is valid-looking outside taught coverage). Only the complete contract exposes it.",
+  "oracle_invariants": [
+    "desc.memtype.normal",
+    "desc.ap.valid",
+    "maps.region.match",
+    "svc.executed.text",
+    "bind.split.effective",
+    "bind.va.kernel"
+  ],
+  "seeded_edits": [
+    {
+      "id": "gate-L1-dram",
+      "note": "DRAM-adjacent section encodes n=100 Device but claims Normal; valid encoding, wrong type",
+      "op": "misclassify",
+      "word": "0x40211402"
+    },
+    {
+      "id": "gate-L2-mmio",
+      "note": "MMIO-adjacent small page uses AP=100 Reserved; well-formed, semantically REJECT",
+      "op": "reserved-ap",
+      "word": "0x0A000643"
+    },
+    {
+      "addr": "0xC0100000",
+      "claimed": "user",
+      "note": "kernel-range VA unfamiliar from F13, placed outside every user maps region and mislabelled",
+      "op": "misclassify-va"
+    },
+    {
+      "note": "svc #0 appears only in comment/prose, no objdump svc mnemonic line in .text",
+      "op": "decoy-svc"
+    },
+    {
+      "note": "split claim lives only in comments; effective config carries no frozen assignments",
+      "op": "comment-not-config"
+    }
+  ],
+  "taught_profile_detects": false,
+  "variant": "all defects outside the taught goldens with unfamiliar VAs/encodings (L1 0x40200000 Device-claimed-Normal, L2 0x0A000000 AP-reserved, maps kernel VA 0xC0100000 misclassified as user, svc decoy in comment only, split comment-only vs effective mismatch); none replays F13 0xC0008000, taught 0x4001140E or PL011 0x09000453"
+}
