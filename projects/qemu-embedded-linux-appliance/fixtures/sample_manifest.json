@@ -1,0 +1,74 @@
+{
+  "schema": "m08-manifest-v1",
+  "note": "SYNTHETIC-sample: schema illustration only, never runtime evidence.",
+  "linux": {
+    "version": "6.18.50",
+    "tag": "v6.18.50",
+    "commit": "7cfc41f8e80f11ffa8382ed1a505154ceffb79c7",
+    "source": "git://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git",
+    "image": {
+      "path": "build/zImage",
+      "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  },
+  "qemu_canonical": {
+    "version": "11.1.1",
+    "tag": "v11.1.1",
+    "commit": "c3d48b7d1e89604920e5b81b91140c2ad39a1943",
+    "machine": "virt,highmem=off,gic-version=2",
+    "cpu": "cortex-a7",
+    "mem": "512M",
+    "smp": 1
+  },
+  "busybox": {
+    "version": "1.36.1",
+    "commit": "1a64f6a20aaf6ea4dbba68bbfa8cc1ab7e5c57c4"
+  },
+  "buildroot": {
+    "version": "2026.05.2",
+    "tag": "2026.05.2",
+    "commit": "72d9d4fa636a371ef9eb99c92a735ce9f6d829d5"
+  },
+  "dtc": {
+    "version": "v1.7.0",
+    "commit": "039a99414e778332d8f9c04cbd3072e1dcc62798"
+  },
+  "dtspec": {
+    "version": "v0.4",
+    "commit": "112f53cc57e5931f1503dfcaa1644caf15362c30"
+  },
+  "toolchain": {
+    "name": "Arm GNU Toolchain 13.3.rel1",
+    "triple": "arm-none-linux-gnueabihf",
+    "package": "arm-gnu-toolchain-13.3.rel1-x86_64-arm-none-linux-gnueabihf.tar.xz",
+    "sha256": "560267bdecf966b7a48467d0af6c81a85b906ef7b0a9b9dd91f506184b940281"
+  },
+  "kernel_config": {
+    "defconfig": "multi_v7_defconfig",
+    "fragment": {
+      "CONFIG_ARCH_VIRT": "y",
+      "CONFIG_ARM_LPAE": "n",
+      "CONFIG_VMSPLIT_3G": "y",
+      "CONFIG_SERIAL_AMBA_PL011": "y",
+      "CONFIG_DEVTMPFS": "y",
+      "CONFIG_DEVTMPFS_MOUNT": "y",
+      "CONFIG_VIRTIO_MMIO": "y",
+      "CONFIG_VIRTIO_BLK": "y",
+      "CONFIG_EXT4_FS": "y"
+    }
+  },
+  "dt": {
+    "source": "qemu-generated"
+  },
+  "rootfs": {
+    "kind": "initrd",
+    "path": "build/rootfs.cpio.gz",
+    "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "overlay": "overlay"
+  },
+  "repo": {
+    "branch": "phase-3/m07-m08-arch-appliance",
+    "commit": "67343a1"
+  },
+  "created_utc": "2026-09-12T00:00:00Z"
+}

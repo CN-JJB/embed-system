@@ -1,0 +1,21 @@
+#!/bin/sh
+# S99appliance-diag -- P3-M08 appliance self-report (BusyBox init).
+#
+# Prints the overlay boot marker so the console log proves this overlay
+# init script ran, then execs the packaged diagnostic utility.
+# No network, no daemon, no arguments.
+
+case "$1" in
+	start)
+		printf 'APPLIANCE-OVERLAY-BOOT-MARKER\n'
+		/usr/bin/appliance-diag
+		;;
+	stop)
+		;;
+	*)
+		echo "Usage: $0 {start|stop}"
+		exit 1
+		;;
+esac
+
+exit 0

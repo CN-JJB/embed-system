@@ -1,0 +1,143 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "P3-M08 appliance input manifest (m08-manifest-v1)",
+  "description": "Pinned source/config identities + content hashes for kernel, DT and rootfs. Hashes bind the executed artifacts; filenames alone never suffice.",
+  "type": "object",
+  "required": ["schema", "linux", "qemu_canonical", "busybox", "buildroot", "dtc", "dtspec", "toolchain", "kernel_config", "dt", "rootfs", "repo", "created_utc"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"type": "string", "const": "m08-manifest-v1"},
+    "linux": {
+      "type": "object",
+      "required": ["version", "tag", "commit", "source", "image"],
+      "additionalProperties": false,
+      "properties": {
+        "version": {"type": "string"},
+        "tag": {"type": "string"},
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "source": {"type": "string"},
+        "image": {
+          "type": "object",
+          "required": ["path", "sha256"],
+          "additionalProperties": false,
+          "properties": {
+            "path": {"type": "string", "minLength": 1},
+            "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+          }
+        }
+      }
+    },
+    "qemu_canonical": {
+      "type": "object",
+      "required": ["version", "tag", "commit", "machine", "cpu", "mem", "smp"],
+      "additionalProperties": false,
+      "properties": {
+        "version": {"type": "string"},
+        "tag": {"type": "string"},
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "machine": {"type": "string"},
+        "cpu": {"type": "string"},
+        "mem": {"type": "string", "pattern": "^[0-9]+M$"},
+        "smp": {"type": "integer", "minimum": 1, "maximum": 8}
+      }
+    },
+    "busybox": {
+      "type": "object",
+      "required": ["version", "commit"],
+      "additionalProperties": false,
+      "properties": {
+        "version": {"type": "string"},
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+      }
+    },
+    "buildroot": {
+      "type": "object",
+      "required": ["version", "tag", "commit"],
+      "additionalProperties": false,
+      "properties": {
+        "version": {"type": "string"},
+        "tag": {"type": "string"},
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+      }
+    },
+    "dtc": {
+      "type": "object",
+      "required": ["version", "commit"],
+      "additionalProperties": false,
+      "properties": {
+        "version": {"type": "string"},
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+      }
+    },
+    "dtspec": {
+      "type": "object",
+      "required": ["version", "commit"],
+      "additionalProperties": false,
+      "properties": {
+        "version": {"type": "string"},
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+      }
+    },
+    "toolchain": {
+      "type": "object",
+      "required": ["name", "triple", "package", "sha256"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {"type": "string"},
+        "triple": {"type": "string"},
+        "package": {"type": "string"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "kernel_config": {
+      "type": "object",
+      "required": ["defconfig", "fragment"],
+      "additionalProperties": false,
+      "properties": {
+        "defconfig": {"type": "string"},
+        "fragment": {"type": "object"}
+      }
+    },
+    "dt": {
+      "type": "object",
+      "required": ["source"],
+      "additionalProperties": false,
+      "properties": {
+        "source": {"type": "string", "enum": ["qemu-generated", "explicit"]},
+        "path": {"type": "string"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"source": {"const": "explicit"}}},
+          "then": {"required": ["source", "path", "sha256"]}
+        },
+        {
+          "if": {"properties": {"source": {"const": "qemu-generated"}}},
+          "then": {"not": {"required": ["path", "sha256"]}}
+        }
+      ]
+    },
+    "rootfs": {
+      "type": "object",
+      "required": ["kind", "path", "sha256", "overlay"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {"type": "string", "const": "initrd"},
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "overlay": {"type": "string", "minLength": 1}
+      }
+    },
+    "repo": {
+      "type": "object",
+      "required": ["branch"],
+      "additionalProperties": false,
+      "properties": {
+        "branch": {"type": "string"},
+        "commit": {"type": "string"}
+      }
+    },
+    "created_utc": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"}
+  }
+}
