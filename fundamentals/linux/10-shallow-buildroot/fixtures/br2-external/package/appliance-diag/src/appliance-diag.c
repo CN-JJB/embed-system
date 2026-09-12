@@ -8,9 +8,9 @@
  *   2. the appliance identity    -> produced by the root filesystem overlay
  *   3. the device tree model     -> produced by the kernel's DT consumption
  *
- * Build-time identity marker is injected through -DAPPLIANCE_DIAG_BUILD_ID so
- * that a stale binary can be told apart from a rebuilt one without looking at
- * timestamps.
+ * SOURCE-REV is intentionally emitted as one compile-time string literal so
+ * reviewer tooling can inspect the built target binary and final image without
+ * executing an ARM binary on the host. BUILD-ID is retained as a legacy alias.
  */
 #include <stdio.h>
 #include <string.h>
@@ -45,8 +45,8 @@ int main(void)
 	struct utsname uts;
 
 	printf("APPLIANCE-DIAG-BEGIN\n");
-	printf("SOURCE-REV=%s\n", APPLIANCE_DIAG_SOURCE_REV);
-	printf("BUILD-ID=%s\n", APPLIANCE_DIAG_SOURCE_REV);
+	printf("SOURCE-REV=" APPLIANCE_DIAG_SOURCE_REV "\n");
+	printf("BUILD-ID=" APPLIANCE_DIAG_SOURCE_REV "\n");
 
 	if (uname(&uts) == 0)
 		printf("KERNEL-RELEASE=%s\n", uts.release);
