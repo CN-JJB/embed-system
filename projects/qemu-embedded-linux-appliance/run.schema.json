@@ -1,0 +1,61 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "P3-M08 appliance run record (m08-run-v1)",
+  "description": "Exact executed QEMU argv + content hashes + capture outcome. Provenance is written before execution; the binder re-derives the fingerprint.",
+  "type": "object",
+  "required": ["schema", "argv", "argv_fingerprint", "qemu", "kernel", "dt", "rootfs", "bootargs", "timeout_sec", "qemu_exit_code", "timed_out", "console_log", "repo"],
+  "additionalProperties": false,
+  "properties": {
+    "schema": {"type": "string", "const": "m08-run-v1"},
+    "argv": {"type": "array", "minItems": 10, "items": {"type": "string"}},
+    "argv_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "qemu": {
+      "type": "object",
+      "required": ["machine", "cpu", "mem", "smp"],
+      "additionalProperties": false,
+      "properties": {
+        "machine": {"type": "string"},
+        "cpu": {"type": "string"},
+        "mem": {"type": "string", "pattern": "^[0-9]+M$"},
+        "smp": {"type": "integer", "minimum": 1, "maximum": 8},
+        "version_actual": {"type": "string"},
+        "version_canonical": {"type": "string"},
+        "canonical_claim": {"type": "boolean"}
+      }
+    },
+    "kernel": {
+      "type": "object",
+      "required": ["path", "sha256"],
+      "additionalProperties": false,
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "dt": {
+      "type": "object",
+      "required": ["source"],
+      "additionalProperties": false,
+      "properties": {
+        "source": {"type": "string", "enum": ["qemu-generated", "explicit"]},
+        "path": {"type": "string"},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "rootfs": {
+      "type": "object",
+      "required": ["path", "sha256"],
+      "additionalProperties": false,
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "bootargs": {"type": "string", "minLength": 1},
+    "timeout_sec": {"type": "integer", "minimum": 1},
+    "qemu_exit_code": {"type": ["integer", "null"]},
+    "timed_out": {"type": "boolean"},
+    "console_log": {"type": "string", "minLength": 1},
+    "repo": {"type": "object"}
+  }
+}

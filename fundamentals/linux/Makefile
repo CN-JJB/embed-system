@@ -1,6 +1,6 @@
 CROSS_COMPILE ?= arm-none-linux-gnueabihf-
 
-.PHONY: all clean check mutations reviewer-check real-kernel-build-check real-qemu-check real-busybox-build-check real-m03-qemu-check real-m04-qemu-check real-m05-dt-check real-m06-buildroot-check
+.PHONY: all clean check mutations reviewer-check real-kernel-build-check real-qemu-check real-busybox-build-check real-m03-qemu-check real-m04-qemu-check real-m05-dt-check real-m06-buildroot-check real-m07-arch-check
 
 all:
 	$(MAKE) -C 05-cross-toolchain-target-artifacts all CROSS_COMPILE=$(CROSS_COMPILE)
@@ -9,6 +9,7 @@ all:
 	$(MAKE) -C 08-qemu-bootargs-console-diagnostics all
 	$(MAKE) -C 09-device-tree-first-pass all
 	$(MAKE) -C 10-shallow-buildroot all
+	$(MAKE) -C 11-architecture-spine all CROSS_COMPILE=$(CROSS_COMPILE)
 
 clean:
 	$(MAKE) -C 05-cross-toolchain-target-artifacts clean
@@ -17,6 +18,7 @@ clean:
 	$(MAKE) -C 08-qemu-bootargs-console-diagnostics clean
 	$(MAKE) -C 09-device-tree-first-pass clean
 	$(MAKE) -C 10-shallow-buildroot clean
+	$(MAKE) -C 11-architecture-spine clean
 
 # Learner-safe checks only; no reviewer tooling, no answer mappings.
 # No heavy build (kernel / Buildroot / QEMU) is triggered here: those remain
@@ -34,7 +36,9 @@ check:
 	$(MAKE) -C 09-device-tree-first-pass check
 	@echo "=== Running P3-M06 Learner-Safe Checks ==="
 	$(MAKE) -C 10-shallow-buildroot check
-	@echo "=== ALL PHASE 3 LINUX BOOT-CHAIN (M01..M06) LEARNER-SAFE CHECKS PASSED ==="
+	@echo "=== Running P3-M07 Learner-Safe Checks ==="
+	$(MAKE) -C 11-architecture-spine check CROSS_COMPILE=$(CROSS_COMPILE)
+	@echo "=== ALL PHASE 3 LINUX BOOT-CHAIN (M01..M07) LEARNER-SAFE CHECKS PASSED ==="
 
 # Reviewer-only authoring regression; never invoked by learner workflows.
 mutations:
@@ -50,6 +54,8 @@ mutations:
 	bash 09-device-tree-first-pass/reviewer/test_m05_mutations.sh
 	@echo "=== Running P3-M06 Component Validator Mutations ==="
 	bash 10-shallow-buildroot/reviewer/test_m06_mutations.sh
+	@echo "=== Running P3-M07 Component Validator Mutations ==="
+	CROSS_COMPILE=$(CROSS_COMPILE) bash 11-architecture-spine/reviewer/test_m07_mutations.sh
 	@echo "=== ALL PHASE 3 LINUX COMPONENT MUTATION CHECKS PASSED ==="
 
 reviewer-check:
@@ -65,6 +71,8 @@ reviewer-check:
 	bash 09-device-tree-first-pass/reviewer/run_m05_reviewer_check.sh
 	@echo "=== Running P3-M06 Reviewer Check ==="
 	bash 10-shallow-buildroot/reviewer/run_m06_reviewer_check.sh
+	@echo "=== Running P3-M07 Reviewer Check ==="
+	LINUX_SRC=$(LINUX_SRC) CROSS_COMPILE=$(CROSS_COMPILE) bash 11-architecture-spine/reviewer/run_m07_reviewer_check.sh
 	@echo "=== ALL PHASE 3 LINUX REVIEWER CHECKS PASSED ==="
 
 real-kernel-build-check:
@@ -92,3 +100,9 @@ real-m05-dt-check:
 # Usage: make real-m06-buildroot-check BUILDROOT_SRC=/path/to/buildroot-2026.05.2
 real-m06-buildroot-check:
 	$(MAKE) -C 10-shallow-buildroot build BUILDROOT_SRC=$(BUILDROOT_SRC)
+
+# P3-M07: real QEMU arch-spine observation (svc execution, /proc/maps,
+# controlled address-fault evidence).  Heavy; opt-in, never part of `check`.
+# Usage: make real-m07-arch-check KERNEL=/path/to/zImage INITRD=/path/to/rootfs.cpio.gz
+real-m07-arch-check:
+	$(MAKE) -C 11-architecture-spine real-arch-check CROSS_COMPILE=$(CROSS_COMPILE) KERNEL=$(KERNEL) INITRD=$(INITRD)

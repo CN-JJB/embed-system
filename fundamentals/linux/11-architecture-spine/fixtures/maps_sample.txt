@@ -1,0 +1,71 @@
+# maps_sample.txt — REAL captured /proc/self/maps on the CANONICAL kernel (primary)
+#
+# Evidence status: VERIFIED (captured on the canonical Linux 6.18.50 guest boot)
+#
+# Kernel:   CANONICAL Linux 6.18.50 — pinned commit 7cfc41f8e80f11ffa8382ed1a505154ceffb79c7,
+#           built locally from the frozen Phase 3 config path:
+#           multi_v7_defconfig + fundamentals/linux/06-kernel-build-boot/fixtures/configs/phase3_delta.config
+#           (effective: `# CONFIG_ARM_LPAE is not set`, `CONFIG_VMSPLIT_3G=y`).
+#           zImage: /opt/pins/linux-6.18.50/arch/arm/boot/zImage (11817472 B)
+#           sha256 46e75c3d23ef46091e2d6ea86b4a0e1c96d7ae343b9898d538beb20ecf57f0b0
+# QEMU:     actual-host qemu-system-arm 8.2.2 (Debian 1:8.2.2+ds-0ubuntu1.18).
+#           Canonical QEMU 11.1.1 was NOT used -> canonical QEMU 11.1.1 runtime: UNVERIFIED.
+# Toolchain: actual-host arm-linux-gnueabihf-gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0.
+#           Canonical Arm GNU Toolchain 13.3.rel1 (arm-none-linux-gnueabihf-) was NOT used.
+# Machine:  -machine virt,highmem=off,gic-version=2 -cpu cortex-a7 -m 512M -smp 1 -nographic -no-reboot
+# Bootargs: "console=ttyAMA0,115200 earlycon=pl011,0x09000000 rdinit=/init panic=1"
+#
+# Descriptor model: VERIFIED non-LPAE short-descriptor for THIS boot.
+#   The boot log prints `cr=10c5387d`, i.e. SCTLR.TRE(bit28)=1 and SCTLR.AFE(bit29)=0.
+#   AFE=0 is exactly what the non-LPAE crval predicts: arch/arm/mm/proc-v7-2level.S:164
+#   (`clear=0x2120c302` sets bit29, `mmuset=0x10c03c7d` leaves it clear -> __v7_setup CLEARS AFE).
+#   This matches the frozen `CONFIG_ARM_LPAE=n` in the built config. P3-M07 teaches THIS model.
+#
+# This is the output of the committed labs/07.1-proc-address-space/src/addrspace.c
+# (static ARM EABI build) executed as a non-PID-1 process inside the guest.
+# /proc/self/maps is the self-reference form of /proc/<pid>/maps.
+# Format per Documentation/filesystems/proc.rst section 1.1:
+#   address           perms offset  dev   inode   pathname
+#
+# Printed addresses and their region (same run, verbatim):
+#   pid            : 45
+#   func   .text  : 0x10440   -> 00010000-0005f000 r-xp /addrspace.elf   (TEXT, executable)
+#   global data   : 0x62230   -> 00062000-00063000 rw-p /addrspace.elf   (data, writable)
+#   global bss    : 0x63014   -> 00063000-00066000 rw-p (anonymous)      (bss, writable)
+#   heap  malloc  : 0x66da0   -> 00066000-00088000 rw-p [heap]           (anonymous, grows up)
+#   stack local   : 0xbedc4b90-> beda4000-bedc5000 rw-p [stack]          (just below TASK_SIZE)
+#
+# Raw maps lines captured in that run:
+00010000-0005f000 r-xp 00000000 00:02 5          /addrspace.elf
+0005f000-00062000 r--p 0004e000 00:02 5          /addrspace.elf
+00062000-00063000 rw-p 00051000 00:02 5          /addrspace.elf
+00063000-00066000 rw-p 00000000 00:00 0
+00066000-00088000 rw-p 00000000 00:00 0          [heap]
+beda4000-bedc5000 rw-p 00000000 00:00 0          [stack]
+bede1000-bede2000 r-xp 00000000 00:00 0          [sigpage]
+bede2000-bede6000 r--p 00000000 00:00 0          [vvar]
+bede6000-bede7000 r-xp 00000000 00:00 0          [vdso]
+ffff0000-ffff1000 r-xp 00000000 00:00 0          [vectors]
+#
+# Notes for the learner (and the evidence boundary):
+# - Stack (0xbedc4b90) sits just below TASK_SIZE 0xBF000000; vdso/vvar/sigpage
+#   also sit below 0xBF000000. This is the frozen 3G/1G split
+#   (PAGE_OFFSET=0xC0000000, TASK_SIZE=0xBF000000) directly observed, i.e.
+#   CONFIG_VMSPLIT_3G behaviour.
+# - NO line has an address >= 0xC0000000: maps shows the user half only. The
+#   kernel half is absent by design, not by omission.
+# - [vectors] (ffff0000-ffff1000) is the ARM high-vectors helper page, not a
+#   general user mapping.
+# - ASLR makes the heap/stack/vdso addresses vary between runs; what is stable
+#   is which REGION each address falls into, not the absolute value.
+# - NON-PROOF (physical): no line here identifies the physical frame behind a
+#   virtual page.
+# - NON-PROOF (page-table walk): /proc/<pid>/maps proves the VIRTUAL mapping
+#   layout and the user/kernel split; it does NOT by itself demonstrate the
+#   L1/L2 short-descriptor table contents. The short-descriptor model of THIS
+#   kernel is evidenced separately by `cr=10c5387d` (AFE=0) + CONFIG_ARM_LPAE=n
+#   (see calibration-evidence.md), not by these maps lines.
+# - COMPARISON ARTIFACT: a prior capture on Ubuntu 6.8.0-134-generic (a DIFFERENT,
+#   non-canonical kernel) showed `cr=30c5387d` (AFE=1 => LPAE-consistent). That
+#   capture is retained only as a comparison in calibration-evidence.md and keeps
+#   its "UNKNOWN / suggests LPAE" label; it is NOT this fixture.

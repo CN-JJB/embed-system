@@ -11,7 +11,7 @@ A long-term, evidence-driven learning system for becoming a strong Embedded Syst
 - performance
 - hardware-software co-design
 
-> Status: bootstrap / Phase 0
+> Status: curriculum authoring — Phase 1 and Phase 2 canonical (implementation + Final Gate merged); Phase 3 Embedded Linux in progress (P3-M01–M06 merged, P3-M07/M08 under review, Phase 3 Final Gate pending)
 
 ## What this repository is
 
@@ -62,4 +62,4 @@ Research/writing AIs are contributors, not final editors. Drafts are reviewed fo
 
 ## Next
 
-Bootstrap the Phase 0 baseline assessment and curriculum roadmap.
+Complete the Phase 3 Embedded Linux curriculum package: implement and review the architecture spine (P3-M07) and the reproducible QEMU appliance integration project (P3-M08), then author the Phase 3 AI-Free Final Gate. See [`roadmap/`](roadmap/) for the per-phase blueprints.

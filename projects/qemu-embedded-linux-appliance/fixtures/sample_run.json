@@ -1,0 +1,35 @@
+{
+  "schema": "m08-run-v1",
+  "note": "SYNTHETIC-sample: argv illustration only, never runtime evidence.",
+  "argv": ["qemu-system-arm", "-machine", "virt,highmem=off,gic-version=2", "-cpu", "cortex-a7", "-m", "512M", "-smp", "1", "-nographic", "-kernel", "build/zImage", "-initrd", "build/rootfs.cpio.gz", "-append", "console=ttyAMA0,115200 earlycon=pl011,0x09000000 rdinit=/sbin/init panic=1"],
+  "argv_fingerprint": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "qemu": {
+    "machine": "virt,highmem=off,gic-version=2",
+    "cpu": "cortex-a7",
+    "mem": "512M",
+    "smp": 1,
+    "version_actual": "SYNTHETIC-qemu-11.1.0",
+    "version_canonical": "11.1.1",
+    "canonical_claim": false
+  },
+  "kernel": {
+    "path": "build/zImage",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "dt": {
+    "source": "qemu-generated"
+  },
+  "rootfs": {
+    "path": "build/rootfs.cpio.gz",
+    "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "bootargs": "console=ttyAMA0,115200 earlycon=pl011,0x09000000 rdinit=/sbin/init panic=1",
+  "timeout_sec": 120,
+  "qemu_exit_code": null,
+  "timed_out": false,
+  "console_log": "build/appliance.log",
+  "repo": {
+    "branch": "phase-3/m07-m08-arch-appliance",
+    "commit": "67343a1"
+  }
+}

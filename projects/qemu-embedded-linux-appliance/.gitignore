@@ -1,0 +1,23 @@
+# P3-M08 appliance project -- anchored ignore rules.
+# Heavyweight build outputs, captured runtime logs and provenance sidecars
+# never enter Git. Only source-controlled harness + tiny SYNTHETIC samples stay.
+
+/build/
+/output/
+/br-output/
+*.elf
+*.o
+*.cpio
+*.cpio.gz
+*.img
+*.log
+*.argv
+*.provenance
+__pycache__/
+*.pyc
+
+# The diagnostic utility's default build output lands next to its source
+# (`make -C src` writes ./appliance-diag). It is reproducible from
+# src/appliance-diag.c, so it is never committed. Anchored to src/ so that a
+# future committed file of the same name elsewhere is unaffected.
+/src/appliance-diag

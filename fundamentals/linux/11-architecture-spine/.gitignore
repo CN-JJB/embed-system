@@ -1,0 +1,12 @@
+# Generated / build artifacts for P3-M07. Never commit these.
+# Patterns are anchored so that committed teaching fixtures are never ignored.
+/build/
+/challenge/build/
+/gate/build/
+*.elf
+*.o
+*.log
+*.argv
+*.provenance
+__pycache__/
+*.pyc

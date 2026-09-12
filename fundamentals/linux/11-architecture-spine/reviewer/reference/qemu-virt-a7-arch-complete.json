@@ -1,0 +1,54 @@
+{
+  "profile": "qemu-virt-a7-arch-complete",
+  "description": "REVIEWER-ONLY complete arch contract for the QEMU virt / Cortex-A7 short-descriptor spine. Superset of the taught fixture: frozen split/config, AP table subset, n->type map, goldens, assumption stamp and invariant IDs. Never copy into learner-facing material.",
+  "derived_from": "fixtures/descriptor_taught.json plus frozen Phase 3 config",
+  "coverage": "complete M07 arch spine (descriptors, split/binding, maps, svc)",
+  "assumption_stamp": "TRE=1 PRRR=0xff0a81a8 NMRR=0x40e040e0 AFE=0 DACR=Client",
+  "frozen_config": {
+    "CONFIG_ARM_LPAE": "n",
+    "CONFIG_VMSPLIT_3G": "y",
+    "PAGE_OFFSET": "0xC0000000",
+    "TASK_SIZE": "0xBF000000",
+    "user_range": "<0xBF000000",
+    "kernel_range": ">=0xC0000000"
+  },
+  "ap_table": {
+    "000": "REJECT (no access)",
+    "001": "PASS (PL1 RW / PL0 none)",
+    "010": "PASS (PL1 RW / PL0 RO)",
+    "011": "PASS (PL1 RW / PL0 RW)",
+    "100": "REJECT (Reserved Table B3-8)",
+    "101": "PASS (PL1 RO / PL0 none)",
+    "110": "PASS (PL1 RO / PL0 RO)",
+    "111": "PASS (PL1 RO / PL0 RO)"
+  },
+  "n_map": {
+    "111": "Normal WBWA",
+    "011": "Normal WB-noWA",
+    "001": "Normal NC",
+    "000": "SO",
+    "100": "Device",
+    "110": "REJECT (IMPLEMENTATION-DEFINED)",
+    "010": "REJECT (reserved under frozen PRRR/NMRR)",
+    "101": "REJECT (reserved under frozen PRRR/NMRR)"
+  },
+  "goldens": [
+    {"level": 1, "word": "0x4001140E", "expect": "Normal"},
+    {"level": 2, "word": "0x09000453", "expect": "Device"}
+  ],
+  "up_policy": "S=0 on Normal is still Normal; never hard-require S=1",
+  "invariants": [
+    "desc.ap.valid",
+    "desc.memtype.normal",
+    "desc.memtype.device",
+    "desc.class.section",
+    "desc.class.smallpage",
+    "maps.split.3G1G",
+    "maps.region.match",
+    "svc.eabi.r7",
+    "svc.executed.text",
+    "bind.split.effective",
+    "bind.va.user",
+    "bind.va.kernel"
+  ]
+}

@@ -1,0 +1,31 @@
+{
+  "schema": "m08-complete-v1",
+  "note": "REVIEWER-ONLY: invariant IDs + hidden transfer fault seeds. Never import from learner paths.",
+  "invariants": {
+    "machine": "virt,highmem=off,gic-version=2",
+    "cpu": "cortex-a7",
+    "mem": "512M",
+    "smp": 1,
+    "bootargs": ["console=ttyAMA0,115200", "earlycon=pl011,0x09000000", "rdinit=/sbin/init", "panic=1"],
+    "pins": {
+      "linux": {"version": "6.18.50", "tag": "v6.18.50", "commit": "7cfc41f8e80f11ffa8382ed1a505154ceffb79c7"},
+      "qemu": {"version": "11.1.1", "tag": "v11.1.1", "commit": "c3d48b7d1e89604920e5b81b91140c2ad39a1943"},
+      "busybox": {"version": "1.36.1", "commit": "1a64f6a20aaf6ea4dbba68bbfa8cc1ab7e5c57c4"},
+      "buildroot": {"version": "2026.05.2", "tag": "2026.05.2", "commit": "72d9d4fa636a371ef9eb99c92a735ce9f6d829d5"},
+      "dtc": {"version": "v1.7.0", "commit": "039a99414e778332d8f9c04cbd3072e1dcc62798"},
+      "dtspec": {"version": "v0.4", "commit": "112f53cc57e5931f1503dfcaa1644caf15362c30"},
+      "toolchain_package_sha256": "560267bdecf966b7a48467d0af6c81a85b906ef7b0a9b9dd91f506184b940281"
+    },
+    "markers": ["APPLIANCE-OVERLAY-BOOT-MARKER", "APPLIANCE-DIAG-BEGIN", "APPLIANCE-DIAG-END", "SOURCE-REV", "KERNEL-RELEASE", "APPLIANCE-RELEASE", "DT-MODEL", "UPTIME-SEC", "MEM-AVAILABLE-KB"],
+    "log_floor_lines": 60,
+    "ram_tolerance_bytes": 16777216
+  },
+  "fault_seeds": {
+    "tutorial_a_rdinit_skew": "rdinit=/init",
+    "tutorial_a_fixed": "rdinit=/sbin/init",
+    "tutorial_b_omit": "mount -t sysfs none /sys",
+    "tutorial_b_symptom": "DT-MODEL=UNAVAILABLE",
+    "transfer_hidden_bootarg_decoy": "rdinit=/sbin/badinit-hidden-transfer",
+    "transfer_hidden_sysfs_variant": "DT-MODEL=TRANSFER-HIDDEN-UNAVAILABLE"
+  }
+}

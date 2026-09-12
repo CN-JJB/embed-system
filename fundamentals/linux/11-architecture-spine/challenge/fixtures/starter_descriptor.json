@@ -1,0 +1,11 @@
+{
+  "_comment": "P3-M07 Challenge starter. Well-formed short-descriptor fixture. Decode it using the ARMv7-A short-descriptor rules and the material from Labs 7.1-7.4, repair it, then run: make check.",
+  "assumption_stamp": "TRE=1 PRRR=0xff0a81a8 NMRR=0x40e040e0 AFE=0 DACR=Client",
+  "entries": [
+    {
+      "id": "challenge-L1-section",
+      "level": 1,
+      "word": "0x4011140A"
+    }
+  ]
+}

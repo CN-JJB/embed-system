@@ -1,0 +1,49 @@
+# Repository-wide generated-artifact backstop.
+#
+# Each module/project carries its own anchored .gitignore for the artifacts it
+# produces.  Those patterns are deliberately anchored and module-specific so
+# that committed teaching fixtures are never ignored.  This root file exists
+# only to close the generic holes that are easy to miss when a new module is
+# added: interpreter caches and host compiler droppings.
+#
+# Do NOT add broad data patterns here (e.g. *.dtb, *.dts, *.log, *.map,
+# *.cpio.gz): several canonical modules intentionally commit small, bounded
+# fixtures with exactly those extensions.
+
+__pycache__/
+*.py[cod]
+
+# Host-side object files and linked host/target executables.  No module
+# commits these; they are always reproducible from source.
+*.o
+*.elf
+*.bin
+*.img
+
+# Editor / OS droppings.
+.DS_Store
+Thumbs.db
+
+# --- Pre-existing in-tree build output -----------------------------------------
+# The Phase 1 Final Gate's own reviewer regression (`make test` in
+# gates/phase-1-final) compiles reference fixtures in place and leaves the
+# binaries and dependency files listed below untracked in that tree.  The
+# Phase 2 Final Gate's check 13 asserts `git status gates/phase-1-final` is
+# empty, so without these rules the canonical regression ORDER
+# (Phase 1 `make test` then Phase 2 `make check`) fails spuriously.
+# These paths are reproducible host build output and are never committed.
+# Scoped by full path on purpose: a blanket `*.d` rule would be unsafe.
+/gates/phase-1-final/part-b/variants/*/repro
+/gates/phase-1-final/reviewer/part-a/reference/*.d
+/gates/phase-1-final/reviewer/part-a/reference/sifter
+/gates/phase-1-final/reviewer/part-a/reference/sifter_san
+# Phase 1 `make test` also leaves object files and per-part build dirs behind.
+/gates/phase-1-final/**/build/
+
+# The Phase 2 Final Gate's `make check` builds all four parts in place and
+# leaves firmware.elf/.asm/.map plus .d dependency files in part-*/build/.
+# Same reasoning as above: reproducible build output, never committed, and the
+# Phase 1 cleanliness assertion in that gate must not be tripped by its own
+# sibling's build. Scoped by path so the tracked fixture trees that legitimately
+# contain a directory named `build/` are untouched.
+/gates/phase-2-final/*/build/
