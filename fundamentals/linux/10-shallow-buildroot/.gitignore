@@ -1,0 +1,15 @@
+# Generated / build artifacts for P3-M06.  Never commit these.
+# Patterns are anchored so that the synthetic teaching fixture under
+# fixtures/output-tree-sample/ (which intentionally contains a build/ directory
+# and an images/ directory) is never ignored.
+/build/
+/challenge/build/
+/gate/build/
+/br-output/
+*.log
+*.argv
+*.provenance
+__pycache__/
+*.pyc
+__pycache__/
+*.pyc

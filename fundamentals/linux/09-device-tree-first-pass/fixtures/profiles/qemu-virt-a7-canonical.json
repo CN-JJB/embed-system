@@ -1,0 +1,46 @@
+{
+  "profile": "qemu-virt-a7-canonical-taught",
+  "description": "The TAUGHT SUBSET of the canonical QEMU virt / Cortex-A7 device tree contract. Every value below was read out of the real QEMU-generated artifact in fixtures/qemu-virt.dtb (see fixtures/qemu-virt.provenance.json) and cross-checked with dtc 1.7.0, not recalled from memory. IMPORTANT: this profile is a convenience subset covering the nodes taught in Labs 5.1-5.3. It is NOT the whole contract. The machine's full description is the tree you dumped in Lab 5.1; conformance to it is what the Module Gate assesses, and the reviewer oracle uses a complete profile.",
+  "derived_from": "fixtures/qemu-virt.dtb",
+  "coverage": "taught subset (root, memory, GIC, console UART, one virtio-mmio window, CPU, chosen)",
+  "root": {
+    "compatible": "linux,dummy-virt",
+    "model": "linux,dummy-virt",
+    "address_cells": 2,
+    "size_cells": 2
+  },
+  "memory": {
+    "path": "/memory@40000000",
+    "device_type": "memory",
+    "reg_entries": [[1073741824, 536870912]]
+  },
+  "gic": {
+    "path": "/intc@8000000",
+    "compatible_contains": "arm,cortex-a15-gic",
+    "interrupt_cells": 3,
+    "reg_entries": [[134217728, 65536], [134283264, 65536]]
+  },
+  "uart": {
+    "path": "/pl011@9000000",
+    "compatible": ["arm,pl011", "arm,primecell"],
+    "reg": [150994944, 4096],
+    "interrupts": [0, 1, 4],
+    "status_enabled": true
+  },
+  "virtio": {
+    "path": "/virtio_mmio@a000000",
+    "compatible": ["virtio,mmio"],
+    "reg": [167772160, 512],
+    "interrupts": [0, 16, 1],
+    "status_enabled": true
+  },
+  "cpu": {
+    "path": "/cpus/cpu@0",
+    "compatible_contains": "arm,cortex-a7",
+    "reg_entries": [[0, 0]]
+  },
+  "chosen": {
+    "stdout_path": "/pl011@9000000"
+  },
+  "nondeterministic_props": ["rng-seed", "kaslr-seed"]
+}

@@ -1,0 +1,159 @@
+{
+  "profile": "buildroot-2026.05.2-symbols-verified",
+  "description": "Symbols verified to EXIST in the real Buildroot 2026.05.2 source tree (release tarball buildroot-2026.05.2.tar.xz, tag 2026.05.2, peeled commit 72d9d4fa636a371ef9eb99c92a735ce9f6d829d5). Each entry records the exact file and line where the symbol is declared, so a defconfig can be checked against real symbols rather than recalled option names.",
+  "verified_against": {
+    "release": "2026.05.2",
+    "tarball_sha256": "see SOURCE_LEDGER.md",
+    "tag_object": "d5774f1666c406402abc46c94aa1517775dd61af",
+    "peeled_commit": "72d9d4fa636a371ef9eb99c92a735ce9f6d829d5"
+  },
+  "symbols": {
+    "BR2_arm": {
+      "file": "arch/Config.in",
+      "line": 33,
+      "kind": "bool"
+    },
+    "BR2_armeb": {
+      "file": "arch/Config.in",
+      "line": 43,
+      "kind": "bool"
+    },
+    "BR2_aarch64": {
+      "file": "arch/Config.in",
+      "line": 54,
+      "kind": "bool"
+    },
+    "BR2_USE_MMU": {
+      "file": "arch/Config.in",
+      "line": 12,
+      "kind": "bool"
+    },
+    "BR2_ARM_CPU_ARMV7A": {
+      "file": "arch/Config.in.arm",
+      "line": 86,
+      "kind": "bool"
+    },
+    "BR2_ARM_CPU_HAS_VFPV4": {
+      "file": "arch/Config.in.arm",
+      "line": 39,
+      "kind": "bool"
+    },
+    "BR2_cortex_a7": {
+      "file": "arch/Config.in.arm",
+      "line": 190,
+      "kind": "bool"
+    },
+    "BR2_ARM_EABI": {
+      "file": "arch/Config.in.arm",
+      "line": 593,
+      "kind": "bool"
+    },
+    "BR2_ARM_EABIHF": {
+      "file": "arch/Config.in.arm",
+      "line": 617,
+      "kind": "bool"
+    },
+    "BR2_TOOLCHAIN_BUILDROOT_GLIBC": {
+      "file": "toolchain/toolchain-buildroot/Config.in",
+      "line": 37,
+      "kind": "bool"
+    },
+    "BR2_PACKAGE_BUSYBOX": {
+      "file": "package/busybox/Config.in",
+      "line": 1,
+      "kind": "bool"
+    },
+    "BR2_LINUX_KERNEL": {
+      "file": "linux/Config.in",
+      "line": 3,
+      "kind": "bool"
+    },
+    "BR2_LINUX_KERNEL_CUSTOM_VERSION": {
+      "file": "linux/Config.in",
+      "line": 75,
+      "kind": "bool"
+    },
+    "BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE": {
+      "file": "linux/Config.in",
+      "line": 117,
+      "kind": "string"
+    },
+    "BR2_LINUX_KERNEL_IMAGE_TARGET_NAME": {
+      "file": "linux/Config.in",
+      "line": 379,
+      "kind": "string"
+    },
+    "BR2_TARGET_ROOTFS_EXT2": {
+      "file": "fs/ext2/Config.in",
+      "line": 1,
+      "kind": "bool"
+    },
+    "BR2_TARGET_ROOTFS_EXT2_4": {
+      "file": "fs/ext2/Config.in",
+      "line": 23,
+      "kind": "bool"
+    },
+    "BR2_TARGET_ROOTFS_CPIO": {
+      "file": "fs/cpio/Config.in",
+      "line": 1,
+      "kind": "bool"
+    },
+    "BR2_TARGET_ROOTFS_CPIO_GZIP": {
+      "file": "fs/cpio/Config.in",
+      "line": 66,
+      "kind": "bool"
+    },
+    "BR2_ROOTFS_OVERLAY": {
+      "file": "system/Config.in",
+      "line": 655,
+      "kind": "string"
+    },
+    "BR2_ROOTFS_POST_BUILD_SCRIPT": {
+      "file": "system/Config.in",
+      "line": 676,
+      "kind": "string"
+    },
+    "BR2_TARGET_GENERIC_HOSTNAME": {
+      "file": "system/Config.in",
+      "line": 38,
+      "kind": "string"
+    },
+    "BR2_TARGET_GENERIC_GETTY_PORT": {
+      "file": "system/Config.in",
+      "line": 456,
+      "kind": "string"
+    },
+    "BR2_SYSTEM_DHCP": {
+      "file": "system/Config.in",
+      "line": 520,
+      "kind": "string"
+    },
+    "BR2_DEFCONFIG": {
+      "file": "Config.in",
+      "line": 234,
+      "kind": "string"
+    }
+  },
+  "documentation": {
+    "rootfs_overlay": {
+      "path": "docs/manual/customize-rootfs.adoc",
+      "note": "In Buildroot 2026.05.2 the manual is AsciiDoc; docs/manual/customize-rootfs.txt does NOT exist. The chapter anchor is [[rootfs-custom]]."
+    },
+    "rebuild_semantics": {
+      "path": "docs/manual/rebuilding-packages.adoc",
+      "note": "States explicitly that Buildroot does not detect configuration changes, and that a package is never rebuilt unless explicitly told to do so -- the mechanism behind fault F12."
+    },
+    "package_make_targets": {
+      "path": "docs/manual/package-make-target.adoc",
+      "note": "Documents the per-package <target> make targets, including the rebuild/reconfigure targets."
+    }
+  },
+  "external_symbols": {
+    "BR2_PACKAGE_APPLIANCE_DIAG": {
+      "file": "fixtures/br2-external/package/appliance-diag/Config.in",
+      "line": 1,
+      "kind": "bool",
+      "origin": "BR2_EXTERNAL tree owned by this repository (not upstream Buildroot)"
+    }
+  }
+}

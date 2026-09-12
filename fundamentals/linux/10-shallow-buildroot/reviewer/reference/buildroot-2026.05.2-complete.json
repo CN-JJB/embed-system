@@ -1,0 +1,47 @@
+{
+  "profile": "buildroot-2026.05.2-complete",
+  "description": "REVIEWER-ONLY complete contract for the canonical Phase 3 Buildroot appliance. Superset of the learner-facing taught profile: it additionally pins the toolchain C library, the exact kernel version, the kernel image target, the initramfs image and its compression, the exact overlay path inside the BR2_EXTERNAL tree, the local package, and it rejects symbols that do not exist in the real Buildroot 2026.05.2 source tree.",
+  "buildroot_release": "2026.05.2",
+  "symbol_table": "fixtures/buildroot-symbols.json",
+  "reject_unknown_symbols": true,
+  "required_values": {
+    "BR2_arm": "y",
+    "BR2_cortex_a7": "y",
+    "BR2_ARM_EABIHF": "y",
+    "BR2_TOOLCHAIN_BUILDROOT_GLIBC": "y",
+    "BR2_TARGET_GENERIC_HOSTNAME": "\"embed-appliance\"",
+    "BR2_TARGET_GENERIC_GETTY_PORT": "\"ttyAMA0\"",
+    "BR2_PACKAGE_BUSYBOX": "y",
+    "BR2_PACKAGE_APPLIANCE_DIAG": "y",
+    "BR2_LINUX_KERNEL": "y",
+    "BR2_LINUX_KERNEL_CUSTOM_VERSION": "y",
+    "BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE": "\"6.18.50\"",
+    "BR2_LINUX_KERNEL_IMAGE_TARGET_NAME": "\"zImage\"",
+    "BR2_TARGET_ROOTFS_EXT2": "y",
+    "BR2_TARGET_ROOTFS_EXT2_4": "y",
+    "BR2_TARGET_ROOTFS_CPIO": "y",
+    "BR2_TARGET_ROOTFS_CPIO_GZIP": "y"
+  },
+  "required_present_nonempty": [
+    "BR2_ROOTFS_OVERLAY"
+  ],
+  "required_exact": {
+    "BR2_ROOTFS_OVERLAY": "\"$(BR2_EXTERNAL_QEMU_VIRT_A7_PATH)/board/qemu-virt-a7/rootfs-overlay\""
+  },
+  "forbidden_set": [
+    "BR2_ARM_EABI",
+    "BR2_aarch64",
+    "BR2_armeb"
+  ],
+  "implications": [
+    {"if_set": "BR2_cortex_a7", "requires_set": ["BR2_arm"]},
+    {"if_set": "BR2_TARGET_ROOTFS_EXT2_4", "requires_set": ["BR2_TARGET_ROOTFS_EXT2"]},
+    {"if_set": "BR2_TARGET_ROOTFS_CPIO_GZIP", "requires_set": ["BR2_TARGET_ROOTFS_CPIO"]},
+    {"if_set": "BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE", "requires_set": ["BR2_LINUX_KERNEL_CUSTOM_VERSION"]}
+  ],
+  "mutually_exclusive": [
+    ["BR2_ARM_EABI", "BR2_ARM_EABIHF"],
+    ["BR2_arm", "BR2_aarch64"],
+    ["BR2_arm", "BR2_armeb"]
+  ]
+}

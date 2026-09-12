@@ -1,0 +1,37 @@
+{
+  "artifact": "qemu-virt.dtb",
+  "description": "Real QEMU-generated device tree blob for the canonical Phase 3 `virt` machine, normalised to canonical FDT layout. Committed as a bounded teaching fixture; regenerate with scripts/dump_virt_dtb.sh.",
+  "generated_utc": "2026-09-11T21:34:00Z",
+  "producer": "qemu-system-arm -machine virt,dumpdtb=...,highmem=off,gic-version=2 -cpu cortex-a7 -m 512M -smp 1",
+  "qemu_version_string": "QEMU emulator version 11.1.0 (v11.1.0-12130-ge470268ff4)",
+  "machine": "virt,highmem=off,gic-version=2",
+  "cpu": "cortex-a7",
+  "memory": "512M",
+  "smp": 1,
+  "raw_dump_bytes": 1048576,
+  "raw_dump_sha256": "0442216cc4646fe7f59ff8ed759129d01b16f0df5786db58ae9a140427a18ad9",
+  "normalised_bytes": 7696,
+  "normalised_sha256": "c91583017e34ac214562ebc80be7c229c53784ebd69575d92a7e304ec11327b1",
+  "normalisation": "re-serialised in canonical FDT layout by scripts/fdtlib_min.py; tree verified semantically identical to the raw dump by scripts/dt_roundtrip_check.py",
+  "cross_validation": {
+    "tool": "dtc 1.7.0 (built from the dtc v1.7.0 release tarball)",
+    "check": "dtc -I dtb -O dts on the normalised artifact reproduces the same tree as the raw dump, modulo the two randomised chosen seed properties"
+  },
+  "nondeterministic_properties": ["chosen/rng-seed", "chosen/kaslr-seed"],
+  "decompiled_source_fixture": "qemu-virt.dts",
+  "node_count": 57,
+  "fdt_version": 17,
+  "canonical_baseline": {
+    "qemu_tag": "v11.1.1",
+    "qemu_peeled_commit": "c3d48b7d1e89604920e5b81b91140c2ad39a1943",
+    "is_canonical_runtime": false,
+    "evidence_status": "PARTIALLY VERIFIED",
+    "note": "The artifact is a real QEMU-generated DTB, but it was produced by an ACTUAL-HOST ALTERNATE (11.1.0-git) rather than the canonical pinned 11.1.1 runtime. The tree structure for `virt,highmem=off,gic-version=2` / `cortex-a7` / `512M` / 1 CPU is stable across 11.1.x, but that stability is asserted by inspection of the two versions, NOT verified by running the canonical build. Regenerate and re-diff before claiming canonical-runtime evidence."
+  },
+  "evidence": {
+    "dtb_generation": "VERIFIED -- the artifact was produced by executing qemu-system-arm",
+    "dtb_parse_and_semantics": "VERIFIED -- scripts/validate_dt_semantics.py passes 84 invariants on this artifact",
+    "dtc_roundtrip": "VERIFIED -- dtc 1.7.0 decompiles the artifact and recompiles it to a semantically identical tree",
+    "runtime_sysfs_correlation": "UNVERIFIED -- no ARM kernel/rootfs was built or booted on the authoring host"
+  }
+}
