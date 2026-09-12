@@ -1,0 +1,31 @@
+{
+  "profile": "buildroot-2026.05.2-taught",
+  "description": "TAUGHT SUBSET of the canonical Phase 3 Buildroot appliance configuration. Covers the architecture/ABI, BusyBox, kernel enablement, block image and overlay selection taught in Labs 6.1-6.3. It is a convenience subset, NOT the whole contract: kernel version pinning, the initramfs image, the local package and the exact overlay path are covered only by the reviewer's complete contract.",
+  "buildroot_release": "2026.05.2",
+  "required_values": {
+    "BR2_arm": "y",
+    "BR2_cortex_a7": "y",
+    "BR2_ARM_EABIHF": "y",
+    "BR2_PACKAGE_BUSYBOX": "y",
+    "BR2_LINUX_KERNEL": "y",
+    "BR2_TARGET_ROOTFS_EXT2": "y",
+    "BR2_TARGET_ROOTFS_EXT2_4": "y"
+  },
+  "required_present_nonempty": [
+    "BR2_ROOTFS_OVERLAY"
+  ],
+  "forbidden_set": [
+    "BR2_ARM_EABI",
+    "BR2_aarch64",
+    "BR2_armeb"
+  ],
+  "implications": [
+    {"if_set": "BR2_cortex_a7", "requires_set": ["BR2_arm"]},
+    {"if_set": "BR2_TARGET_ROOTFS_EXT2_4", "requires_set": ["BR2_TARGET_ROOTFS_EXT2"]}
+  ],
+  "mutually_exclusive": [
+    ["BR2_ARM_EABI", "BR2_ARM_EABIHF"],
+    ["BR2_arm", "BR2_aarch64"],
+    ["BR2_arm", "BR2_armeb"]
+  ]
+}

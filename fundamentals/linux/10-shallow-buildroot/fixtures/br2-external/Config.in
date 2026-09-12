@@ -1,0 +1,1 @@
+source "$BR2_EXTERNAL_QEMU_VIRT_A7_PATH/package/appliance-diag/Config.in"

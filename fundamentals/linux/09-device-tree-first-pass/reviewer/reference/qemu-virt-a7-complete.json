@@ -1,0 +1,108 @@
+{
+  "profile": "qemu-virt-a7-complete",
+  "description": "REVIEWER-ONLY complete semantic contract for the canonical QEMU virt / Cortex-A7 device tree. This is the profile the oracle grades against. It is a superset of the learner-facing taught profile: it additionally covers the whole 32-window virtio-mmio bank, the GPIO and RTC peripherals, the fw-cfg window, the architected timer, the flash bank and the PCIe ECAM window. Every value was decoded out of fixtures/qemu-virt.dtb with fdtlib_min and cross-checked with dtc 1.7.0.",
+  "derived_from": "fixtures/qemu-virt.dtb",
+  "coverage": "complete machine description (superset of the taught profile)",
+  "root": {
+    "compatible": "linux,dummy-virt",
+    "model": "linux,dummy-virt",
+    "address_cells": 2,
+    "size_cells": 2
+  },
+  "memory": {
+    "path": "/memory@40000000",
+    "device_type": "memory",
+    "reg_entries": [[1073741824, 536870912]]
+  },
+  "gic": {
+    "path": "/intc@8000000",
+    "compatible_contains": "arm,cortex-a15-gic",
+    "interrupt_cells": 3,
+    "reg_entries": [[134217728, 65536], [134283264, 65536]]
+  },
+  "uart": {
+    "path": "/pl011@9000000",
+    "compatible": ["arm,pl011", "arm,primecell"],
+    "reg": [150994944, 4096],
+    "interrupts": [0, 1, 4],
+    "status_enabled": true
+  },
+  "virtio": {
+    "path": "/virtio_mmio@a000000",
+    "compatible": ["virtio,mmio"],
+    "reg": [167772160, 512],
+    "interrupts": [0, 16, 1],
+    "status_enabled": true
+  },
+  "virtio_windows": {
+    "first_base": 167772160,
+    "count": 32,
+    "stride": 512,
+    "size": 512,
+    "first_spi": 16,
+    "trigger": 1
+  },
+  "cpu": {
+    "path": "/cpus/cpu@0",
+    "compatible_contains": "arm,cortex-a7",
+    "reg_entries": [[0, 0]]
+  },
+  "chosen": {
+    "stdout_path": "/pl011@9000000"
+  },
+  "peripherals": {
+    "gpio": {
+      "path": "/pl061@9030000",
+      "compatible": ["arm,pl061", "arm,primecell"],
+      "reg": [151191552, 4096],
+      "interrupts": [0, 7, 4],
+      "status_enabled": true
+    },
+    "rtc": {
+      "path": "/pl031@9010000",
+      "compatible": ["arm,pl031", "arm,primecell"],
+      "reg": [151060480, 4096],
+      "interrupts": [0, 2, 4],
+      "status_enabled": true
+    },
+    "fwcfg": {
+      "path": "/fw-cfg@9020000",
+      "compatible": ["qemu,fw-cfg-mmio"],
+      "reg": [151126016, 24],
+      "status_enabled": true
+    },
+    "timer": {
+      "path": "/timer",
+      "compatible": ["arm,armv7-timer"],
+      "interrupts": [[1, 13, 260], [1, 14, 260], [1, 11, 260], [1, 10, 260]],
+      "status_enabled": true
+    },
+    "flash": {
+      "path": "/flash@0",
+      "compatible": ["cfi-flash"],
+      "reg": [[0, 67108864], [67108864, 67108864]],
+      "status_enabled": true
+    },
+    "pcie": {
+      "path": "/pcie@10000000",
+      "compatible": ["pci-host-ecam-generic"],
+      "reg": [1056964608, 16777216],
+      "status_enabled": true
+    },
+    "virtio_window_1": {
+      "path": "/virtio_mmio@a000200",
+      "compatible": ["virtio,mmio"],
+      "reg": [167772672, 512],
+      "interrupts": [0, 17, 1],
+      "status_enabled": true
+    },
+    "virtio_window_3": {
+      "path": "/virtio_mmio@a000600",
+      "compatible": ["virtio,mmio"],
+      "reg": [167773696, 512],
+      "interrupts": [0, 19, 1],
+      "status_enabled": true
+    }
+  },
+  "nondeterministic_props": ["rng-seed", "kaslr-seed"]
+}

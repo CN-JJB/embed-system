@@ -1,0 +1,14 @@
+{
+  "assessment": "challenge",
+  "fault_family": "F11-family resource value (interrupt specifier)",
+  "variant": "console UART interrupt specifier names the wrong SPI",
+  "seeded_edits": [
+    {"op": "set-cells", "path": "/pl011@9000000", "prop": "interrupts",
+     "value": [0, 33, 4],
+     "note": "structurally valid 3-cell specifier; SPI 33 instead of SPI 1 under the GIC #interrupt-cells = 3 binding"}
+  ],
+  "expected_repair": "restore the console interrupt specifier to the SPI the GIC model routes for that UART",
+  "taught_profile_detects": true,
+  "oracle_invariants": ["uart.interrupts.specifiers"],
+  "note": "Same family as faults/F11-bad-mmio-reg-address, different property and node than the worked tutorial."
+}

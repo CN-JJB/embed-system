@@ -1,0 +1,22 @@
+#!/bin/sh
+#
+# S99appliance-diag -- Phase 3 P3-M06 appliance self-report.
+#
+# Runs the locally packaged diagnostic utility once at boot so that the
+# generated image proves, at runtime, which overlay content it actually
+# contains.  It writes a marker to the console and to /var/log.
+
+case "$1" in
+	start)
+		printf 'APPLIANCE-OVERLAY-BOOT-MARKER\n'
+		/usr/bin/appliance-diag
+		;;
+	stop)
+		;;
+	*)
+		echo "Usage: $0 {start|stop}"
+		exit 1
+		;;
+esac
+
+exit 0

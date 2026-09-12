@@ -1,0 +1,156 @@
+#!/usr/bin/env bash
+# Boot the real Phase 3 appliance under the canonical QEMU hardware contract
+# with an explicitly supplied DTB, capture the serial console, and record the
+# executed argv as provenance.
+#
+# Lab 5.4 needs the guest's /sys/firmware/devicetree/base view, which only
+# exists in a running kernel.  This script performs the boot and injects a
+# bounded, read-only correlation probe through a temporary initramfs overlay;
+# the captured log is then bound to the DTB by scripts/verify_runtime_binding.py.
+#
+# Usage:
+#   scripts/run_qemu_dtb_boot.sh DTB KERNEL INITRD OUT_LOG OUT_ARGV
+#
+# Environment:
+#   QEMU_SYSTEM_ARM, QEMU_MACHINE, QEMU_CPU, QEMU_MEM, QEMU_SMP,
+#   TIMEOUT_SEC (default 90), CONSOLE (default ttyAMA0,115200),
+#   EARLYCON (default pl011,0x09000000)
+set -euo pipefail
+
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+M05_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
+cd "$M05_ROOT"
+
+DTB="${1:?usage: run_qemu_dtb_boot.sh DTB KERNEL INITRD OUT_LOG OUT_ARGV [OUT_INITRD]}"
+KERNEL="${2:?}"
+INITRD="${3:?}"
+OUT_LOG="${4:?}"
+OUT_ARGV="${5:?}"
+OUT_INITRD="${6:-}"
+
+QEMU_MACHINE="${QEMU_MACHINE:-virt,highmem=off,gic-version=2}"
+QEMU_CPU="${QEMU_CPU:-cortex-a7}"
+QEMU_MEM="${QEMU_MEM:-512M}"
+QEMU_SMP="${QEMU_SMP:-1}"
+TIMEOUT_SEC="${TIMEOUT_SEC:-90}"
+CONSOLE="${CONSOLE:-ttyAMA0,115200}"
+EARLYCON="${EARLYCON:-pl011,0x09000000}"
+
+QEMU="${QEMU_SYSTEM_ARM:-}"
+[ -n "$QEMU" ] || QEMU=$(command -v qemu-system-arm || true)
+[ -n "$QEMU" ] && [ -x "$QEMU" ] || { echo "ERROR: qemu-system-arm not found" >&2; exit 2; }
+
+for f in "$DTB" "$KERNEL" "$INITRD"; do
+    [ -f "$f" ] || { echo "ERROR: missing required boot input: $f" >&2; exit 2; }
+done
+
+# The DTB identity that is about to be booted. This is the binding anchor:
+# the runtime verifier requires the log's provenance to carry the same hash.
+DTB_SHA=$(sha256sum "$DTB" | awk '{print $1}')
+KERNEL_SHA=$(sha256sum "$KERNEL" | awk '{print $1}')
+BASE_INITRD_SHA=$(sha256sum "$INITRD" | awk '{print $1}')
+
+TMPDIR_PROBE=$(mktemp -d "/tmp/dtprobe.XXXXXX")
+cleanup() {
+    rm -rf "$TMPDIR_PROBE"
+}
+trap cleanup EXIT
+
+# 1. Build bounded guest probe script /dtprobe_init
+cat > "$TMPDIR_PROBE/dtprobe_init" << 'EOF'
+#!/bin/sh
+mount -t proc proc /proc 2>/dev/null || true
+mount -t sysfs sysfs /sys 2>/dev/null || true
+mount -t devtmpfs devtmpfs /dev 2>/dev/null || true
+
+if [ -f /sys/firmware/devicetree/base/model ]; then
+    MODEL=$(cat /sys/firmware/devicetree/base/model 2>/dev/null | tr -d '\0')
+    echo "DT-PROBE model=${MODEL}"
+fi
+
+PROBE_DIR="/sys/firmware/devicetree/base/pl011@9000000"
+if [ -d "$PROBE_DIR" ]; then
+    echo "DT-PROBE-NODE $PROBE_DIR"
+    ls "$PROBE_DIR" 2>/dev/null | grep -v '^name$' | tr '\n' ' '
+    echo ""
+fi
+
+echo "DT-PROBE-END"
+poweroff -f 2>/dev/null || reboot -f 2>/dev/null
+exit 0
+EOF
+chmod +x "$TMPDIR_PROBE/dtprobe_init"
+
+# 2. Package probe script into a tiny cpio overlay
+( cd "$TMPDIR_PROBE" && echo "dtprobe_init" | cpio -o -H newc ) > "$TMPDIR_PROBE/overlay.cpio" 2>/dev/null
+
+# 3. Materialize executed composite boot initrd at deterministic capture-associated path
+if [ -z "$OUT_INITRD" ]; then
+    OUT_DIR=$(dirname "$OUT_ARGV")
+    OUT_STEM=$(basename "$OUT_ARGV")
+    OUT_STEM="${OUT_STEM%.*}"
+    BOOT_INITRD="${OUT_DIR}/${OUT_STEM}.composite-initrd.cpio"
+else
+    BOOT_INITRD="$OUT_INITRD"
+fi
+mkdir -p "$(dirname "$OUT_LOG")" "$(dirname "$OUT_ARGV")" "$(dirname "$BOOT_INITRD")"
+cat "$INITRD" "$TMPDIR_PROBE/overlay.cpio" > "$BOOT_INITRD"
+BOOT_INITRD_SHA=$(sha256sum "$BOOT_INITRD" | awk '{print $1}')
+
+BOOTARGS="console=${CONSOLE} earlycon=${EARLYCON} rdinit=/dtprobe_init"
+
+ARGV=(
+    "$QEMU"
+    -machine "$QEMU_MACHINE"
+    -cpu "$QEMU_CPU"
+    -m "$QEMU_MEM"
+    -smp "$QEMU_SMP"
+    -nographic
+    -no-reboot
+    -kernel "$KERNEL"
+    -initrd "$BOOT_INITRD"
+    -dtb "$DTB"
+    -append "$BOOTARGS"
+)
+
+{
+    echo "# executed_argv (one argument per line, shell-quoted)"
+    printf '%s\n' "${ARGV[@]}" | sed 's/^/argv: /'
+    echo "dtb_sha256: $DTB_SHA"
+    echo "kernel_sha256: $KERNEL_SHA"
+    echo "base_initrd_sha256: $BASE_INITRD_SHA"
+    echo "initrd_sha256: $BOOT_INITRD_SHA"
+    echo "composite_initrd_sha256: $BOOT_INITRD_SHA"
+    echo "initrd_path: $BOOT_INITRD"
+    echo "base_initrd_path: $INITRD"
+    echo "dtb_path: $DTB"
+    echo "kernel_path: $KERNEL"
+    echo "bootargs: $BOOTARGS"
+    echo "machine: $QEMU_MACHINE"
+    echo "cpu: $QEMU_CPU"
+    echo "memory: $QEMU_MEM"
+    echo "smp: $QEMU_SMP"
+    echo "qemu_version: $("$QEMU" --version | head -n 1)"
+    echo "captured_utc: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+} > "$OUT_ARGV"
+
+echo "=== booting with -dtb $DTB (sha256 $DTB_SHA) ==="
+QEMU_RC=0
+if command -v timeout >/dev/null 2>&1; then
+    timeout "$TIMEOUT_SEC" "${ARGV[@]}" </dev/null >"$OUT_LOG" 2>&1 || QEMU_RC=$?
+else
+    "${ARGV[@]}" </dev/null >"$OUT_LOG" 2>&1 &
+    QPID=$!
+    ( sleep "$TIMEOUT_SEC"; kill "$QPID" 2>/dev/null ) &
+    wait "$QPID" || QEMU_RC=$?
+fi
+
+# Fail closed check:
+# Verify that QEMU executed and the guest probe reached DT-PROBE-END
+if ! grep -q "DT-PROBE-END" "$OUT_LOG"; then
+    echo "ERROR: QEMU guest probe failed to complete (DT-PROBE-END missing in $OUT_LOG, qemu_rc=$QEMU_RC)" >&2
+    exit 1
+fi
+
+echo "[OK] console log   : $OUT_LOG ($(wc -c < "$OUT_LOG" | tr -d ' ') bytes)"
+echo "[OK] argv provenance: $OUT_ARGV"

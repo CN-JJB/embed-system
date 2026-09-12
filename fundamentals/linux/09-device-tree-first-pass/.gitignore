@@ -1,0 +1,12 @@
+# Generated / build artifacts for P3-M05.  Never commit these.
+# Patterns are anchored so that committed teaching fixtures are never ignored.
+/build/
+/challenge/build/
+/gate/build/
+*.raw.dtb
+*.log
+*.argv
+__pycache__/
+*.pyc
+__pycache__/
+*.pyc

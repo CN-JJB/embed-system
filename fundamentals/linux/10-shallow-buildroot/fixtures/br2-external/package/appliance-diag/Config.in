@@ -1,0 +1,8 @@
+config BR2_PACKAGE_APPLIANCE_DIAG
+	bool "appliance-diag"
+	help
+	  Original Phase 3 diagnostic utility.  It reports the kernel release,
+	  the appliance identity marker installed by the root filesystem overlay,
+	  and the device tree model string exposed by the kernel.
+
+	  Used by P3-M06 to exercise Buildroot's package build-stamp semantics.

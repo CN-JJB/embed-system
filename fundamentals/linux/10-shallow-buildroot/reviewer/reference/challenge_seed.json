@@ -1,0 +1,14 @@
+{
+  "assessment": "challenge",
+  "fault_family": "target ABI selection",
+  "variant": "soft-float EABI selected instead of EABIhf",
+  "seeded_edits": [
+    {"op": "replace", "symbol": "BR2_ARM_EABIHF", "value": "y",
+     "with": "BR2_ARM_EABI=y",
+     "note": "the canonical Phase 3 userspace contract is hard-float; a soft-float EABI rootfs cannot run the hard-float userspace"}
+  ],
+  "expected_repair": "select the hard-float ABI the canonical target uses",
+  "taught_profile_detects": true,
+  "oracle_invariants": ["required.BR2_ARM_EABIHF", "forbidden.BR2_ARM_EABI"],
+  "note": "Architecture/ABI family taught in Lab 6.1; the seeded instance is the opposite ABI, not a replay."
+}

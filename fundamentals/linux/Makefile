@@ -1,20 +1,26 @@
 CROSS_COMPILE ?= arm-none-linux-gnueabihf-
 
-.PHONY: all clean check mutations reviewer-check real-kernel-build-check real-qemu-check real-busybox-build-check real-m03-qemu-check real-m04-qemu-check
+.PHONY: all clean check mutations reviewer-check real-kernel-build-check real-qemu-check real-busybox-build-check real-m03-qemu-check real-m04-qemu-check real-m05-dt-check real-m06-buildroot-check
 
 all:
 	$(MAKE) -C 05-cross-toolchain-target-artifacts all CROSS_COMPILE=$(CROSS_COMPILE)
 	$(MAKE) -C 06-kernel-build-boot all CROSS_COMPILE=$(CROSS_COMPILE)
 	$(MAKE) -C 07-minimal-rootfs-busybox-init all CROSS_COMPILE=$(CROSS_COMPILE)
 	$(MAKE) -C 08-qemu-bootargs-console-diagnostics all
+	$(MAKE) -C 09-device-tree-first-pass all
+	$(MAKE) -C 10-shallow-buildroot all
 
 clean:
 	$(MAKE) -C 05-cross-toolchain-target-artifacts clean
 	$(MAKE) -C 06-kernel-build-boot clean
 	$(MAKE) -C 07-minimal-rootfs-busybox-init clean
 	$(MAKE) -C 08-qemu-bootargs-console-diagnostics clean
+	$(MAKE) -C 09-device-tree-first-pass clean
+	$(MAKE) -C 10-shallow-buildroot clean
 
 # Learner-safe checks only; no reviewer tooling, no answer mappings.
+# No heavy build (kernel / Buildroot / QEMU) is triggered here: those remain
+# opt-in through the real-* targets below.
 check:
 	@echo "=== Running P3-M01 Learner-Safe Checks ==="
 	$(MAKE) -C 05-cross-toolchain-target-artifacts check CROSS_COMPILE=$(CROSS_COMPILE)
@@ -24,7 +30,11 @@ check:
 	$(MAKE) -C 07-minimal-rootfs-busybox-init check CROSS_COMPILE=$(CROSS_COMPILE)
 	@echo "=== Running P3-M04 Learner-Safe Checks ==="
 	$(MAKE) -C 08-qemu-bootargs-console-diagnostics check
-	@echo "=== ALL PHASE 3 LINUX BOOT-CHAIN (M01..M04) LEARNER-SAFE CHECKS PASSED ==="
+	@echo "=== Running P3-M05 Learner-Safe Checks ==="
+	$(MAKE) -C 09-device-tree-first-pass check
+	@echo "=== Running P3-M06 Learner-Safe Checks ==="
+	$(MAKE) -C 10-shallow-buildroot check
+	@echo "=== ALL PHASE 3 LINUX BOOT-CHAIN (M01..M06) LEARNER-SAFE CHECKS PASSED ==="
 
 # Reviewer-only authoring regression; never invoked by learner workflows.
 mutations:
@@ -36,6 +46,10 @@ mutations:
 	CROSS_COMPILE=$(CROSS_COMPILE) bash 07-minimal-rootfs-busybox-init/reviewer/test_m03_mutations.sh
 	@echo "=== Running P3-M04 Component Validator Mutations ==="
 	bash 08-qemu-bootargs-console-diagnostics/reviewer/test_m04_mutations.sh
+	@echo "=== Running P3-M05 Component Validator Mutations ==="
+	bash 09-device-tree-first-pass/reviewer/test_m05_mutations.sh
+	@echo "=== Running P3-M06 Component Validator Mutations ==="
+	bash 10-shallow-buildroot/reviewer/test_m06_mutations.sh
 	@echo "=== ALL PHASE 3 LINUX COMPONENT MUTATION CHECKS PASSED ==="
 
 reviewer-check:
@@ -47,6 +61,10 @@ reviewer-check:
 	CROSS_COMPILE=$(CROSS_COMPILE) bash 07-minimal-rootfs-busybox-init/reviewer/run_m03_reviewer_check.sh
 	@echo "=== Running P3-M04 Reviewer Check ==="
 	bash 08-qemu-bootargs-console-diagnostics/reviewer/run_m04_reviewer_check.sh
+	@echo "=== Running P3-M05 Reviewer Check ==="
+	bash 09-device-tree-first-pass/reviewer/run_m05_reviewer_check.sh
+	@echo "=== Running P3-M06 Reviewer Check ==="
+	bash 10-shallow-buildroot/reviewer/run_m06_reviewer_check.sh
 	@echo "=== ALL PHASE 3 LINUX REVIEWER CHECKS PASSED ==="
 
 real-kernel-build-check:
@@ -63,3 +81,14 @@ real-m03-qemu-check:
 
 real-m04-qemu-check:
 	$(MAKE) -C 08-qemu-bootargs-console-diagnostics real-bootargs-qemu-check
+
+# P3-M05: real QEMU DTB generation + real dtc round trip.  Requires
+# qemu-system-arm and dtc on the host; opt-in, never part of `check`.
+real-m05-dt-check:
+	$(MAKE) -C 09-device-tree-first-pass dump-dtb
+	$(MAKE) -C 09-device-tree-first-pass roundtrip
+
+# P3-M06: real Buildroot appliance build + boot.  Heavy; opt-in.
+# Usage: make real-m06-buildroot-check BUILDROOT_SRC=/path/to/buildroot-2026.05.2
+real-m06-buildroot-check:
+	$(MAKE) -C 10-shallow-buildroot build BUILDROOT_SRC=$(BUILDROOT_SRC)

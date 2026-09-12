@@ -1,0 +1,16 @@
+{
+  "assessment": "gate",
+  "fault_family": "availability (F10 family) + resource-window (F11 family)",
+  "variant": "combined unfamiliar variant, both defects outside the taught contract profile",
+  "seeded_edits": [
+    {"op": "set-string", "path": "/pl061@9030000", "prop": "status", "value": "disabled",
+     "note": "the GPIO controller is described but no longer available"},
+    {"op": "set-cells", "path": "/virtio_mmio@a000200", "prop": "reg",
+     "value": [0, 167772672, 0, 1024],
+     "note": "window size 0x400 instead of 0x200; silently overlaps /virtio_mmio@a000400"}
+  ],
+  "expected_repair": "restore the peripheral's availability and the virtio-mmio window's size to what the QEMU virt hardware model presents",
+  "taught_profile_detects": false,
+  "oracle_invariants": ["gpio.status.value", "virtio_windows.sizes", "mmio.no-overlap"],
+  "note": "The taught profile passes this artifact by design. Only the complete contract -- i.e. reasoning from the machine description captured in Lab 5.1 -- exposes it."
+}

@@ -1,0 +1,23 @@
+{
+  "assessment": "gate",
+  "fault_family": "kernel version drift + initramfs image contract + overlay provenance",
+  "variant": "combined unfamiliar variant, all three defects outside the taught profile",
+  "seeded_edits": [
+    {"op": "replace", "symbol": "BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE",
+     "value": "\"6.18.50\"", "with": "\"6.6.30\"",
+     "note": "the appliance would be built against a different kernel release than the pinned Phase 3 baseline"},
+    {"op": "unset", "symbol": "BR2_TARGET_ROOTFS_CPIO_GZIP",
+     "note": "the initramfs image would be produced uncompressed; every 'the image exists' check still passes, but the documented launch contract expects rootfs.cpio.gz"},
+    {"op": "replace", "symbol": "BR2_ROOTFS_OVERLAY",
+     "with": "\"$(BR2_EXTERNAL_QEMU_VIRT_A7_PATH)/board/qemu-virt-a7/rootfs-overlay-legacy\"",
+     "note": "the overlay path names a directory that does not exist in this repository's external tree"}
+  ],
+  "expected_repair": "restore the pinned kernel version, the compressed initramfs selection and the real overlay path",
+  "taught_profile_detects": false,
+  "oracle_invariants": [
+    "required.BR2_LINUX_KERNEL_CUSTOM_VERSION_VALUE",
+    "required.BR2_TARGET_ROOTFS_CPIO_GZIP",
+    "exact.BR2_ROOTFS_OVERLAY"
+  ],
+  "note": "The taught profile passes this fragment by design. Only the complete contract exposes it."
+}
