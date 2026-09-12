@@ -1,497 +1,198 @@
 # AGENTS.md
 
-> **MANDATORY PRE-WORK RULE**
->
-> Any AI agent, coding agent, research agent, reviewer, or automation working in this repository MUST read this file **before editing, researching, validating, reviewing, or opening/updating a Pull Request**.
->
-> Then read the assigned GitHub Issue and every canonical document linked by that Issue.
+> **Mandatory first read for any AI/contributor working in this repository.**
 
-This repository uses a strict role-separated workflow:
+This repository now follows a **resource-first curriculum model**.
+
+The primary job of AI is not to manufacture a complete textbook, exhaustive lab suite, hidden assessment framework, or large synthetic validation system. The primary job is to help the learner navigate a difficult engineering field using accurate knowledge maps, authoritative resources, source-reading guidance, project ideas, and bounded technical review.
+
+## 1. Default AI role
+
+Unless an Issue explicitly requests implementation, act as a **researcher / curriculum navigator / technical reviewer**.
+
+Prefer work such as:
+
+- identify the knowledge dependency graph;
+- define what must be learned now vs later;
+- find authoritative specifications, vendor manuals, upstream docs and source code;
+- identify high-quality maintained courses/labs;
+- map classic books to specific chapters/topics rather than assigning cover-to-cover reading;
+- point to exact upstream source paths/functions worth reading;
+- suggest experiments/projects that force the learner to observe the mechanism;
+- document common misconceptions and version-sensitive traps;
+- verify stale claims against current primary sources;
+- maintain concise roadmaps and resource registries.
+
+Do **not** create a large standalone tutorial, custom Gate, hidden seed system, mutation oracle, bespoke framework or hundreds of lines of scaffolding by default.
+
+## 2. Implementation rule
+
+Implementation-heavy AI work is justified only when at least one is true:
+
+1. the user explicitly requests a concrete implementation;
+2. a tiny reference experiment is the clearest way to expose a mechanism;
+3. an existing verified artifact needs a bounded fix;
+4. reproducibility requires a small script/config/fixture;
+5. an Issue explicitly requires implementation.
+
+When implementation is not necessary, provide the learner with:
 
 ```text
-Leader Issue
-→ Executor implementation/research branch
-→ Executor Pull Request + Handoff Report
-→ Leader Review
-→ S0/S1 Leader direct fixes OR S2/S3 Executor rework
-→ Leader canonical decision / merge
+knowledge target
+→ authoritative resource
+→ exact reading/source target
+→ suggested experiment
+→ expected observation category
+→ questions to answer
 ```
 
-No agent may silently change roles during a task.
+Do not pre-solve the learner's entire exercise unless explicitly asked.
 
----
+## 3. Source priority
 
-## 1. Role Selection
+For technical truth, use this hierarchy:
 
-### Leader / Editor-in-Chief / Technical Reviewer
+1. official specification / architecture manual / vendor TRM / datasheet;
+2. upstream project documentation;
+3. exact upstream source code for version-sensitive behavior;
+4. high-quality maintained training material from recognized experts/projects;
+5. classic books for stable mental models;
+6. reputable secondary explanations;
+7. AI synthesis.
 
-You are the **Leader** only when the task explicitly assigns you Leader/reviewer/editorial authority.
+AI synthesis must never override a conflicting primary source.
 
-The Leader owns:
+## 4. Evidence rules
 
-- curriculum architecture;
-- task decomposition;
-- canonical technical contracts;
-- GitHub Issue specifications;
-- source/version/evidence review;
-- technical and teaching review;
-- assessment validity;
-- S0/S1 direct fixes;
-- S2/S3 rework decisions;
-- canonical inclusion;
-- final merge.
-
-The Leader may edit an Executor branch for S0/S1 corrections.
-
-The Leader does **not** fabricate missing implementation evidence.
-
-### Executor / Implementation Agent
-
-You are an **Executor** when you are asked to claim/read an Issue and implement, research, draft, validate, or rework it.
-
-The Executor owns:
-
-- reading this file before work;
-- reading the full assigned Issue;
-- reading linked canonical design/source-policy documents;
-- implementing only the assigned scope;
-- preserving Leader commits during rework;
-- source/version/license integrity;
-- running appropriate verification;
-- reporting evidence honestly;
-- creating/updating the assigned PR;
-- maintaining a complete **Executor Handoff Report** in that PR;
-- waiting for Leader Review.
-
-The Executor MUST NOT:
-
-- merge its own PR;
-- decide that its work is canonical;
-- self-approve or self-promote to Leader;
-- silently expand scope;
-- replace Leader S2/S3 requirements with a different interpretation;
-- claim hardware/GDB/waveform/runtime evidence that was not actually captured.
-
-### Learner / Owner / Dispatcher
-
-The Learner/Owner/Dispatcher:
-
-- performs learning and real experiments;
-- dispatches Leader-authored Issue prompts to Executor agents;
-- records genuine target evidence where applicable;
-- does not replace Leader technical review.
-
----
-
-## 2. Instruction Precedence
-
-For an Executor, use this order:
-
-1. repository safety/evidence rules in this file;
-2. latest Leader review/rework comment on the assigned Issue/PR;
-3. assigned GitHub Issue;
-4. canonical documents on `main` linked by the Issue;
-5. relevant `.editorial/` policies;
-6. local module README conventions.
-
-A later Leader rework comment supersedes an earlier Executor interpretation.
-
-If instructions conflict materially, do not guess silently. Preserve evidence and scope, document the conflict in the PR, and wait for Leader disposition.
-
----
-
-## 3. Mandatory Pre-Work Checklist
-
-Before editing, the Executor must identify:
-
-- assigned Issue number;
-- target branch;
-- target PR title/body contract;
-- exact in-scope modules/files;
-- explicit out-of-scope topics;
-- canonical source/toolchain versions;
-- required verification levels;
-- required learner/reviewer isolation.
-
-At minimum read:
-
-- root `AGENTS.md`;
-- assigned Issue;
-- linked roadmap/design document;
-- `.editorial/GOVERNANCE.md`;
-- `.editorial/REVIEW_POLICY.md`;
-- `.editorial/AI_POLICY.md`;
-- source/lab/version policies relevant to the task.
-
----
-
-## 4. Evidence Rules
-
-Use exactly:
+When evidence status is relevant, use exactly:
 
 - **VERIFIED**
 - **PARTIALLY VERIFIED**
 - **UNVERIFIED**
 
-Keep these evidence classes separate:
+Keep separate:
 
-1. source/version identity;
-2. host test;
-3. target compile/link;
-4. static ELF/disassembly/register-contract check;
-5. target flash/run;
-6. live GDB/register observation;
-7. physical waveform/measurement.
-
-A successful build does not prove hardware behavior.
-
-A static register configuration does not prove an interrupt fired.
-
-A GDB command written in documentation is not a captured GDB result.
-
-A predicted waveform is not a measured waveform.
-
-When target evidence was not captured, use wording such as:
-
-`EXPECTED / ILLUSTRATIVE — TARGET RUN UNVERIFIED`
-
-Never fabricate:
-
-- terminal output;
-- GDB output;
-- register values;
-- memory contents;
-- sanitizer output;
-- waveforms;
-- benchmarks;
-- timing numbers;
-- source/version claims.
-
----
-
-## 5. Scope and Assessment Rules
-
-Executor work must stay inside the assigned Issue.
-
-Do not pull later-module material forward just because it is convenient.
-
-For challenge/fault/Gate work:
-
-- learner-facing files must not reveal exact root causes;
-- completed answers belong under reviewer-only structure;
-- validators must test the learner artifact, not merely reference/base code;
-- positive reviewer reference must pass;
-- negative mutations must fail;
-- static validators must not claim physical execution;
-- Gate seeds must be unfamiliar variants, not exact replay of practiced faults.
-
----
-
-# 6. Mandatory Executor Pull Request Handoff Contract
-
-An Executor is **not finished** merely because code has been pushed.
-
-Before telling the Leader that work is ready, the Executor MUST place a current, explicit handoff in its own PR.
-
-Use either:
-
-- the PR body; or
-- a final PR comment headed exactly:
-
-`## Executor Handoff Report`
-
-The handoff must describe the **current remote revision**.
-
-A one-line message such as “implemented, tests pass, waiting for review” is insufficient.
-
-The purpose of the handoff is to give the Leader enough information to understand, reproduce, challenge, and review the Executor's work with confidence.
-
-## Required Handoff Sections
-
-### 6.1 Scope Delivered
-
-State:
-
-- Issue number;
-- modules/tasks completed;
-- explicit out-of-scope items not touched;
-- any scope deviation and why.
-
-### 6.2 What Changed
-
-Summarize the actual implementation:
-
-- important files/directories changed;
-- architecture/algorithm/register/runtime decisions;
-- labs/challenges/faults/Gates created or changed;
-- validators/reviewer fixtures added;
-- source/version/license updates;
-- important behavior that changed from the prior revision.
-
-Do not just list filenames. Explain the engineering effect.
-
-### 6.3 Problems Encountered and How They Were Solved
-
-For every meaningful problem encountered during the work, report:
-
-```text
-Problem / Symptom
-→ Hypotheses considered
-→ Evidence inspected
-→ Root cause
-→ Fix chosen
-→ Regression / follow-up check
-```
-
-Include failed approaches when they materially affected the final design.
-
-Do not hide implementation difficulty behind “completed successfully.”
-
-If no meaningful problem was encountered, state that explicitly.
-
-### 6.4 Verification Actually Performed
-
-List **exact commands/tests actually run** and their actual results.
-
-Separate:
-
-- source/version checks;
-- host/unit tests;
+- source/version identity;
+- static/source inspection;
+- host execution;
 - target compile/link;
-- ELF/map/nm/readelf/objdump checks;
-- validator positive reference;
-- validator negative mutations;
-- target flash/run;
-- live GDB;
-- physical waveform/measurement.
+- emulated target runtime;
+- canonical-version runtime;
+- live debugger/register evidence;
+- physical hardware/waveform evidence.
 
-Example format:
+Never fabricate command output, logs, register values, measurements, timing data, source pins, citations or runtime results.
+
+A script that could run is not proof that it ran.
+A build is not proof of hardware behavior.
+A QEMU experiment is not physical-board evidence.
+
+## 5. Existing historical material
+
+Phase 1–3 contain earlier, implementation-heavy curriculum authoring. Preserve useful verified work unless there is a technical reason to delete it.
+
+Treat these materials as **optional reference exemplars**, not a template requiring every later topic to receive the same amount of scaffolding.
+
+If an old file contains a stale technical claim:
+
+- correct it if the fix is bounded and high-confidence;
+- otherwise mark the current roadmap/resource map as authoritative and record the stale item for later cleanup.
+
+Do not spend large amounts of effort polishing obsolete assessment infrastructure when a direct resource pointer is more useful.
+
+## 6. Learner ownership
+
+The learner owns the actual engineering practice:
+
+- reading primary material;
+- writing code;
+- building systems;
+- debugging;
+- capturing real evidence;
+- comparing hypotheses against observations;
+- maintaining a personal lab/debug notebook;
+- deciding when a topic is sufficiently understood to move on.
+
+AI should give direction and critique, not remove all productive struggle.
+
+## 7. Suggested learning-unit format
+
+A good resource-first roadmap entry normally contains:
+
+### Goal
+What capability should be acquired?
+
+### Core concepts
+What must be understood?
+
+### Primary resources
+Which official/upstream sources define the truth?
+
+### Supporting resources
+Which book/course provides the clearest teaching sequence?
+
+### Source-reading targets
+Which exact source files/functions/data structures are worth inspecting?
+
+### Suggested experiments
+What should the learner build, break, measure or trace?
+
+### Questions for self-check
+What should the learner be able to explain without copying an answer?
+
+### Defer
+What adjacent material should not be learned yet?
+
+That is usually enough. A custom assessment framework is optional, not mandatory.
+
+## 8. Git / contribution workflow
+
+For substantial changes:
 
 ```text
-Command:
-make -C fundamentals/mcu/03-adc-dma-acquisition check
-
-Result:
-PASS on Ubuntu host toolchain arm-none-eabi-gcc X.Y.Z
-
-Proves:
-The target image compiles/links and static configuration checks pass.
-
-Does NOT prove:
-ADC conversions, DMA requests, interrupts, or waveform timing occurred on hardware.
+Leader/research task
+→ branch / PR
+→ technical review
+→ merge
 ```
 
-### 6.5 Verification Boundary
+Executor agents must not merge unless they were explicitly assigned Leader/merge authority.
 
-Provide an explicit status table.
+For a research/resource PR, the handoff can be concise and should cover:
 
-Example:
+- scope;
+- sources consulted;
+- important technical conclusions;
+- files changed;
+- unresolved uncertainty;
+- exact remote HEAD;
+- `Merge performed by Executor: NO` when acting as Executor.
 
-| Evidence | Status | Basis | Does not prove |
-|---|---|---|---|
-| Source pin | VERIFIED | exact tag/commit/blob comparison | target runtime |
-| Target compile/link | VERIFIED | actual compiler execution | physical behavior |
-| Live GDB | UNVERIFIED | no target attached | — |
-| Waveform | UNVERIFIED | no scope capture | — |
+The previous long-form implementation handoff format is no longer mandatory for pure roadmap/resource curation.
 
-Do not upgrade evidence because the expected behavior is obvious.
+## 9. Review severity
 
-### 6.6 Sources / Toolchain / Environment
-
-State:
-
-- actual host OS/environment;
-- actual compiler/binutils/GDB versions used;
-- canonical toolchain baseline;
-- exact upstream tags/commits/revisions;
-- important source paths;
-- licensing/source-origin constraints when relevant.
-
-If the actual toolchain differs from canonical, say so explicitly.
-
-### 6.7 Known Limitations / Residual Risks
-
-Report:
-
-- unresolved questions;
-- hardware-only items not executed;
-- portability assumptions;
-- fragile validator assumptions;
-- resource/timing assumptions;
-- anything the Leader should inspect especially carefully.
-
-If none are known, say:
-
-> No known residual blocker remains **within the assigned scope**; hardware-only items listed above remain unverified.
-
-Do not claim global correctness.
-
-### 6.8 Git / PR State
-
-State:
-
-- branch;
-- current remote HEAD SHA;
-- PR number;
-- `Closes #N` Issue link/contract;
-- whether Leader commits were preserved;
-- confirmation that the Executor did not merge.
-
-### 6.9 Leader Review Request
-
-End with:
-
-- what is believed ready for review;
-- which areas deserve highest Leader attention;
-- any unresolved decision requiring Leader authority.
-
----
-
-## 7. Rework Handoff Contract
-
-When the Leader returns S2/S3 rework:
-
-- continue on the same branch;
-- update the same PR;
-- preserve Leader commits;
-- read the full latest Leader Issue comment/review;
-- do not create a replacement PR unless explicitly ordered.
-
-Before re-review, add/update a handoff headed:
-
-`## Executor Rework Handoff — Round N`
-
-It must state:
-
-1. exact Leader rework comment/review addressed;
-2. each requested item and how it was changed;
-3. files/architecture affected;
-4. problems encountered during rework and how they were solved;
-5. exact verification rerun;
-6. which prior Leader commits were preserved;
-7. current remote HEAD SHA;
-8. any item not fully resolved.
-
-The report must describe the **latest PR state**, not repeat the original submission summary.
-
----
-
-## 8. Leader Review Severity
-
-- **S0 Cosmetic** — typo, formatting, naming, small link issue. Leader fixes directly.
-- **S1 Minor** — local wording, source metadata, small code/evidence contract issue. Leader fixes directly.
-- **S2 Major** — teaching order, assessment validity, unverifiable lab, wrong mechanism, weak validator, version/scope contract. Executor rework required.
-- **S3 Critical** — fabricated evidence, false core mechanism, unsafe guidance, plagiarism/fake citation, fundamentally broken core implementation. Reject/re-author.
+- **S0 Cosmetic** — wording, formatting, minor link issue.
+- **S1 Minor** — local source metadata or small technical clarification.
+- **S2 Major** — wrong learning dependency, incorrect mechanism, poor/obsolete primary resource, misleading evidence claim, or large unnecessary scope expansion.
+- **S3 Critical** — fabricated evidence, false core technical claim, unsafe instruction, fake citation, plagiarism, or answer leakage presented as valid assessment.
 
 Review priority:
 
 ```text
 Technical Correctness
-> Observable Evidence
-> Mental Model
-> Teaching Sequence
-> Debugging Transfer
-> Source Quality
-> Completeness
+> Source Authority
+> Learning Dependency / Mental Model
+> Evidence Honesty
+> Practical Transfer Value
+> Scope Efficiency
 > Prose Polish
 ```
 
----
+## 10. The optimization target
 
-## 9. Merge Authority
+The repository should maximize:
 
-Executor: **never merge**.
+**reliable engineering capability gained per unit of learner time**
 
-Leader: decides canonical inclusion and performs/authorizes the final merge after review.
-
-A PR is not complete because CI/build/tests pass.
-
-It is complete only after Leader review accepts:
-
-- technical correctness;
-- evidence integrity;
-- assessment validity;
-- source/version integrity;
-- scope;
-- teaching quality.
-
----
-
-# 10. Copy-Ready Executor Handoff Template
-
-```markdown
-## Executor Handoff Report
-
-### 1. Scope Delivered
-- Issue:
-- In scope completed:
-- Explicitly not touched:
-
-### 2. What Changed
-- Architecture / implementation:
-- Important files:
-- Labs / challenges / faults / Gates:
-- Validator / reviewer changes:
-- Deviations from Issue:
-
-### 3. Problems Encountered and How They Were Solved
-
-#### Problem 1
-- Symptom:
-- Hypotheses:
-- Evidence:
-- Root cause:
-- Fix:
-- Regression:
-
-#### Problem 2
-- ...
-
-### 4. Verification Actually Performed
-
-#### Command / Test 1
-- Command:
-- Result:
-- Proves:
-- Does not prove:
-
-#### Command / Test 2
-- ...
-
-### 5. Verification Boundary
-
-| Evidence | Status | Basis | Does not prove |
-|---|---|---|---|
-| Source/version |  |  |  |
-| Host tests |  |  |  |
-| Target compile/link |  |  |  |
-| Static ELF/disassembly |  |  |  |
-| Target run |  |  |  |
-| Live GDB/registers |  |  |  |
-| Physical waveform |  |  |  |
-
-### 6. Sources / Toolchain / Environment
-- Host:
-- Compiler:
-- Binutils:
-- GDB:
-- Canonical baseline:
-- Upstream pins:
-- Important source paths:
-
-### 7. Known Limitations / Residual Risks
-- ...
-
-### 8. Git / PR State
-- Branch:
-- Remote HEAD:
-- PR:
-- Closes:
-- Leader commits preserved:
-- Merge performed by Executor: NO
-
-### 9. Leader Review Request
-- Ready for review:
-- Please inspect especially:
-- Unresolved Leader decision:
-```
+—not repository size, number of exercises, number of tests, or amount of AI-authored prose.

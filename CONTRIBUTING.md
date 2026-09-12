@@ -1,80 +1,84 @@
 # Contributing to embed-system
 
-This repository uses a role-separated editorial workflow. Tutorial text, code, labs, assessments, and research are not automatically publishable because they build or pass local tests.
+This repository follows a **resource-first editorial workflow**.
 
-## Mandatory First Read
+Most contributions should improve one of these:
 
-Before any AI agent or contributor starts work, read:
+- knowledge/dependency maps;
+- authoritative resource selection;
+- source-reading targets;
+- learning sequence;
+- experiment/project suggestions;
+- bounded corrections to stale technical claims;
+- concise notes from verified real experiments.
 
-1. **`AGENTS.md`** — mandatory Leader / Executor workflow and PR handoff contract.
-2. the assigned GitHub Issue;
-3. every canonical design/roadmap document linked by that Issue;
-4. the relevant `.editorial/` policies.
+Large tutorial packages, custom Gates, hidden-seed systems, mutation frameworks and bespoke validators are **not required by default**.
 
-The root `AGENTS.md` is the operational entrypoint for all agent work.
+## Mandatory first read
 
-## Canonical Workflow
+Before substantial work, read:
+
+1. `AGENTS.md`;
+2. the relevant roadmap/resource file;
+3. `.editorial/GOVERNANCE.md`;
+4. `.editorial/RESOURCE_POLICY.md`;
+5. `.editorial/REVIEW_POLICY.md`;
+6. `.editorial/AI_POLICY.md`.
+
+## Preferred contribution workflow
+
+For resource/research changes:
 
 ```text
-Leader creates full GitHub Issue
-→ Executor implements/researches on assigned branch
-→ Executor opens/updates its PR
-→ Executor writes a complete Handoff Report in that PR
-→ Leader reviews
-→ S0/S1: Leader may fix directly
-→ S2/S3: Executor reworks the same PR
-→ Leader decides canonical inclusion and merge
+identify learning gap
+→ check primary sources/current upstream docs
+→ make a concise roadmap/resource change
+→ open PR
+→ technical review
+→ merge
 ```
 
-The Executor **never merges its own PR**.
+For explicit implementation work:
 
-## Executor Completion Requirement
+```text
+bounded implementation task
+→ branch / PR
+→ report what was actually built/run
+→ technical review
+→ merge/rework
+```
 
-Before reporting work as complete, the Executor must update its own PR with the mandatory **Executor Handoff Report** defined in `AGENTS.md`.
+An Executor must not merge unless explicitly assigned Leader/merge authority.
 
-The report must explain, at minimum:
+## What a good resource PR contains
 
-- what was implemented;
-- what changed and why;
-- meaningful problems encountered;
-- hypotheses/evidence/root cause/fix/regression for those problems;
-- exact commands/tests actually run and actual results;
-- VERIFIED / PARTIALLY VERIFIED / UNVERIFIED boundaries;
-- toolchain/source/version identity;
-- known limitations and residual risks;
-- branch, remote HEAD, PR, Issue closing contract;
-- what the Leader should inspect especially carefully.
+- clear scope;
+- ranked sources rather than a link dump;
+- explanation of what each resource is for;
+- exact source-reading targets when useful;
+- learning-order rationale;
+- suggested experiment/project direction;
+- known uncertainty or version sensitivity;
+- no fabricated evidence.
 
-“Implemented, tests pass, waiting for review” is not a sufficient handoff.
+A concise PR is preferable to a large amount of generated prose.
 
-After Leader rework, the Executor must update the same PR with a current rework handoff describing the latest revision.
+## Evidence
 
-## Editorial Policies
+When evidence status matters, use only:
 
-See:
+- `VERIFIED`
+- `PARTIALLY VERIFIED`
+- `UNVERIFIED`
 
-- `.editorial/GOVERNANCE.md`
-- `.editorial/SOURCE_POLICY.md`
-- `.editorial/RESOURCE_POLICY.md`
-- `.editorial/WRITING_GUIDE.md`
-- `.editorial/LAB_STANDARD.md`
-- `.editorial/IMAGE_POLICY.md`
-- `.editorial/REVIEW_POLICY.md`
-- `.editorial/AI_POLICY.md`
-- `.editorial/VERSION_POLICY.md`
+Do not confuse source inspection, target build, emulated runtime and physical hardware evidence.
 
-## Core Principle
+## Editorial policies
 
-A convincing explanation is not enough.
+See `.editorial/` for source, resource, writing, lab, image, review, AI and version policies.
 
-Content should be:
+## Core principle
 
-- correct;
-- sourced;
-- teachable;
-- reproducible;
-- observable;
-- debuggable;
-- version-aware;
-- assessment-valid;
-- useful to the target engineering path.
+The repository should maximize **reliable engineering capability per unit of learner time**.
+
+A good contribution helps the learner find the right truth source, understand the dependency, do the right experiment, and avoid a known misconception. It does not need to pre-build the entire learning experience.

@@ -2,134 +2,144 @@
 
 ## Mission
 
-`embed-system` is a living learning system for developing strong Embedded Systems Engineering capability, with a primary path through Embedded Linux, BSP, Linux drivers, SoC/platform engineering, bring-up, debugging, and performance.
+`embed-system` is a living **resource-first engineering learning system** for developing strong Embedded Systems capability, especially in Embedded Linux, BSP, Linux drivers, SoC/platform engineering, bring-up, debugging and performance.
 
-The repository serves five roles at once:
+The repository is primarily responsible for:
 
-1. tutorial;
-2. lab book;
-3. project portfolio;
-4. debugging knowledge base;
-5. career-alignment system.
+1. a knowledge/dependency map;
+2. a curated resource map;
+3. source-reading guidance;
+4. suggested experiments/projects;
+5. debugging/evidence habits;
+6. career-alignment and specialization choices.
 
-## Operational Entry Point
+It may also contain verified reference labs and projects, especially from earlier phases, but it is **not required to become a complete standalone textbook**.
 
-Root `AGENTS.md` is mandatory before any agent work.
+## Operational entry point
 
-It defines the current operational workflow, role boundaries, evidence rules, and Executor PR handoff contract.
+Read root `AGENTS.md` before substantial AI/contributor work.
+
+## Editorial principle
+
+The optimization target is:
+
+> reliable engineering capability gained per unit of learner time
+
+Repository size, amount of AI prose, number of validators and number of Gates are not success metrics.
 
 ## Roles
 
-### Leader / Editor-in-Chief / Technical Reviewer
+### Leader / Editor / Technical Reviewer
 
-The project Leader owns:
+The Leader owns:
 
-- curriculum architecture;
-- task decomposition;
-- GitHub Issue specifications;
-- technical review;
-- teaching review;
-- source/version review;
-- assessment-validity review;
-- job-market alignment;
-- S0/S1 direct fixes;
-- S2/S3 rework disposition;
-- canonical inclusion;
-- final merge.
+- the overall learning architecture;
+- source/resource quality;
+- technical correctness;
+- scope and sequencing;
+- bounded corrections to stale material;
+- canonical inclusion and merge;
+- deciding when implementation-heavy authoring is actually justified.
 
-No Executor, researcher, draft writer, or lab designer has final editorial authority.
+### Research / Resource Agent
 
-### Executor / Implementation Agent
+This is the default AI role.
 
-The Executor is the operational role for an AI or contributor assigned to implement/research/draft/validate a Leader-authored Issue.
+It should:
 
-The Executor owns:
+- map knowledge prerequisites;
+- locate primary sources and maintained expert material;
+- verify version-sensitive claims;
+- rank resources;
+- identify exact source-reading targets;
+- propose experiments and self-check questions;
+- keep optional depth out of the critical path.
 
-- reading `AGENTS.md`, the assigned Issue, and linked canonical documents before work;
-- staying inside assigned scope;
-- implementing the requested code/content/lab/research;
-- running appropriate verification;
-- preserving source/version/evidence integrity;
-- creating or updating the assigned PR;
-- maintaining the mandatory **Executor Handoff Report** in that PR;
-- performing Leader-requested S2/S3 rework on the same PR.
+It should not create a large bespoke tutorial or assessment framework unless explicitly requested.
 
-The Executor must not:
+### Implementation Agent
 
-- self-approve;
-- self-promote to Leader;
-- merge its own PR;
-- claim canonical status;
-- fabricate execution evidence;
-- silently expand scope.
+Implementation is a special case, used for:
 
-### Learner / Owner / Dispatcher
+- a small reference experiment;
+- a reproducibility helper;
+- a bounded existing fix;
+- an explicitly requested project/lab.
 
-The repository owner:
+Implementation agents must report actual evidence honestly and must not merge unless assigned Leader authority.
 
-- performs the learning tasks;
-- runs real experiments;
-- records genuine target evidence;
-- dispatches short Leader-authored prompts that point Executors to full GitHub Issues.
+### Learner
 
-The Learner/Dispatcher does not replace Leader technical review.
+The learner owns the most important work:
 
-### Researcher / Draft Writer / Lab Designer
+- reading;
+- coding;
+- building;
+- debugging;
+- measuring;
+- source navigation;
+- recording real evidence;
+- transferring knowledge to unfamiliar cases.
 
-These are Executor specializations, not independent editorial authorities.
+The repository should preserve productive struggle rather than pre-solving every exercise.
 
-They may:
+## Canonical workflow
 
-- collect sources;
-- map a topic;
-- draft text;
-- propose diagrams;
-- design labs;
-- prepare code candidates.
-
-They must follow the same Executor evidence and PR handoff rules.
-
-## Canonical Workflow
+For research/resource work:
 
 ```text
-Leader Issue
-→ Executor branch/work
-→ Executor PR + Handoff Report
-→ Leader Review
-→ S0/S1 Leader direct fix OR S2/S3 Executor rework
-→ Leader canonical decision / merge
+research question / roadmap gap
+→ source review
+→ concise roadmap/resource change
+→ technical review
+→ merge
 ```
 
-Full task and rework specifications belong in GitHub Issues/review threads.
+For implementation-heavy work:
 
-The short prompt given to an Executor should normally tell it to claim/read the Issue, execute it, update the assigned PR, and wait for Leader Review.
+```text
+explicit implementation task
+→ implementation branch/PR
+→ evidence report
+→ technical review
+→ merge/rework
+```
 
-## Review Severity
+A large hidden assessment system is never required merely because a topic exists.
 
-- **S0 Cosmetic** — spelling, formatting, naming, link, minor style. Leader fixes directly.
-- **S1 Minor** — local wording/source inconsistency/small code or evidence contract. Leader fixes directly.
-- **S2 Major** — wrong teaching order, weak evidence, invalid assessment, unverifiable lab, mechanism/version/scope contract problem. Executor rework required.
-- **S3 Critical** — false core technical claim, unsafe guidance, fabricated evidence, fake citation, plagiarism, fundamentally broken core implementation presented as valid. Reject/re-author.
+## Review severity
 
-## Merge Authority
+- **S0 Cosmetic** — typo, formatting, minor link problem.
+- **S1 Minor** — small source metadata or local technical clarification.
+- **S2 Major** — wrong mechanism, poor source choice, wrong learning dependency, misleading evidence, unnecessary large scope, or stale version-sensitive guidance.
+- **S3 Critical** — fabricated evidence, fake source/citation, unsafe instruction, plagiarism, fundamentally false technical claim, or assessment answer leakage presented as valid.
 
-The Executor never merges.
+Review priority:
 
-The Leader decides canonical inclusion and performs or authorizes the final merge after review.
+```text
+Technical Correctness
+> Source Authority
+> Mental Model / Learning Dependency
+> Evidence Honesty
+> Practical Transfer Value
+> Scope Efficiency
+> Prose Polish
+```
 
-A contribution is not ready merely because it reads well or passes a local build. It must pass:
+## Evidence
 
-- technical correctness;
-- observable evidence integrity;
-- mental-model quality;
-- teaching coherence;
-- assessment validity;
-- source/version integrity;
-- reproducibility;
-- licensing/originality;
-- scope discipline;
-- career relevance.
+When evidence status is material, use only:
 
-## Living Book Principle
+- **VERIFIED**
+- **PARTIALLY VERIFIED**
+- **UNVERIFIED**
 
-The repository may be restructured, rewritten, downgraded, or deleted as better evidence or higher-value learning paths emerge.
+Do not collapse source inspection, emulated runtime and physical hardware into one claim.
+
+## Existing material
+
+Phase 1–3 contain significant historical implementation-heavy work. Keep useful verified material as optional reference exemplars.
+
+Do not use the existence of those assets as precedent that future phases need equivalent scaffolding.
+
+The project may rewrite, downgrade, archive or delete material when a better learning path emerges.
