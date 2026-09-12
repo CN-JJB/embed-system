@@ -11,7 +11,34 @@ A resource-first learning map for becoming a strong Embedded Systems Engineer, w
 - performance and real-time behavior
 - hardware-software co-design
 
-> **Status:** Phase 1–3 knowledge maps and verified reference work are canonical. The repository is now in **resource-first mode**: future AI work prioritizes authoritative resources, learning order, source-reading targets, suggested experiments, and bounded technical corrections rather than generating a large standalone textbook or exhaustive assessment framework.
+> **Status:** Phase 1–3 knowledge maps and verified reference work are canonical. Phase 4–6 are resource-first maps. AI primarily researches authoritative resources, clarifies mechanisms and reviews learner work instead of pre-solving the entire curriculum.
+
+## If you are here to learn: start here
+
+**Do not begin with the resource registry or by browsing random folders.**
+
+Use this order:
+
+1. **[`START_HERE.md`](START_HERE.md)** — the linear learner route: exactly what to do next from Phase 0 through Phase 6.
+2. **[`resources/TOPIC_RESOURCE_INDEX.md`](resources/TOPIC_RESOURCE_INDEX.md)** — the precise topic → document/chapter/source → experiment → exit-criterion mapping used by each step.
+3. **[`roadmap/MASTER_LEARNING_MAP.md`](roadmap/MASTER_LEARNING_MAP.md)** — the broad dependency/competency map when you need context rather than the next action.
+4. **[`resources/CANONICAL_RESOURCES.md`](resources/CANONICAL_RESOURCES.md)** — the wider reference library when you need an alternative or deeper source.
+
+The learner path is intentionally:
+
+```text
+START_HERE
+→ one numbered learning unit
+→ matching TOPIC_RESOURCE_INDEX row
+→ primary source slice
+→ one explanation/course resource
+→ upstream source where useful
+→ learner-built experiment
+→ evidence note + exit criterion
+→ next unit
+```
+
+Existing `fundamentals/`, `projects/`, and older Gates are **reference exemplars**, not a requirement to read solved material before attempting the work yourself.
 
 ## What this repository is
 
@@ -19,7 +46,7 @@ This repository is primarily a **navigation and engineering-practice system**. I
 
 1. what to learn;
 2. in what order;
-3. which primary sources and high-quality courses/books to use;
+3. exactly which primary sources and high-quality courses/books apply to each knowledge point;
 4. which upstream code is worth reading;
 5. what experiments or projects are worth attempting;
 6. what evidence would demonstrate real understanding;
@@ -28,14 +55,6 @@ This repository is primarily a **navigation and engineering-practice system**. I
 Existing verified labs, scripts, gates and projects are retained as **optional reference exemplars**. They are not a requirement that every future topic receive an AI-authored tutorial, hidden-seed gate, mutation oracle or custom validator.
 
 The learner is expected to do the actual learning, implementation, debugging and experimentation from the cited resources.
-
-## Start here
-
-- [Master Learning Map](roadmap/MASTER_LEARNING_MAP.md)
-- [Roadmap Status and Phase Index](roadmap/README.md)
-- [Canonical Resources](resources/CANONICAL_RESOURCES.md)
-- [Resource Policy](.editorial/RESOURCE_POLICY.md)
-- [Governance](.editorial/GOVERNANCE.md)
 
 ## Current phase map
 
@@ -65,7 +84,7 @@ For version-sensitive engineering, prefer this order:
 
 ```text
 official specification / vendor TRM / upstream documentation
-→ upstream source code
+→ source code for the exact version being used
 → high-quality maintained course/lab
 → classic book for durable mental model
 → learner-built experiment
@@ -77,18 +96,33 @@ Blogs and AI explanations are supporting material, not the final authority for k
 
 Previously authored Phase 1–3 material is not discarded merely because the authoring strategy changed. Work that captured real source/version evidence or real runtime behavior remains useful as a reference. Unverified or synthetic material must remain explicitly labelled and must not be promoted to runtime or hardware evidence.
 
+When a reference project contains a finished solution, prefer this order:
+
+```text
+read the route/resources
+→ attempt your own implementation or diagnosis
+→ capture evidence
+→ only then compare with the repository exemplar
+```
+
 ## Editorial system
 
-AI is now primarily a **researcher, navigator and technical reviewer**. It should:
+AI is primarily a **researcher, navigator and technical reviewer**. It should:
 
 - map knowledge and dependencies;
 - find authoritative resources;
 - verify version-sensitive claims against primary sources;
-- recommend source-reading targets;
+- recommend exact source-reading targets;
 - suggest experiments and projects without pre-solving them;
 - identify misconceptions and stale material;
-- keep the learning path bounded and career-relevant.
+- keep the learning path bounded and career-relevant;
+- review the learner's reasoning and evidence after an attempt.
 
 AI should **not** create a large new tutorial or custom assessment framework by default. Implementation-heavy authoring requires an explicit reason and should be kept small.
 
-See [`AGENTS.md`](AGENTS.md) and [`.editorial/`](.editorial/) for the current rules.
+## Repository/editorial reference
+
+- [Roadmap index](roadmap/README.md)
+- [Resource policy](.editorial/RESOURCE_POLICY.md)
+- [Governance](.editorial/GOVERNANCE.md)
+- [Agent rules](AGENTS.md)

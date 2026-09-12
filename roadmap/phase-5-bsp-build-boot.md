@@ -1,258 +1,224 @@
 # Phase 5 — BSP, Bootloader, Build Systems and Board Integration
 
-> **Authoring model:** resource-first. The objective is to learn how a production embedded Linux image is assembled and maintained, not to create a giant AI-authored BSP tutorial.
+> **Authoring model:** resource-first. The objective is to understand how a production embedded-Linux image is assembled and maintained, not to create a giant AI-authored BSP tutorial.
+
+## How to navigate this phase
+
+Use the same unit IDs everywhere:
+
+- [`../START_HERE.md`](../START_HERE.md) — order and next action;
+- [`../resources/TOPIC_RESOURCE_INDEX.md`](../resources/TOPIC_RESOURCE_INDEX.md) — exact documents/headings/source targets/experiments;
+- this file — phase scope and dependencies.
+
+```text
+P5.1 BSP layer mental model
+→ P5.2 U-Boot standard boot / environment / FDT
+→ P5.3 Buildroot project customization
+→ P5.4 Yocto/OE metadata / tasks / signatures / sstate
+→ P5.5 kernel + DT patch/config management
+→ P5.6 image layout / recovery / update architecture
+→ P5.7 licensing / CVE / SBOM / reproducibility
+→ P5.8 board-integration capstone
+```
 
 ## Exit capability
 
 By the end of Phase 5, the learner should be able to:
 
-- explain what a BSP actually contains and what it does not;
-- trace boot from ROM/firmware into U-Boot and Linux at the level needed for board integration;
-- manage kernel config, patches and Device Tree as source-controlled BSP inputs;
+- explain what a BSP contains and what it does not;
+- trace boot from firmware/ROM assumptions through U-Boot to Linux;
+- manage kernel config, patches and DT as source-controlled BSP inputs;
 - use Buildroot confidently for a small embedded product;
-- understand the Yocto/OpenEmbedded layer/recipe/task/signature model well enough to work in a production BSP;
+- understand Yocto/OpenEmbedded layer/recipe/task/signature/sstate concepts well enough to work in a production BSP;
 - distinguish board support, machine metadata, packages, images and application layers;
-- debug “works in source tree but not in final image” propagation problems;
-- reason about reproducibility, licenses, CVEs and update strategy;
-- make a bounded change crossing bootloader/DT/kernel/rootfs/build-system layers.
+- debug “changed source but not final image” propagation failures;
+- reason about image/update/recovery, licenses, CVEs, SBOM and reproducibility;
+- make a bounded change crossing at least two BSP layers.
 
 ---
 
-# P5-1 — BSP mental model
-
-## Learn
+## P5.1 — BSP layer mental model
 
 A BSP is an integration boundary, not merely a kernel tree.
 
-Typical inputs:
+Typical source-controlled inputs:
 
 ```text
-boot firmware / ROM assumptions
-→ bootloader
-→ Device Tree / firmware description
+firmware / ROM assumptions
+→ bootloader configuration
+→ DT / firmware description
 → Linux kernel config + patches
 → drivers
-→ root filesystem packages/config
+→ rootfs packages/config
 → build-system metadata
-→ image layout / update artifacts
+→ image/update layout
 ```
 
-For a vendor product, the BSP may also include firmware blobs, trusted firmware, security configuration, manufacturing scripts and board-specific tooling.
+A product may also include firmware blobs, trusted firmware, security/manufacturing configuration and board tooling.
 
-## Suggested exercise
+### Exact resource entry
 
-Take one real board's vendor BSP and classify every major repository/component by layer. Do not start modifying it yet.
+Use **P5.1** in [`../resources/TOPIC_RESOURCE_INDEX.md`](../resources/TOPIC_RESOURCE_INDEX.md).
+
+### Suggested exercise
+
+Take one public board/vendor stack and classify every major repository/component by layer. Mark generated outputs separately from source-controlled inputs.
 
 ---
 
-# P5-2 — U-Boot fundamentals
+## P5.2 — U-Boot standard boot, environment, FDT and driver model
 
-## Learn
+### Learn
 
-- U-Boot build/config orientation;
+- build/config orientation;
 - environment and boot scripts;
+- Standard Boot;
 - loading kernel/DT/initramfs;
-- `booti`/`bootz`/FIT orientation as appropriate to target;
-- working FDT vs U-Boot control FDT concept;
-- driver model orientation;
-- board configuration and defconfig;
-- boot media and image placement;
-- debugging commands.
+- `bootz`/`booti`/FIT orientation as appropriate to target;
+- working FDT vs U-Boot control DT;
+- driver-model orientation;
+- board defconfig/configuration;
+- boot media/image placement;
+- interactive debugging commands.
 
-## Primary resources
+### Exact resource entry
 
-U-Boot documentation:
-https://docs.u-boot.org/en/latest/
+Use **P5.2**: U-Boot documentation sections **Standard Boot**, **Environment Variables**, **Devicetree Control in U-Boot**, **Driver Model**, and the architecture-appropriate boot/image command docs.
 
-Useful sections include driver model, command reference, Device Tree handling, debugging/testing and image/boot documentation.
+### Suggested experiment
 
-## Suggested experiment
+Interrupt autoboot, inspect environment, manually load artifacts, inspect/change the working FDT, change exactly one bootarg, boot and state exactly what was passed to Linux.
 
-On a supported board or QEMU platform:
+### Defer
 
-1. interrupt autoboot;
-2. inspect environment;
-3. manually load kernel + DT + rootfs;
-4. modify one boot argument;
-5. inspect/modify the working FDT in memory;
-6. boot;
-7. explain exactly which artifacts U-Boot passed to Linux.
-
-## Defer
-
-- DDR training code;
-- SPL/TPL deep porting;
-- secure monitor/TEE integration;
-- board bring-up from completely unsupported silicon.
-
-Those become necessary only for deeper platform roles.
+DDR training/SPL/TPL deep porting and unsupported-silicon bring-up until a real target demands them.
 
 ---
 
-# P5-3 — Buildroot as transparent BSP/build-system practice
+## P5.3 — Buildroot project customization and package model
 
-## Learn
+### Learn
 
-- defconfig and Kconfig;
+- defconfig / Kconfig;
 - toolchain choices;
 - packages;
-- rootfs overlays;
+- overlays;
 - post-build/post-image hooks;
 - filesystem/image generation;
 - `BR2_EXTERNAL`;
 - package rebuild/stamp semantics;
-- output/build vs output/target vs output/images;
-- reproducibility/licensing/CVE tooling orientation.
+- `output/build` vs `output/target` vs `output/images`;
+- legal-info/vulnerability/reproducibility orientation.
 
-## Primary resources
+### Exact resource entry
 
-Buildroot manual:
-https://buildroot.org/downloads/manual/manual.html
+Use **P5.3**: Buildroot manual headings **Project-specific customization**, **Root filesystem overlays**, **Adding new packages to Buildroot**, **BR2_EXTERNAL**, **Rebuilding packages**, plus Bootlin Buildroot training.
 
-Bootlin Buildroot training:
-https://bootlin.com/training/buildroot/
+### Suggested project
 
-## Suggested project
-
-Create a small board configuration that:
-
-- builds kernel + DT + rootfs;
-- adds one original application/package;
-- creates one rootfs customization;
-- generates a reproducible image;
-- records exact external source revisions;
-- survives a clean rebuild.
-
-Then intentionally create a stale package/image condition and diagnose it.
+Create a small `BR2_EXTERNAL` project with one board defconfig, package and overlay; clean-build it; then create a stale package/image situation and diagnose which layer failed to propagate.
 
 ---
 
-# P5-4 — Yocto/OpenEmbedded concepts
+## P5.4 — Yocto/OpenEmbedded metadata, tasks, signatures and sstate
 
-Do not begin Yocto until Buildroot has made the build-pipeline problem concrete.
+Do not begin here before Buildroot has made the embedded build-pipeline problem concrete.
 
-## Learn
+### Learn
 
-- Poky/reference distribution concept;
+- Poky/reference-distribution concept;
 - OpenEmbedded metadata;
 - layers;
 - recipes and `.bbappend`;
 - machine/distro/image configuration;
-- tasks and dependency graph;
+- tasks and dependencies;
 - task signatures;
 - shared state (`sstate`);
-- `WORKDIR`, sysroots, deploy artifacts;
+- sysroots/work/deploy artifacts;
 - package/image relationship;
-- kernel recipes/config fragments/patches;
-- devtool orientation;
-- SDK/eSDK orientation.
+- kernel recipe/config/patch orientation;
+- `devtool` and SDK/eSDK orientation.
 
-## Primary resources
+### Exact resource entry
 
-Yocto documentation:
-https://docs.yoctoproject.org/
+Use **P5.4**: Yocto Overview/Concepts sections on layers/recipes/tasks/sstate/signatures plus BitBake execution/dependency/signature material and Bootlin Yocto training.
 
-Start with Overview and Concepts:
-https://docs.yoctoproject.org/dev/overview-manual/index.html
+### Suggested experiment
 
-Then consult, as needed:
-
-- BSP Developer's Guide;
-- Development Tasks Manual;
-- Linux Kernel Development Manual;
-- Reference Manual.
-
-BitBake manual:
-https://docs.yoctoproject.org/bitbake/dev/singleindex.html
-
-Bootlin Yocto/OpenEmbedded training:
-https://bootlin.com/training/yocto/
-
-## Suggested experiment
-
-Build a reference image, then make **one** controlled customization each at different layers:
-
-- add a package;
-- modify a recipe with `.bbappend`;
-- apply a kernel config fragment or patch;
-- change machine-specific DT;
-- inspect which tasks rerun and why.
-
-The key question is not “what command builds it?” but “which metadata caused which task/artifact to change?”
+Build one reference image. Add a package, then a `.bbappend`, then one machine-specific change **separately**. Explain which tasks reran and why.
 
 ---
 
-# P5-5 — Kernel/DT patch management inside a BSP
+## P5.5 — Kernel/DT patch and configuration management
 
-## Learn
+### Learn
 
-- why vendor kernel branches exist;
-- upstream vs LTS vs vendor tree;
+- upstream vs LTS vs vendor kernel;
 - config fragments;
 - patch series;
 - DT source organization;
 - backports;
-- out-of-tree vs upstream driver cost;
-- rebasing/upgrading BSPs.
+- cost of out-of-tree code;
+- BSP upgrades/rebases.
 
-## Suggested source-reading exercise
+### Exact resource entry
 
-Pick one vendor BSP patch and determine:
+Use **P5.5**: the Yocto **Linux Kernel Development Manual** and **BSP Developer's Guide** when using Yocto, or corresponding Buildroot board/kernel customization guidance, plus the exact upstream/vendor source trees involved.
 
-- what upstream subsystem it touches;
-- whether equivalent support exists upstream;
-- whether the patch is hardware-specific, bug fix, or product policy;
-- what breaks if it is dropped during an upgrade.
+### Suggested exercise
+
+For one vendor patch, determine subsystem ownership, upstream status, hardware-vs-product-policy nature, and what breaks if the patch is dropped during upgrade.
 
 ---
 
-# P5-6 — Image layout and update orientation
+## P5.6 — Image layout, recovery and update architecture
 
-## Learn
-
-At practical architecture depth:
+### Learn
 
 - boot partitions;
 - rootfs formats;
-- read-only vs writable areas;
+- read-only/writable areas;
 - A/B update concept;
 - recovery image;
 - artifact versioning;
-- signed images/verified boot orientation;
-- rollback and power-loss considerations.
+- signed/verified images orientation;
+- rollback and power-loss semantics.
 
-Do not choose an OTA framework before the product's failure/recovery model is understood.
+### Exact resource entry
 
-## Suggested design exercise
+Use **P5.6**: U-Boot image/FIT/verified-boot material where relevant, then the official documentation of an update framework **only after** you have defined the product failure/recovery model.
 
-Draw two image/update architectures:
+### Suggested design exercise
 
-1. simple development image;
-2. production A/B update image.
-
-For each, explain what happens on power loss during update and how rollback is decided.
+Draw a development image layout and a production A/B layout. For every update step, state the outcome of power loss and how rollback is chosen.
 
 ---
 
-# P5-7 — Licensing, CVEs, SBOM and reproducibility orientation
+## P5.7 — Licensing, CVE, SBOM and reproducibility
 
-## Learn
+### Learn
 
-- open-source license obligations at practical depth;
-- source offer / notices where applicable;
+- license obligations at practical depth;
+- source offer/notices where applicable;
 - package license metadata;
-- CVE feeds/scanning limitations;
+- CVE feed/scanner limitations;
 - SBOM concept;
-- deterministic/reproducible build goals;
-- why exact source revisions and artifact provenance matter.
+- deterministic/reproducible-build goals;
+- exact source/artifact provenance.
 
-Use Buildroot/Yocto's native tooling before inventing a separate system.
+### Exact resource entry
+
+Use **P5.7**: Buildroot `legal-info`/license/vulnerability tooling and the matching Yocto license/SPDX/CVE/reproducibility documentation for the version actually used.
+
+### Suggested experiment
+
+For one built image, produce a source/version/license inventory and document one concrete limitation of automated CVE matching.
 
 ---
 
-# Capstone direction
+## P5.8 — Reproducible board-integration capstone
 
-Take one board or emulator target and maintain a small BSP-like integration repository containing only source-controlled inputs:
+Maintain a small integration repository containing **inputs**, not generated build trees:
 
 ```text
 README / manifest
@@ -261,17 +227,19 @@ kernel config fragments / patches
 DT changes
 Buildroot or Yocto metadata
 one application/package
-image instructions
+image/update instructions
 bring-up/debug notes
 ```
 
-Acceptance should be practical:
+Use **P5.8** in the topic resource index for the exit criterion.
 
-- clean clone can reproduce a bootable image;
+Practical acceptance:
+
+- clean clone reproduces a bootable image;
 - one board-specific change is understood across layers;
-- artifacts can be traced to source/config inputs;
-- a stale-build/config fault can be diagnosed;
-- no unexplained manual step is required.
+- boot artifacts trace back to source/config inputs;
+- one stale-build/config fault is diagnosed;
+- no unexplained manual edit to generated output is required.
 
 ---
 
@@ -279,24 +247,22 @@ Acceptance should be practical:
 
 - calling a vendor SDK “the BSP” without understanding its layers;
 - learning Yocto syntax before understanding the build pipeline;
-- editing generated files under build output instead of source metadata;
-- carrying patches without knowing whether upstream already solved the problem;
-- putting board-specific policy into generic drivers;
+- editing generated build outputs instead of source metadata;
+- carrying patches without checking upstream;
+- placing board policy in generic drivers;
 - treating DT as a configuration dumping ground;
 - relying on undocumented U-Boot environment state;
-- mixing development convenience and production update architecture;
-- assuming a successful incremental build proves reproducibility.
-
----
+- mixing development convenience with production update architecture;
+- assuming an incremental build proves reproducibility.
 
 # What to defer
 
 Until the role/project needs it:
 
-- secure boot implementation details;
+- secure-boot implementation details;
 - TF-A/OP-TEE deep integration;
 - advanced UEFI;
 - complex OTA frameworks;
 - factory provisioning infrastructure;
-- multi-product Yocto distribution architecture;
+- large multi-product Yocto distribution architecture;
 - custom boot ROM / DDR PHY bring-up.
