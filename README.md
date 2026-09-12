@@ -1,65 +1,94 @@
 # embed-system
 
-A long-term, evidence-driven learning system for becoming a strong Embedded Systems Engineer, with a focus on:
+A resource-first learning map for becoming a strong Embedded Systems Engineer, with emphasis on:
 
 - Embedded Linux
-- BSP
-- Linux drivers
-- SoC / platform engineering
-- bring-up
-- debugging
-- performance
+- Linux kernel drivers
+- BSP / boot flow / build systems
+- SoC and platform engineering
+- MCU / RTOS foundations
+- bring-up and debugging
+- performance and real-time behavior
 - hardware-software co-design
 
-> Status: curriculum authoring — Phase 1 and Phase 2 canonical (implementation + Final Gate merged); Phase 3 Embedded Linux in progress (P3-M01–M06 merged, P3-M07/M08 under review, Phase 3 Final Gate pending)
+> **Status:** Phase 1–3 knowledge maps and verified reference work are canonical. The repository is now in **resource-first mode**: future AI work prioritizes authoritative resources, learning order, source-reading targets, suggested experiments, and bounded technical corrections rather than generating a large standalone textbook or exhaustive assessment framework.
 
 ## What this repository is
 
-This is maintained as a living:
+This repository is primarily a **navigation and engineering-practice system**. It tells the learner:
 
-1. tutorial;
-2. lab book;
-3. debugging knowledge base;
-4. project portfolio;
-5. career-alignment system.
+1. what to learn;
+2. in what order;
+3. which primary sources and high-quality courses/books to use;
+4. which upstream code is worth reading;
+5. what experiments or projects are worth attempting;
+6. what evidence would demonstrate real understanding;
+7. which topics can safely be deferred.
 
-The goal is not to maximize the amount of content. The goal is to maximize verified engineering capability per unit of learning time.
+Existing verified labs, scripts, gates and projects are retained as **optional reference exemplars**. They are not a requirement that every future topic receive an AI-authored tutorial, hidden-seed gate, mutation oracle or custom validator.
 
-## Editorial System
+The learner is expected to do the actual learning, implementation, debugging and experimentation from the cited resources.
 
-All research, drafting, labs, AI-assisted contributions, visuals, and review follow the rules under [`.editorial/`](.editorial/).
+## Start here
 
-Start with:
-
-- [Governance](.editorial/GOVERNANCE.md)
-- [Source Policy](.editorial/SOURCE_POLICY.md)
+- [Master Learning Map](roadmap/MASTER_LEARNING_MAP.md)
+- [Roadmap Status and Phase Index](roadmap/README.md)
+- [Canonical Resources](resources/CANONICAL_RESOURCES.md)
 - [Resource Policy](.editorial/RESOURCE_POLICY.md)
-- [Writing Guide](.editorial/WRITING_GUIDE.md)
-- [Lab Standard](.editorial/LAB_STANDARD.md)
-- [Review Policy](.editorial/REVIEW_POLICY.md)
-- [AI Policy](.editorial/AI_POLICY.md)
-- [Maintenance Policy](.editorial/MAINTENANCE_POLICY.md)
+- [Governance](.editorial/GOVERNANCE.md)
 
-## Resource Philosophy
+## Current phase map
 
-Core topics should combine:
+```text
+Phase 0  Baseline / environment / evidence habits
+   ↓
+Phase 1  System C + Linux userspace foundations
+   ↓
+Phase 2  MCU + STM32 + FreeRTOS mechanisms
+   ↓
+Phase 3  Embedded Linux boot chain and appliance fundamentals
+   ↓
+Phase 4  Linux kernel driver model and subsystem drivers
+   ↓
+Phase 5  BSP / bootloader / build-system / board integration
+   ↓
+Phase 6  Bring-up / debugging / tracing / performance / real-time
+   ↓
+Optional specialization: networking, graphics, security, hardware-software co-design
+```
 
-- official specifications / datasheets / TRMs;
-- upstream source code;
-- high-quality open-source projects;
-- classic books;
-- high-quality university or professional courses;
-- original reproducible experiments;
-- current job-market evidence.
+Phase 1–3 contain substantial historical authoring and verified examples. Phase 4–6 are deliberately **leaner resource maps**: they point to current upstream documentation and proven training material and suggest self-directed projects rather than pre-solving the work.
 
-See [Canonical Resources](resources/CANONICAL_RESOURCES.md).
+## Resource philosophy
 
-## Contribution Workflow
+For version-sensitive engineering, prefer this order:
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
+```text
+official specification / vendor TRM / upstream documentation
+→ upstream source code
+→ high-quality maintained course/lab
+→ classic book for durable mental model
+→ learner-built experiment
+```
 
-Research/writing AIs are contributors, not final editors. Drafts are reviewed for technical correctness, pedagogy, evidence quality, reproducibility, version integrity, licensing, and career relevance before they become canonical course material.
+Blogs and AI explanations are supporting material, not the final authority for kernel, architecture, peripheral or build-system behavior.
 
-## Next
+## Existing verified work
 
-Complete the Phase 3 Embedded Linux curriculum package: implement and review the architecture spine (P3-M07) and the reproducible QEMU appliance integration project (P3-M08), then author the Phase 3 AI-Free Final Gate. See [`roadmap/`](roadmap/) for the per-phase blueprints.
+Previously authored Phase 1–3 material is not discarded merely because the authoring strategy changed. Work that captured real source/version evidence or real runtime behavior remains useful as a reference. Unverified or synthetic material must remain explicitly labelled and must not be promoted to runtime or hardware evidence.
+
+## Editorial system
+
+AI is now primarily a **researcher, navigator and technical reviewer**. It should:
+
+- map knowledge and dependencies;
+- find authoritative resources;
+- verify version-sensitive claims against primary sources;
+- recommend source-reading targets;
+- suggest experiments and projects without pre-solving them;
+- identify misconceptions and stale material;
+- keep the learning path bounded and career-relevant.
+
+AI should **not** create a large new tutorial or custom assessment framework by default. Implementation-heavy authoring requires an explicit reason and should be kept small.
+
+See [`AGENTS.md`](AGENTS.md) and [`.editorial/`](.editorial/) for the current rules.
