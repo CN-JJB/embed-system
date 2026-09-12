@@ -66,6 +66,19 @@ if [ -n "$QEMU_BIN" ] && [ -x "$QEMU_BIN" ]; then
     "$PY" scripts/dt_roundtrip_check.py fixtures/qemu-virt.dtb build/reviewer-virt.dtb --quiet \
         && echo "[PASS] freshly generated tree is semantically identical to the committed fixture" \
         || echo "[NOTE] freshly generated tree differs from the committed fixture; inspect the diff"
+
+    # Stage 6b: Real QEMU DTB boot & runtime binding check (when bootable kernel & initrd are supplied)
+    REAL_KERNEL="${KERNEL:-}"
+    REAL_INITRD="${INITRD:-}"
+    if [ -n "$REAL_KERNEL" ] && [ -f "$REAL_KERNEL" ] && [ -n "$REAL_INITRD" ] && [ -f "$REAL_INITRD" ]; then
+        echo "[INFO] Running real QEMU DTB boot and runtime binding verification..."
+        bash scripts/run_qemu_dtb_boot.sh fixtures/qemu-virt.dtb "$REAL_KERNEL" "$REAL_INITRD" build/boot.log build/boot.argv
+        "$PY" scripts/verify_runtime_binding.py fixtures/qemu-virt.dtb build/boot.argv build/boot.log
+        echo "[PASS] Real QEMU DTB boot & runtime binding verified."
+    else
+        echo "[NOTE] Bootable KERNEL and/or INITRD not supplied: live guest /sys probe SKIPPED (UNVERIFIED on this host)."
+        echo "       Set KERNEL=/path/to/zImage INITRD=/path/to/rootfs.cpio.gz to execute full live guest probe."
+    fi
 else
     echo "[NOTE] qemu-system-arm not available on this host: real DTB regeneration SKIPPED."
 fi

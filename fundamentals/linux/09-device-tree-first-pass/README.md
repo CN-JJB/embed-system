@@ -109,12 +109,17 @@ properties are big-endian 32-bit words. **Neither is "plain text".**
 ### 5.2 Properties are only meaningful in context
 
 ```text
-reg        = <address  size>        interpreted with PARENT #address-cells/#size-cells
-interrupts = <specifier ...>        interpreted with the INTERRUPT PARENT's #interrupt-cells
+reg        = <address  size>        interpreted with DIRECT PARENT #address-cells/#size-cells (NOT inherited; defaults to 2/1 if absent)
+interrupts = <specifier ...>        interpreted with the INTERRUPT PARENT's #interrupt-cells (interrupt-parent IS inherited)
 compatible = string list            a matching key the kernel looks up in a table
 status     = string                 availability, not existence
 phandle    = <u32>                  a node's handle; other properties reference it
 ```
+
+> [!IMPORTANT]
+> **Inheritance Rule Distinction**:
+> - `#address-cells` and `#size-cells` are **never inherited** from ancestors (Devicetree Specification v0.4 §2.3.5). A child's `reg` is decoded using only its *direct parent's* properties. If the parent omits them, the client decoder uses specification defaults: `#address-cells = <2>` and `#size-cells = <1>`, regardless of what grandparents specify.
+> - `interrupt-parent` **is inherited**: if a node omits `interrupt-parent`, it inherits the phandle of its nearest ancestor.
 
 The single most common real-world device tree bug is a `reg` that is
 "a number that looks fine" and decodes to the wrong resource. The second is an

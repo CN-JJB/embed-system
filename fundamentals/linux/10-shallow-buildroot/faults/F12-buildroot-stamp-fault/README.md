@@ -115,22 +115,50 @@ make -C "$BR_SRC" O="$OUTPUT_DIR" BR2_EXTERNAL="$BR2_EXTERNAL" appliance-diag-re
 
 ### Root cause
 
-`output/build/appliance-diag-1.0/.stamp_target_installed` exists and was not
-invalidated by the source edit. Buildroot's package phases are stamp-gated at
-package granularity; a plain `make` therefore never re-entered the build or
-target-install steps, and the staging tree (and hence the image) kept the old
-binary.
+Two distinct layers of Buildroot caching are at work:
+
+1. **Stamp gating**: `output/build/appliance-diag-1.0/.stamp_target_installed` exists and was not
+   invalidated by the external source edit. A plain `make` therefore never re-entered the package.
+2. **Local source extraction**: `appliance-diag.mk` uses `APPLIANCE_DIAG_SITE_METHOD = local`.
+   Buildroot copies the external source tree to `output/build/appliance-diag-1.0` *once* during
+   the extract phase (`.stamp_extracted`).
+   Crucially, running `make appliance-diag-rebuild` only removes `.stamp_built` and
+   `.stamp_target_installed`; it does **not** re-extract the external source! Thus, `-rebuild`
+   alone rebuilds the *stale copy* already inside `output/build/`, leaving external source edits
+   unpropagated.
 
 ### Fix
 
+For `SITE_METHOD = local`, the clean recovery that forces re-extraction is:
+
 ```bash
 make -C "$BR_SRC" O="$OUTPUT_DIR" BR2_EXTERNAL="$BR2_EXTERNAL" \
-     appliance-diag-rebuild all
+     appliance-diag-dirclean all
 ```
 
-`-rebuild` removes the package's build and install stamps and re-runs build +
-install + finalize without a full tree clean. `-reconfigure` is the variant to
-use when the package's *configuration* must be regenerated as well.
+`appliance-diag-dirclean` completely removes `output/build/appliance-diag-1.0`, forcing Buildroot
+to re-extract the updated source from `APPLIANCE_DIAG_SITE`, rebuild it, and regenerate the rootfs
+image.
+
+#### The `OVERRIDE_SRCDIR` Alternative for Active Development
+
+If you are actively developing and modifying package source repeatedly, Buildroot provides the
+`OVERRIDE_SRCDIR` mechanism (`docs/manual/using-buildroot-development.adoc`). By adding to
+`local.mk`:
+
+```make
+APPLIANCE_DIAG_OVERRIDE_SRCDIR = $(BR2_EXTERNAL_QEMU_VIRT_A7_PATH)/package/appliance-diag/src
+```
+
+Buildroot switches from one-shot extraction to `rsync` before every build. Under this model,
+`make appliance-diag-rebuild all` *does* pick up external edits because Buildroot re-rsyncs the
+source before running the build step.
+
+### Observable Build Identity
+
+The build ID is injected at compile time via `APPLIANCE_DIAG_BUILD_ID` in `appliance-diag.mk`.
+Inspecting `BUILD-ID` in the diagnostic output verifies whether the binary running or packaged
+is the updated revision (e.g. `1.1`) rather than the stale initial build (`1.0`).
 
 ### Regression
 
@@ -141,7 +169,7 @@ python3 scripts/audit_output_tree.py \
 ```
 
 plus, where the environment permits, a boot whose capture is bound to the new
-image hash and shows the new build identity.
+image hash and shows the updated `BUILD-ID`.
 
 ---
 

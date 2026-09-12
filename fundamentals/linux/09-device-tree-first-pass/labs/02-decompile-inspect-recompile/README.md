@@ -64,8 +64,11 @@ Three things to notice:
   (`arch/arm/include/asm/mach/arch.h`) for the best match on the *root*
   `compatible` property.
 * `#address-cells = <2>` and `#size-cells = <2>` are the **addressing rules for
-  every child of the root**. Every `reg` directly under `/` is therefore
-  `address(2 cells) size(2 cells)` = 4 cells.
+  every direct child of the root**. Every `reg` directly under `/` is therefore
+  `address(2 cells) size(2 cells)` = 4 cells. Note that `#address-cells` and
+  `#size-cells` are **not inherited** from ancestors; if an intermediate bus node
+  omits them, children default to `#address-cells = <2>` and `#size-cells = <1>`,
+  rather than inheriting from the root.
 * `interrupt-parent = <0x8002>` is a **phandle reference** that is *inherited*.
   A node with no `interrupt-parent` of its own uses the nearest ancestor's.
 

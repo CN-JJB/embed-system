@@ -49,9 +49,11 @@ The script:
   (`virt,highmem=off,gic-version=2`, `cortex-a7`, `512M`, `-smp 1`, `-nographic`);
 * records that argv, plus the SHA-256 of the DTB, kernel and initramfs, as
   provenance;
-* boots with `-dtb <your blob>`;
-* runs a **bounded, read-only** probe that prints the model, the node listing
-  and the property names of `/pl011@9000000`, then powers off.
+* boots with `-dtb <your blob>` and an injected temporary initramfs overlay
+  (`rdinit=/dtprobe_init`) that executes a bounded, read-only probe (printing
+  `model` and the property names of `/pl011@9000000`), emits `DT-PROBE-END`,
+  and powers off;
+* fails closed (exit code 1) if QEMU fails or the guest fails to reach `DT-PROBE-END`.
 
 Then bind the capture to your artifact:
 

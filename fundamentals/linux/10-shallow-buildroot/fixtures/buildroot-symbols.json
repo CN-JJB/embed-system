@@ -78,6 +78,26 @@
       "line": 117,
       "kind": "string"
     },
+    "BR2_LINUX_KERNEL_USE_DEFCONFIG": {
+      "file": "linux/Config.in",
+      "line": 183,
+      "kind": "bool"
+    },
+    "BR2_LINUX_KERNEL_DEFCONFIG": {
+      "file": "linux/Config.in",
+      "line": 206,
+      "kind": "string"
+    },
+    "BR2_LINUX_KERNEL_CONFIG_FRAGMENT_FILES": {
+      "file": "linux/Config.in",
+      "line": 224,
+      "kind": "string"
+    },
+    "BR2_LINUX_KERNEL_ZIMAGE": {
+      "file": "linux/Config.in",
+      "line": 265,
+      "kind": "bool"
+    },
     "BR2_LINUX_KERNEL_IMAGE_TARGET_NAME": {
       "file": "linux/Config.in",
       "line": 379,

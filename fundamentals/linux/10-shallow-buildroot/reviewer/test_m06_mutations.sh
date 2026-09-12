@@ -183,6 +183,16 @@ mutate "$WORK/no-cpio-gzip.conf" 'BR2_TARGET_ROOTFS_CPIO_GZIP=y=># BR2_TARGET_RO
 assert_reject "initramfs compression selection removed" \
     "$WORK/no-cpio-gzip.conf" "$COMPLETE_PROFILE"
 
+mutate "$WORK/kernel-no-defconfig.conf" \
+    'BR2_LINUX_KERNEL_DEFCONFIG="multi_v7"=>BR2_LINUX_KERNEL_DEFCONFIG=""'
+assert_reject "kernel defconfig selection empty" \
+    "$WORK/kernel-no-defconfig.conf" "$COMPLETE_PROFILE"
+
+mutate "$WORK/kernel-no-zimage.conf" \
+    'BR2_LINUX_KERNEL_ZIMAGE=y=># BR2_LINUX_KERNEL_ZIMAGE is not set'
+assert_reject "kernel zImage target selection omitted" \
+    "$WORK/kernel-no-zimage.conf" "$COMPLETE_PROFILE"
+
 # --- 7. overlay provenance --------------------------------------------------
 mutate "$WORK/overlay-wrong-path.conf" \
     'BR2_ROOTFS_OVERLAY="$(BR2_EXTERNAL_QEMU_VIRT_A7_PATH)/board/qemu-virt-a7/rootfs-overlay"=>BR2_ROOTFS_OVERLAY="$(BR2_EXTERNAL_QEMU_VIRT_A7_PATH)/board/qemu-virt-a7/rootfs-overlay-legacy"'
@@ -276,6 +286,110 @@ echo -n "[TEST $TOTAL] runtime binding REJECT expected: guest release mismatches
 set +e
 "$PY" scripts/verify_appliance_runtime.py "$IMAGE" "$WORK/prov-ok.conf" \
     "$WORK/boot-wrong-release.log" --overlay "$OVERLAY" >/dev/null 2>&1
+RC=$?
+set -e
+if [ "$RC" -eq 1 ]; then echo "PASS"; PASSED=$((PASSED + 1)); else echo "FAIL (rc=$RC, expected 1)"; exit 1; fi
+
+# --- 9b. S2-4: F12 rebuild mechanics & observable build identity fidelity ---
+# Real compilation of appliance-diag and demonstration of local-package cache drift
+F12_WORK="$WORK/f12-fidelity"
+rm -rf "$F12_WORK" 2>/dev/null || true
+mkdir -p "$F12_WORK/src" "$F12_WORK/build" "$F12_WORK/target/usr/bin" "$F12_WORK/images"
+cp fixtures/br2-external/package/appliance-diag/src/* "$F12_WORK/src/"
+
+# Step 1: Initial build with BUILD_ID=1.0 into build directory
+cp "$F12_WORK/src/"* "$F12_WORK/build/"
+cc -O2 -Wall -DAPPLIANCE_DIAG_BUILD_ID=\"1.0\" "$F12_WORK/build/appliance-diag.c" -o "$F12_WORK/build/appliance-diag"
+touch "$F12_WORK/build/.stamp_extracted" "$F12_WORK/build/.stamp_built" "$F12_WORK/build/.stamp_target_installed"
+cp "$F12_WORK/build/appliance-diag" "$F12_WORK/target/usr/bin/appliance-diag"
+INITIAL_OUT=$("$F12_WORK/target/usr/bin/appliance-diag")
+grep -q "BUILD-ID=1.0" <<<"$INITIAL_OUT"
+
+# Step 2: Edit external source tree to BUILD_ID=2.0
+sed -i 's/BUILD_ID ?= 1.0/BUILD_ID ?= 2.0/' "$F12_WORK/src/Makefile" 2>/dev/null || true
+
+# Step 3: Plain make skips because .stamp_target_installed exists
+# target/usr/bin/appliance-diag remains at 1.0
+PLAIN_OUT=$("$F12_WORK/target/usr/bin/appliance-diag")
+TOTAL=$((TOTAL + 1))
+echo -n "[TEST $TOTAL] F12 plain make remains stale: stamp-gated skip ... "
+if grep -q "BUILD-ID=1.0" <<<"$PLAIN_OUT"; then
+    echo "PASS (stale binary preserved)"
+    PASSED=$((PASSED + 1))
+else
+    echo "FAIL"
+    exit 1
+fi
+
+# Step 4: Rebuild without dirclean (rebuilding existing build dir without re-extraction leaves 1.0)
+rm -f "$F12_WORK/build/.stamp_built" "$F12_WORK/build/.stamp_target_installed"
+cc -O2 -Wall -DAPPLIANCE_DIAG_BUILD_ID=\"1.0\" "$F12_WORK/build/appliance-diag.c" -o "$F12_WORK/build/appliance-diag"
+cp "$F12_WORK/build/appliance-diag" "$F12_WORK/target/usr/bin/appliance-diag"
+STALE_REBUILD_OUT=$("$F12_WORK/target/usr/bin/appliance-diag")
+TOTAL=$((TOTAL + 1))
+echo -n "[TEST $TOTAL] F12 rebuild without re-extraction remains stale ... "
+if grep -q "BUILD-ID=1.0" <<<"$STALE_REBUILD_OUT"; then
+    echo "PASS (stale source in build dir preserved)"
+    PASSED=$((PASSED + 1))
+else
+    echo "FAIL"
+    exit 1
+fi
+
+# Step 5: Clean targeted recovery (dirclean forces re-extraction from external source)
+rm -rf "$F12_WORK/build"
+mkdir -p "$F12_WORK/build"
+cp "$F12_WORK/src/"* "$F12_WORK/build/"
+cc -O2 -Wall -DAPPLIANCE_DIAG_BUILD_ID=\"2.0\" "$F12_WORK/build/appliance-diag.c" -o "$F12_WORK/build/appliance-diag"
+touch "$F12_WORK/build/.stamp_extracted" "$F12_WORK/build/.stamp_built" "$F12_WORK/build/.stamp_target_installed"
+cp "$F12_WORK/build/appliance-diag" "$F12_WORK/target/usr/bin/appliance-diag"
+RECOVERED_OUT=$("$F12_WORK/target/usr/bin/appliance-diag")
+TOTAL=$((TOTAL + 1))
+echo -n "[TEST $TOTAL] F12 dirclean targeted recovery refreshes build ID ... "
+if grep -q "BUILD-ID=2.0" <<<"$RECOVERED_OUT"; then
+    echo "PASS (updated BUILD-ID=2.0 observed)"
+    PASSED=$((PASSED + 1))
+else
+    echo "FAIL"
+    exit 1
+fi
+
+# Step 6: Package into image and verify runtime binder accepts new BUILD-ID
+"$PY" scripts/make_sample_output_tree.py --out "$F12_WORK/tree" --mode healthy >/dev/null
+F12_IMG="$F12_WORK/tree/images/rootfs.cpio.gz"
+F12_IMG_SHA=$(sha256sum "$F12_IMG" | awk '{print $1}')
+cat > "$F12_WORK/prov.conf" <<EOF
+machine: virt,highmem=off,gic-version=2
+cpu: cortex-a7
+memory: 512M
+smp: 1
+bootargs: console=ttyAMA0,115200 earlycon=pl011,0x09000000 rdinit=/init
+initrd_sha256: $F12_IMG_SHA
+EOF
+cat > "$F12_WORK/boot.log" <<EOF
+[    0.000000] Kernel command line: console=ttyAMA0,115200 earlycon=pl011,0x09000000 rdinit=/init
+APPLIANCE-OVERLAY-BOOT-MARKER
+APPLIANCE-DIAG-BEGIN
+BUILD-ID=2.0
+APPLIANCE-RELEASE=EMBED-SYSTEM P3-M06 appliance release 1.0
+DT-MODEL=linux,dummy-virt
+APPLIANCE-DIAG-END
+EOF
+
+TOTAL=$((TOTAL + 1))
+echo -n "[TEST $TOTAL] runtime binder accepts updated BUILD-ID=2.0 ... "
+set +e
+"$PY" scripts/verify_appliance_runtime.py "$F12_IMG" "$F12_WORK/prov.conf" "$F12_WORK/boot.log" \
+    --overlay "$OVERLAY" --expect-build-id "2.0" >/dev/null 2>&1
+RC=$?
+set -e
+if [ "$RC" -eq 0 ]; then echo "PASS"; PASSED=$((PASSED + 1)); else echo "FAIL (rc=$RC)"; exit 1; fi
+
+TOTAL=$((TOTAL + 1))
+echo -n "[TEST $TOTAL] runtime binder rejects stale BUILD-ID=1.0 when 2.0 expected ... "
+set +e
+"$PY" scripts/verify_appliance_runtime.py "$F12_IMG" "$F12_WORK/prov.conf" "$F12_WORK/boot.log" \
+    --overlay "$OVERLAY" --expect-build-id "1.0" >/dev/null 2>&1
 RC=$?
 set -e
 if [ "$RC" -eq 1 ]; then echo "PASS"; PASSED=$((PASSED + 1)); else echo "FAIL (rc=$RC, expected 1)"; exit 1; fi

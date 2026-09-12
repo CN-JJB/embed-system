@@ -149,6 +149,62 @@ patch --in "$CANONICAL" --out "$WORK/bad-cells.dtb" \
 assert_semantic_reject "reg cell count contradicts parent #address-cells/#size-cells" "$WORK/bad-cells.dtb"
 assert_structural_reject "same defect is also a structural violation" "$WORK/bad-cells.dtb"
 
+# --- 3b. S2-1: non-inheritance of #address-cells/#size-cells from grandparent ---
+# Grandparent (root) defines #address-cells = <1>, #size-cells = <1>.
+# Intermediate parent /testbus omits #address-cells and #size-cells.
+# Per Devicetree Spec v0.4 Section 2.3.5, /testbus defaults to 2/1 (stride 3).
+# Child /testbus/dev has reg with 2 cells (which would match inherited 1/1, but violates default 2/1).
+"$PY" - "$WORK/non-inherit-reject.dtb" << 'PYEOF'
+import sys, os, struct
+sys.path.insert(0, "scripts")
+from fdtlib_min import Fdt, Node, write_file
+fdt = Fdt()
+root = Node("")
+root.props["#address-cells"] = struct.pack(">I", 1)
+root.props["#size-cells"] = struct.pack(">I", 1)
+bus = Node("testbus", parent=root)
+dev = Node("device@1000", parent=bus)
+dev.props["reg"] = struct.pack(">2I", 0x1000, 0x100)
+root.children = [bus]
+bus.children = [dev]
+fdt.root = root
+write_file(fdt, sys.argv[1])
+PYEOF
+assert_structural_reject "reg cell count violates direct parent default 2/1 despite grandparent 1/1" "$WORK/non-inherit-reject.dtb"
+
+# --- 3c. S2-1: positive control proving 3 cells decode under direct parent default 2/1 ---
+"$PY" - "$WORK/non-inherit-pass.dtb" << 'PYEOF'
+import sys, os, struct
+sys.path.insert(0, "scripts")
+from fdtlib_min import Fdt, Node, write_file, decode_reg
+fdt = Fdt()
+root = Node("")
+root.props["#address-cells"] = struct.pack(">I", 1)
+root.props["#size-cells"] = struct.pack(">I", 1)
+bus = Node("testbus", parent=root)
+dev = Node("device@1000", parent=bus)
+dev.props["reg"] = struct.pack(">3I", 0x00, 0x1000, 0x100)
+root.children = [bus]
+bus.children = [dev]
+fdt.root = root
+write_file(fdt, sys.argv[1])
+decoded = decode_reg(dev)
+assert decoded == [(0x1000, 0x100)], f"unexpected decode: {decoded}"
+PYEOF
+MUTATIONS=$((MUTATIONS + 1))
+echo -n "[TEST $MUTATIONS] PASS expected: decode_reg proves 3 cells decode under parent default 2/1 ... "
+set +e
+"$PY" scripts/dt_structural_check.py "$WORK/non-inherit-pass.dtb" >/dev/null 2>&1
+RC=$?
+set -e
+if [ "$RC" -eq 0 ]; then
+    echo "PASS"
+    PASSED=$((PASSED + 1))
+else
+    echo "FAIL (rc=$RC)"
+    exit 1
+fi
+
 # --- 4. right cell count, wrong interpreted address --------------------------
 patch --in "$CANONICAL" --out "$WORK/wrong-addr.dtb" \
       --set-cells "/pl031@9010000" reg 0x00 0x09020000 0x00 0x1000
@@ -258,6 +314,38 @@ dtb_sha256: $(sha256sum "$CANONICAL" | awk '{print $1}')
 EOF
 assert_binding_reject "runtime capture executed with a non-canonical machine string" \
     "$CANONICAL" "$WORK/prov-wrong-machine.conf" "$WORK/boot.log"
+
+# --- 13b. S2-2: runner fails closed on missing input (rc=2) -----------------
+MUTATIONS=$((MUTATIONS + 1))
+echo -n "[TEST $MUTATIONS] runner error expected: missing input file ... "
+set +e
+bash scripts/run_qemu_dtb_boot.sh "$CANONICAL" "/nonexistent/zImage" "/nonexistent/initrd" "$WORK/out.log" "$WORK/out.argv" >/dev/null 2>&1
+RC=$?
+set -e
+if [ "$RC" -eq 2 ]; then
+    echo "PASS (exited 2 as expected)"
+    PASSED=$((PASSED + 1))
+else
+    echo "FAIL (rc=$RC, expected 2)"
+    exit 1
+fi
+
+# --- 13c. S2-2: runner fails closed on missing DT-PROBE-END (rc=1) ----------
+MUTATIONS=$((MUTATIONS + 1))
+echo -n "[TEST $MUTATIONS] runner reject expected: missing DT-PROBE-END marker ... "
+# Provide a dummy non-bootable kernel & initrd to provoke fail-closed exit
+echo "dummy" > "$WORK/dummy.bin"
+set +e
+TIMEOUT_SEC=2 bash scripts/run_qemu_dtb_boot.sh "$CANONICAL" "$WORK/dummy.bin" "$WORK/dummy.bin" "$WORK/fail.log" "$WORK/fail.argv" >/dev/null 2>&1
+RC=$?
+set -e
+if [ "$RC" -eq 1 ]; then
+    echo "PASS (fail-closed exit 1)"
+    PASSED=$((PASSED + 1))
+else
+    echo "FAIL (rc=$RC, expected 1)"
+    exit 1
+fi
 
 # --- 14. positive reference controls ----------------------------------------
 assert_pass "canonical fixture against the complete contract" "$CANONICAL"

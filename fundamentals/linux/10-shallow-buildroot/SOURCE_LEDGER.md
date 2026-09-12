@@ -82,7 +82,7 @@ following the stale reference.
 | # | Action | Exact command (abridged) | Result | Status |
 |---|---|---|---|---|
 | 1 | Buildroot release identity | download tarball; `sed -n 's/^export BR2_VERSION := //p' Makefile` | `2026.05.2` | **VERIFIED** |
-| 2 | Symbol existence + location | `grep -rn '^config BR2_<name>$' <file>` over the extracted tree | all 25 symbols located; file/line recorded | **VERIFIED** |
+| 2 | Symbol existence + location | `grep -rn '^config BR2_<name>$' <file>` over the extracted tree | all 30 symbols located; file/line recorded | **VERIFIED** |
 | 3 | Overlay semantics | read `docs/manual/customize-rootfs.adoc` | copy-over-target semantics, exclusion rules, recommended path | **VERIFIED** |
 | 4 | Rebuild semantics | read `docs/manual/rebuilding-packages.adoc` | "never rebuilt unless explicitly told to do so"; overlay change needs only `make` | **VERIFIED** |
 | 5 | Package make targets | read `docs/manual/package-make-target.adoc`; `grep .stamp_target_installed package/pkg-generic.mk` | stamp-based package phases confirmed | **VERIFIED** |

@@ -5,8 +5,8 @@
 #
 # Lab 5.4 needs the guest's /sys/firmware/devicetree/base view, which only
 # exists in a running kernel.  This script performs the boot and injects a
-# bounded, read-only correlation probe through the kernel command line; the
-# captured log is then bound to the DTB by scripts/verify_runtime_devicetree.sh.
+# bounded, read-only correlation probe through a temporary initramfs overlay;
+# the captured log is then bound to the DTB by scripts/verify_runtime_binding.py.
 #
 # Usage:
 #   scripts/run_qemu_dtb_boot.sh DTB KERNEL INITRD OUT_LOG OUT_ARGV
@@ -49,11 +49,43 @@ DTB_SHA=$(sha256sum "$DTB" | awk '{print $1}')
 KERNEL_SHA=$(sha256sum "$KERNEL" | awk '{print $1}')
 INITRD_SHA=$(sha256sum "$INITRD" | awk '{print $1}')
 
-# A bounded, read-only probe: emit the device tree view, then power off.  It
-# does not modify the guest; it only reads files under /sys/firmware/devicetree.
-PROBE='for p in /sys/firmware/devicetree/base/model /sys/firmware/devicetree/base/compatible; do echo "DT-PROBE $(cat $p 2>/dev/null | tr "\0" " ")"; done; for d in /sys/firmware/devicetree/base/pl011@9000000; do echo "DT-PROBE-NODE $d"; ls $d 2>/dev/null | tr "\n" " "; echo; done; echo "DT-PROBE-END"; poweroff -f'
+TMPDIR_PROBE=$(mktemp -d "/tmp/dtprobe.XXXXXX")
+cleanup() {
+    rm -rf "$TMPDIR_PROBE"
+}
+trap cleanup EXIT
 
-BOOTARGS="console=${CONSOLE} earlycon=${EARLYCON} rdinit=/init"
+# 1. Build bounded guest probe script /dtprobe_init
+cat > "$TMPDIR_PROBE/dtprobe_init" << 'EOF'
+#!/bin/sh
+mount -t proc proc /proc 2>/dev/null || true
+mount -t sysfs sysfs /sys 2>/dev/null || true
+mount -t devtmpfs devtmpfs /dev 2>/dev/null || true
+
+if [ -f /sys/firmware/devicetree/base/model ]; then
+    MODEL=$(cat /sys/firmware/devicetree/base/model 2>/dev/null | tr -d '\0')
+    echo "DT-PROBE model=${MODEL}"
+fi
+
+PROBE_DIR="/sys/firmware/devicetree/base/pl011@9000000"
+if [ -d "$PROBE_DIR" ]; then
+    echo "DT-PROBE-NODE $PROBE_DIR"
+    ls "$PROBE_DIR" 2>/dev/null | grep -v '^name$' | tr '\n' ' '
+    echo ""
+fi
+
+echo "DT-PROBE-END"
+poweroff -f 2>/dev/null || reboot -f 2>/dev/null
+exit 0
+EOF
+chmod +x "$TMPDIR_PROBE/dtprobe_init"
+
+# 2. Package probe script into a tiny cpio and concatenate with base initrd
+( cd "$TMPDIR_PROBE" && echo "dtprobe_init" | cpio -o -H newc ) > "$TMPDIR_PROBE/overlay.cpio" 2>/dev/null
+BOOT_INITRD="$TMPDIR_PROBE/boot_initrd.cpio"
+cat "$INITRD" "$TMPDIR_PROBE/overlay.cpio" > "$BOOT_INITRD"
+
+BOOTARGS="console=${CONSOLE} earlycon=${EARLYCON} rdinit=/dtprobe_init"
 
 mkdir -p "$(dirname "$OUT_LOG")" "$(dirname "$OUT_ARGV")"
 
@@ -64,8 +96,9 @@ ARGV=(
     -m "$QEMU_MEM"
     -smp "$QEMU_SMP"
     -nographic
+    -no-reboot
     -kernel "$KERNEL"
-    -initrd "$INITRD"
+    -initrd "$BOOT_INITRD"
     -dtb "$DTB"
     -append "$BOOTARGS"
 )
@@ -86,16 +119,22 @@ ARGV=(
 } > "$OUT_ARGV"
 
 echo "=== booting with -dtb $DTB (sha256 $DTB_SHA) ==="
-set +e
+QEMU_RC=0
 if command -v timeout >/dev/null 2>&1; then
-    timeout "$TIMEOUT_SEC" "${ARGV[@]}" </dev/null >"$OUT_LOG" 2>&1
+    timeout "$TIMEOUT_SEC" "${ARGV[@]}" </dev/null >"$OUT_LOG" 2>&1 || QEMU_RC=$?
 else
     "${ARGV[@]}" </dev/null >"$OUT_LOG" 2>&1 &
     QPID=$!
     ( sleep "$TIMEOUT_SEC"; kill "$QPID" 2>/dev/null ) &
-    wait "$QPID"
+    wait "$QPID" || QEMU_RC=$?
 fi
-set -e
+
+# Fail closed check:
+# Verify that QEMU executed and the guest probe reached DT-PROBE-END
+if ! grep -q "DT-PROBE-END" "$OUT_LOG"; then
+    echo "ERROR: QEMU guest probe failed to complete (DT-PROBE-END missing in $OUT_LOG, qemu_rc=$QEMU_RC)" >&2
+    exit 1
+fi
 
 echo "[OK] console log   : $OUT_LOG ($(wc -c < "$OUT_LOG" | tr -d ' ') bytes)"
 echo "[OK] argv provenance: $OUT_ARGV"

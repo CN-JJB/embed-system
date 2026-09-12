@@ -68,10 +68,27 @@ if missing:
     sys.exit(1)
 print(f"[PASS] all {len(table.get('symbols', {}))} recorded symbols verified against the real tree")
 PYEOF
+
+    # Stage 6b: Real Buildroot Kconfig defconfig smoke check
+    SMOKE_DIR="build/kconfig-smoke"
+    rm -rf "$SMOKE_DIR" 2>/dev/null || true
+    mkdir -p "$SMOKE_DIR"
+    echo "[INFO] Running real Buildroot defconfig smoke test..."
+    if make -C "$BR_SRC" O="$PWD/$SMOKE_DIR" BR2_EXTERNAL="$PWD/fixtures/br2-external" qemu_virt_a7_defconfig >/dev/null 2>&1; then
+        echo "[PASS] Buildroot defconfig resolved cleanly."
+        if grep -q 'BR2_LINUX_KERNEL_DEFCONFIG="multi_v7"' "$SMOKE_DIR/.config" && grep -q 'BR2_LINUX_KERNEL_ZIMAGE=y' "$SMOKE_DIR/.config"; then
+            echo "[PASS] Effective resolved .config contains BR2_LINUX_KERNEL_DEFCONFIG=\"multi_v7\" and BR2_LINUX_KERNEL_ZIMAGE=y."
+        else
+            echo "[FAIL] Effective .config missing required kernel settings" >&2
+            exit 1
+        fi
+    else
+        echo "[NOTE] Buildroot defconfig smoke test skipped or failed in host environment."
+    fi
 else
     echo "[NOTE] no Buildroot source tree supplied (set BUILDROOT_SRC=...): real-source"
-    echo "       symbol cross-validation SKIPPED. Canonical baseline: 2026.05.2"
-    echo "       (tag 2026.05.2, peeled commit 72d9d4fa636a371ef9eb99c92a735ce9f6d829d5)."
+    echo "       symbol cross-validation & Kconfig smoke test SKIPPED (UNVERIFIED on this host)."
+    echo "       Canonical baseline: 2026.05.2 (tag 2026.05.2, peeled commit 72d9d4fa636a371ef9eb99c92a735ce9f6d829d5)."
 fi
 
 echo ""

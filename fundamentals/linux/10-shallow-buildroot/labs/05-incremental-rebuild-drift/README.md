@@ -72,16 +72,18 @@ Diagnose it from real state, not by assumption:
 3. **Experiment** — compare the source mtime against the stamp mtimes; run the
    build with the package's own verbose target and observe whether its build
    steps are entered at all.
-4. **Evidence** — `make appliance-diag-rebuild all` (or the
-   `-reconfigure` variant when the configuration must be re-run) removes the
-   package's stamps and re-enters build/install; a plain `make` does not.
+4. **Evidence** — a plain `make` skips the package entirely because its stamp
+   exists. With `SITE_METHOD = local`, running `make appliance-diag-rebuild`
+   cleans the build stamp but does not re-extract external sources; the clean
+   targeted fix that forces source re-extraction is `make appliance-diag-dirclean all`
+   (or using `OVERRIDE_SRCDIR` in `local.mk`).
 5. **Narrow scope** — the source is saved and valid; the image is not corrupt;
-   the build simply never re-entered the package.
-6. **Root cause** — Buildroot tracks packages by stamp files, at package
-   granularity, not by per-file timestamps.
-7. **Fix** — the *targeted* rebuild target, not a full tree wipe.
-8. **Regression** — the rebuilt image contains the new content, proved by the
-   audit and, if you can boot, by the runtime binder.
+   the build state needs a clean re-extraction of the modified source.
+6. **Root cause** — Buildroot packages are stamp-gated and `SITE_METHOD = local`
+   extracts only once; external edits do not propagate through `-rebuild` alone.
+7. **Fix** — `make appliance-diag-dirclean all` (or `local.mk` `OVERRIDE_SRCDIR`).
+8. **Regression** — the rebuilt image contains the new binary with updated `BUILD-ID`,
+   proved by the audit and runtime binder.
 
 ---
 

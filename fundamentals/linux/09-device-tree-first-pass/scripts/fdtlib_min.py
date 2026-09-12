@@ -59,10 +59,12 @@ FDT_END = 0x9
 SUPPORTED_VERSIONS = (16, 17)
 
 #: Default cell counts used when a node has no ``#address-cells``/``#size-cells``
-#: of its own.  Per the specification the root node defaults to 2/1; every other
-#: node inherits the value of its parent.
-ROOT_DEFAULT_ADDRESS_CELLS = 2
-ROOT_DEFAULT_SIZE_CELLS = 1
+#: of its own. Per Devicetree Specification v0.4 Section 2.3.5:
+#: "#address-cells and #size-cells are not inherited from ancestors in the
+#: devicetree. If not explicitly specified, the default value for
+#: #address-cells is 2, and the default value for #size-cells is 1."
+DEFAULT_ADDRESS_CELLS = 2
+DEFAULT_SIZE_CELLS = 1
 
 HEADER_FMT = ">10I"
 HEADER_SIZE = struct.calcsize(HEADER_FMT)  # 40
@@ -202,26 +204,34 @@ class Node:
         return True
 
     # -- cell context ------------------------------------------------------
-
+ 
     def address_cells(self) -> int:
+        """Return the number of address cells defined by this node for its children.
+
+        Per Devicetree Specification v0.4 (section 2.3.5), ``#address-cells``
+        is NOT inherited from ancestors. If omitted on this node, the default
+        is 2 cells.
+        """
         if self.has("#address-cells"):
             cells = self.prop_cells("#address-cells")
             if len(cells) != 1:
                 raise FdtSemanticError(f"{self.path}: #address-cells must hold exactly 1 cell")
             return cells[0]
-        if self.parent is None:
-            return ROOT_DEFAULT_ADDRESS_CELLS
-        return self.parent.address_cells()
+        return DEFAULT_ADDRESS_CELLS
 
     def size_cells(self) -> int:
+        """Return the number of size cells defined by this node for its children.
+
+        Per Devicetree Specification v0.4 (section 2.3.5), ``#size-cells``
+        is NOT inherited from ancestors. If omitted on this node, the default
+        is 1 cell.
+        """
         if self.has("#size-cells"):
             cells = self.prop_cells("#size-cells")
             if len(cells) != 1:
                 raise FdtSemanticError(f"{self.path}: #size-cells must hold exactly 1 cell")
             return cells[0]
-        if self.parent is None:
-            return ROOT_DEFAULT_SIZE_CELLS
-        return self.parent.size_cells()
+        return DEFAULT_SIZE_CELLS
 
     def interrupt_cells(self) -> int:
         if not self.has("#interrupt-cells"):
