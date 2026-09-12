@@ -290,30 +290,30 @@ RC=$?
 set -e
 if [ "$RC" -eq 1 ]; then echo "PASS"; PASSED=$((PASSED + 1)); else echo "FAIL (rc=$RC, expected 1)"; exit 1; fi
 
-# --- 9b. S2-4: F12 rebuild mechanics & observable build identity fidelity ---
-# Real compilation of appliance-diag and demonstration of local-package cache drift
+# --- 9b. S2-R2-3: F12 rebuild mechanics & observable SOURCE-REV fidelity ---
+# Unit model of appliance-diag local-package cache drift and recovery
 F12_WORK="$WORK/f12-fidelity"
 rm -rf "$F12_WORK" 2>/dev/null || true
 mkdir -p "$F12_WORK/src" "$F12_WORK/build" "$F12_WORK/target/usr/bin" "$F12_WORK/images"
 cp fixtures/br2-external/package/appliance-diag/src/* "$F12_WORK/src/"
 
-# Step 1: Initial build with BUILD_ID=1.0 into build directory
+# Step 1: Initial build with SOURCE-REV=1.0 into build directory
 cp "$F12_WORK/src/"* "$F12_WORK/build/"
-cc -O2 -Wall -DAPPLIANCE_DIAG_BUILD_ID=\"1.0\" "$F12_WORK/build/appliance-diag.c" -o "$F12_WORK/build/appliance-diag"
+cc -O2 -Wall "$F12_WORK/build/appliance-diag.c" -o "$F12_WORK/build/appliance-diag"
 touch "$F12_WORK/build/.stamp_extracted" "$F12_WORK/build/.stamp_built" "$F12_WORK/build/.stamp_target_installed"
 cp "$F12_WORK/build/appliance-diag" "$F12_WORK/target/usr/bin/appliance-diag"
 INITIAL_OUT=$("$F12_WORK/target/usr/bin/appliance-diag")
-grep -q "BUILD-ID=1.0" <<<"$INITIAL_OUT"
+grep -q "SOURCE-REV=1.0" <<<"$INITIAL_OUT"
 
-# Step 2: Edit external source tree to BUILD_ID=2.0
-sed -i 's/BUILD_ID ?= 1.0/BUILD_ID ?= 2.0/' "$F12_WORK/src/Makefile" 2>/dev/null || true
+# Step 2: Edit external source tree to SOURCE-REV=2.0
+sed -i 's/APPLIANCE_DIAG_SOURCE_REV "1.0"/APPLIANCE_DIAG_SOURCE_REV "2.0"/' "$F12_WORK/src/appliance-diag.c" 2>/dev/null || true
 
 # Step 3: Plain make skips because .stamp_target_installed exists
 # target/usr/bin/appliance-diag remains at 1.0
 PLAIN_OUT=$("$F12_WORK/target/usr/bin/appliance-diag")
 TOTAL=$((TOTAL + 1))
 echo -n "[TEST $TOTAL] F12 plain make remains stale: stamp-gated skip ... "
-if grep -q "BUILD-ID=1.0" <<<"$PLAIN_OUT"; then
+if grep -q "SOURCE-REV=1.0" <<<"$PLAIN_OUT"; then
     echo "PASS (stale binary preserved)"
     PASSED=$((PASSED + 1))
 else
@@ -323,12 +323,12 @@ fi
 
 # Step 4: Rebuild without dirclean (rebuilding existing build dir without re-extraction leaves 1.0)
 rm -f "$F12_WORK/build/.stamp_built" "$F12_WORK/build/.stamp_target_installed"
-cc -O2 -Wall -DAPPLIANCE_DIAG_BUILD_ID=\"1.0\" "$F12_WORK/build/appliance-diag.c" -o "$F12_WORK/build/appliance-diag"
+cc -O2 -Wall "$F12_WORK/build/appliance-diag.c" -o "$F12_WORK/build/appliance-diag"
 cp "$F12_WORK/build/appliance-diag" "$F12_WORK/target/usr/bin/appliance-diag"
 STALE_REBUILD_OUT=$("$F12_WORK/target/usr/bin/appliance-diag")
 TOTAL=$((TOTAL + 1))
 echo -n "[TEST $TOTAL] F12 rebuild without re-extraction remains stale ... "
-if grep -q "BUILD-ID=1.0" <<<"$STALE_REBUILD_OUT"; then
+if grep -q "SOURCE-REV=1.0" <<<"$STALE_REBUILD_OUT"; then
     echo "PASS (stale source in build dir preserved)"
     PASSED=$((PASSED + 1))
 else
@@ -340,21 +340,21 @@ fi
 rm -rf "$F12_WORK/build"
 mkdir -p "$F12_WORK/build"
 cp "$F12_WORK/src/"* "$F12_WORK/build/"
-cc -O2 -Wall -DAPPLIANCE_DIAG_BUILD_ID=\"2.0\" "$F12_WORK/build/appliance-diag.c" -o "$F12_WORK/build/appliance-diag"
+cc -O2 -Wall "$F12_WORK/build/appliance-diag.c" -o "$F12_WORK/build/appliance-diag"
 touch "$F12_WORK/build/.stamp_extracted" "$F12_WORK/build/.stamp_built" "$F12_WORK/build/.stamp_target_installed"
 cp "$F12_WORK/build/appliance-diag" "$F12_WORK/target/usr/bin/appliance-diag"
 RECOVERED_OUT=$("$F12_WORK/target/usr/bin/appliance-diag")
 TOTAL=$((TOTAL + 1))
-echo -n "[TEST $TOTAL] F12 dirclean targeted recovery refreshes build ID ... "
-if grep -q "BUILD-ID=2.0" <<<"$RECOVERED_OUT"; then
-    echo "PASS (updated BUILD-ID=2.0 observed)"
+echo -n "[TEST $TOTAL] F12 dirclean targeted recovery refreshes source rev ... "
+if grep -q "SOURCE-REV=2.0" <<<"$RECOVERED_OUT"; then
+    echo "PASS (updated SOURCE-REV=2.0 observed)"
     PASSED=$((PASSED + 1))
 else
     echo "FAIL"
     exit 1
 fi
 
-# Step 6: Package into image and verify runtime binder accepts new BUILD-ID
+# Step 6: Verify runtime binder accepts updated SOURCE-REV=2.0
 "$PY" scripts/make_sample_output_tree.py --out "$F12_WORK/tree" --mode healthy >/dev/null
 F12_IMG="$F12_WORK/tree/images/rootfs.cpio.gz"
 F12_IMG_SHA=$(sha256sum "$F12_IMG" | awk '{print $1}')
@@ -370,6 +370,7 @@ cat > "$F12_WORK/boot.log" <<EOF
 [    0.000000] Kernel command line: console=ttyAMA0,115200 earlycon=pl011,0x09000000 rdinit=/init
 APPLIANCE-OVERLAY-BOOT-MARKER
 APPLIANCE-DIAG-BEGIN
+SOURCE-REV=2.0
 BUILD-ID=2.0
 APPLIANCE-RELEASE=EMBED-SYSTEM P3-M06 appliance release 1.0
 DT-MODEL=linux,dummy-virt
@@ -377,22 +378,59 @@ APPLIANCE-DIAG-END
 EOF
 
 TOTAL=$((TOTAL + 1))
-echo -n "[TEST $TOTAL] runtime binder accepts updated BUILD-ID=2.0 ... "
+echo -n "[TEST $TOTAL] runtime binder accepts updated SOURCE-REV=2.0 ... "
 set +e
 "$PY" scripts/verify_appliance_runtime.py "$F12_IMG" "$F12_WORK/prov.conf" "$F12_WORK/boot.log" \
-    --overlay "$OVERLAY" --expect-build-id "2.0" >/dev/null 2>&1
+    --overlay "$OVERLAY" --expect-source-rev "2.0" >/dev/null 2>&1
 RC=$?
 set -e
 if [ "$RC" -eq 0 ]; then echo "PASS"; PASSED=$((PASSED + 1)); else echo "FAIL (rc=$RC)"; exit 1; fi
 
 TOTAL=$((TOTAL + 1))
-echo -n "[TEST $TOTAL] runtime binder rejects stale BUILD-ID=1.0 when 2.0 expected ... "
+echo -n "[TEST $TOTAL] runtime binder rejects stale SOURCE-REV=1.0 when 2.0 expected ... "
 set +e
 "$PY" scripts/verify_appliance_runtime.py "$F12_IMG" "$F12_WORK/prov.conf" "$F12_WORK/boot.log" \
-    --overlay "$OVERLAY" --expect-build-id "1.0" >/dev/null 2>&1
+    --overlay "$OVERLAY" --expect-source-rev "1.0" >/dev/null 2>&1
 RC=$?
 set -e
 if [ "$RC" -eq 1 ]; then echo "PASS"; PASSED=$((PASSED + 1)); else echo "FAIL (rc=$RC, expected 1)"; exit 1; fi
+
+# --- 9c. S2-R2-2: effective configuration validation controls -----------------
+# Generate simulated effective .config (superset of defconfig with Buildroot internal symbols)
+cat "$CANONICAL" > "$WORK/effective-healthy.conf"
+cat >> "$WORK/effective-healthy.conf" <<EOF
+BR2_HAVE_DOT_CONFIG=y
+BR2_VERSION="2026.05.2"
+BR2_HOST_GCC_AT_LEAST_4_9=y
+BR2_TOOLCHAIN_USES_GLIBC=y
+EOF
+
+TOTAL=$((TOTAL + 1))
+echo -n "[TEST $TOTAL] PASS expected: effective resolved .config passes with --effective ... "
+set +e
+"$PY" scripts/verify_br_config.py "$WORK/effective-healthy.conf" --profile "$COMPLETE_PROFILE" \
+    --symbol-table "$SYMBOLS" --effective >/dev/null 2>&1
+RC=$?
+set -e
+if [ "$RC" -eq 0 ]; then echo "PASS"; PASSED=$((PASSED + 1)); else echo "FAIL (rc=$RC, expected 0)"; exit 1; fi
+
+# Effective config with missing required kernel setting must REJECT
+sed 's/BR2_LINUX_KERNEL_ZIMAGE=y/BR2_LINUX_KERNEL_ZIMAGE=n/' \
+    "$WORK/effective-healthy.conf" > "$WORK/effective-wrong-zimage.conf"
+TOTAL=$((TOTAL + 1))
+echo -n "[TEST $TOTAL] semantic REJECT expected: effective config missing required zImage ... "
+set +e
+out=$("$PY" scripts/verify_br_config.py "$WORK/effective-wrong-zimage.conf" --profile "$COMPLETE_PROFILE" \
+    --symbol-table "$SYMBOLS" --effective 2>&1)
+RC=$?
+set -e
+if [ "$RC" -eq 1 ] && grep -q "REJECT" <<<"$out"; then
+    echo "PASS (intended semantic REJECT)"
+    PASSED=$((PASSED + 1))
+else
+    echo "FAIL (rc=$RC, expected 1)"
+    exit 1
+fi
 
 # --- 10. positive reference controls ----------------------------------------
 assert_pass "canonical defconfig against the taught contract" "$CANONICAL" "$TAUGHT_PROFILE"

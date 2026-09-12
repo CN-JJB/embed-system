@@ -88,12 +88,13 @@ following the stale reference.
 | 5 | Package make targets | read `docs/manual/package-make-target.adoc`; `grep .stamp_target_installed package/pkg-generic.mk` | stamp-based package phases confirmed | **VERIFIED** |
 | 6 | Canonical defconfig vs taught contract | `verify_br_config.py <defconfig>` | PASS | **VERIFIED** |
 | 7 | Canonical defconfig vs complete contract + symbol table | `verify_br_config.py <defconfig> --profile …complete.json --symbol-table …` | PASS | **VERIFIED** |
-| 8 | External-tree structure | `external.desc`, `external.mk`, `Config.in`, `configs/`, `package/`, `board/` | consistent with the documented BR2_EXTERNAL layout | **VERIFIED** (structural) |
+| 7b | Effective resolved `.config` validation | `verify_br_config.py <.config> --profile …complete.json --symbol-table … --effective` | PASS on healthy, REJECT on mutated | **VERIFIED** (tooling) |
+| 8 | External-tree structure | `external.desc`, `external.mk`, `Config.in`, `configs/`, `package/`, `board/` | consistent with documented BR2_EXTERNAL layout | **VERIFIED** (structural) |
 | 9 | Overlay propagation audit (synthetic sample) | `make_sample_output_tree.py` + `audit_output_tree.py` | healthy PASS; stale REJECT (`overlay.in-image`, `overlay.not-stale`) | **VERIFIED** (tooling) |
-| 10 | Real Buildroot build | `make … qemu_virt_a7_defconfig && make` | not attempted — Buildroot does not build on this host (no POSIX environment) | **UNVERIFIED** |
-| 11 | Real appliance QEMU boot | `run_buildroot_appliance.sh` | not attempted — no image exists | **UNVERIFIED** |
-| 12 | Real overlay propagation into a real `rootfs.ext4` | `audit_output_tree.py` on a real build | not attempted | **UNVERIFIED** |
-| 13 | F12 runtime reproduction on a real build | — | not attempted; the mechanism is verified from the manual and the synthetic sample | **UNVERIFIED** |
+| 10 | Real Buildroot build / defconfig smoke | `make … qemu_virt_a7_defconfig` | fail-closed reviewer runner implemented; real build UNVERIFIED on host | **UNVERIFIED** |
+| 11 | Real appliance QEMU boot | `run_buildroot_appliance.sh` | not attempted — no image exists on host | **UNVERIFIED** |
+| 12 | Real overlay propagation into a real `rootfs.ext4` | `audit_output_tree.py` on a real build | not attempted on host | **UNVERIFIED** |
+| 13 | F12 local-site rebuild fidelity | `test_f12_real_buildroot.sh` & synthetic unit suite (Tests 23–27) | unit suite PASS; real Buildroot execution gated on `BUILDROOT_SRC` | **PARTIALLY VERIFIED** (synthetic PASS, real path UNVERIFIED on host) |
 | 14 | Live GDB / physical measurement | — | not applicable | **UNVERIFIED** |
 
 ### Actual-host vs canonical

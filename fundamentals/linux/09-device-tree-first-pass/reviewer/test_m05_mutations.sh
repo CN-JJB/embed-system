@@ -347,6 +347,80 @@ else
     exit 1
 fi
 
+# --- 13d. S2-R2-1: runner materialises composite initrd deterministically ---
+MUTATIONS=$((MUTATIONS + 1))
+echo -n "[TEST $MUTATIONS] runner materialises composite initrd and binds hash ... "
+if [ -f "$WORK/fail.composite-initrd.cpio" ]; then
+    FAIL_INITRD_SHA=$(sha256sum "$WORK/fail.composite-initrd.cpio" | awk '{print $1}')
+    if grep -q "initrd_sha256: $FAIL_INITRD_SHA" "$WORK/fail.argv"; then
+        echo "PASS (composite initrd persisted and recorded)"
+        PASSED=$((PASSED + 1))
+    else
+        echo "FAIL (hash mismatch in argv provenance)"
+        exit 1
+    fi
+else
+    echo "FAIL (composite initrd not materialized at deterministic path)"
+    exit 1
+fi
+
+# --- 13e. S2-R2-1: runtime binder rejects executed initrd hash mismatch ---
+echo "dummy composite" > "$WORK/mismatch-composite.cpio"
+cat > "$WORK/prov-initrd-mismatch.conf" <<EOF
+machine: virt,highmem=off,gic-version=2
+cpu: cortex-a7
+memory: 512M
+smp: 1
+bootargs: console=ttyAMA0,115200 earlycon=pl011,0x09000000 rdinit=/init
+dtb_sha256: $(sha256sum "$CANONICAL" | awk '{print $1}')
+initrd_path: $WORK/mismatch-composite.cpio
+initrd_sha256: 0000000000000000000000000000000000000000000000000000000000000000
+EOF
+assert_binding_reject "runtime capture whose executed initrd hash does not match provenance" \
+    "$CANONICAL" "$WORK/prov-initrd-mismatch.conf" "$WORK/boot.log"
+
+# --- 13f. S2-R2-1: runtime binder rejects missing executed initrd file ---
+cat > "$WORK/prov-initrd-missing.conf" <<EOF
+machine: virt,highmem=off,gic-version=2
+cpu: cortex-a7
+memory: 512M
+smp: 1
+bootargs: console=ttyAMA0,115200 earlycon=pl011,0x09000000 rdinit=/init
+dtb_sha256: $(sha256sum "$CANONICAL" | awk '{print $1}')
+initrd_path: $WORK/nonexistent-composite.cpio
+initrd_sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+EOF
+assert_binding_reject "runtime capture whose executed initrd file is missing" \
+    "$CANONICAL" "$WORK/prov-initrd-missing.conf" "$WORK/boot.log"
+
+# --- 13g. S2-R2-1: positive control: matching executed initrd binds cleanly ---
+MUTATIONS=$((MUTATIONS + 1))
+echo -n "[TEST $MUTATIONS] PASS expected: valid executed composite initrd binds cleanly ... "
+VAL_INITRD="$WORK/valid-composite.cpio"
+echo "probe composite content" > "$VAL_INITRD"
+VAL_SHA=$(sha256sum "$VAL_INITRD" | awk '{print $1}')
+cat > "$WORK/prov-valid-initrd.conf" <<EOF
+machine: virt,highmem=off,gic-version=2
+cpu: cortex-a7
+memory: 512M
+smp: 1
+bootargs: console=ttyAMA0,115200 earlycon=pl011,0x09000000 rdinit=/init
+dtb_sha256: $(sha256sum "$CANONICAL" | awk '{print $1}')
+initrd_path: $VAL_INITRD
+initrd_sha256: $VAL_SHA
+EOF
+set +e
+"$PY" scripts/verify_runtime_binding.py "$CANONICAL" "$WORK/prov-valid-initrd.conf" "$WORK/boot.log" >/dev/null 2>&1
+RC=$?
+set -e
+if [ "$RC" -eq 0 ]; then
+    echo "PASS"
+    PASSED=$((PASSED + 1))
+else
+    echo "FAIL (rc=$RC, expected 0)"
+    exit 1
+fi
+
 # --- 14. positive reference controls ----------------------------------------
 assert_pass "canonical fixture against the complete contract" "$CANONICAL"
 assert_pass "canonical fixture against the taught contract" "$CANONICAL" "$TAUGHT_PROFILE"

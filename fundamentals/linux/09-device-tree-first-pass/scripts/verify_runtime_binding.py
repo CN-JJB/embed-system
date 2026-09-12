@@ -74,20 +74,23 @@ def read_text(path: str) -> str:
         return handle.read()
 
 
-def parse_provenance(text: str) -> Dict[str, str]:
+def parse_provenance(text: str) -> Tuple[Dict[str, str], List[str]]:
     out: Dict[str, str] = {}
+    argv_list: List[str] = []
     for line in text.splitlines():
         line = line.strip()
         if not line or line.startswith("#"):
             continue
         if line.startswith("argv:"):
+            arg = line[len("argv:"):].strip()
+            argv_list.append(arg)
             out.setdefault("argv", "")
-            out["argv"] += line[len("argv:"):].strip() + " "
+            out["argv"] += arg + " "
             continue
         if ":" in line:
             key, value = line.split(":", 1)
             out[key.strip()] = value.strip()
-    return out
+    return out, argv_list
 
 
 def main(argv: Optional[List[str]] = None) -> int:
@@ -95,6 +98,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("candidate", help="candidate DTB")
     parser.add_argument("provenance", help="executed-argv provenance file")
     parser.add_argument("log", help="captured guest console log")
+    parser.add_argument("--initrd", help="executed composite initrd path to verify", default=None)
     args = parser.parse_args(argv)
 
     for path in (args.candidate, args.provenance, args.log):
@@ -102,13 +106,17 @@ def main(argv: Optional[List[str]] = None) -> int:
             print(f"ERROR: missing required input: {path}", file=sys.stderr)
             return EXIT_ERROR
 
+    if args.initrd and not os.path.isfile(args.initrd):
+        print(f"ERROR: specified --initrd not found: {args.initrd}", file=sys.stderr)
+        return EXIT_ERROR
+
     try:
         candidate = parse_file(args.candidate)
     except (FdtFormatError, FdtSemanticError) as exc:
         print(f"ERROR: cannot parse candidate DTB: {exc}", file=sys.stderr)
         return EXIT_ERROR
 
-    prov = parse_provenance(read_text(args.provenance))
+    prov, argv_list = parse_provenance(read_text(args.provenance))
     log = read_text(args.log)
 
     print("=" * 66)
@@ -216,6 +224,41 @@ def main(argv: Optional[List[str]] = None) -> int:
             need(False, "binding.dtb-identity",
                  "the provenance does not record a dtb_sha256 equal to the candidate and the "
                  "booted DTB path is not available for a semantic comparison")
+
+    # 7. the executed composite initrd must match the provenance record
+    expected_initrd_sha = prov.get("initrd_sha256") or prov.get("composite_initrd_sha256")
+    initrd_path = args.initrd or prov.get("initrd_path")
+    if not initrd_path and "-initrd" in argv_list:
+        idx = argv_list.index("-initrd")
+        if idx + 1 < len(argv_list):
+            initrd_path = argv_list[idx + 1]
+
+    if expected_initrd_sha:
+        if not initrd_path:
+            need(False, "binding.initrd-identity",
+                 f"provenance records initrd_sha256 {expected_initrd_sha[:16]}... but specifies no initrd path or -initrd in argv")
+        else:
+            resolved_initrd = initrd_path
+            if not os.path.isabs(resolved_initrd) and not os.path.exists(resolved_initrd):
+                cand_rel = os.path.join(os.path.dirname(os.path.abspath(args.provenance)), initrd_path)
+                if os.path.exists(cand_rel):
+                    resolved_initrd = cand_rel
+            if not os.path.isfile(resolved_initrd):
+                need(False, "binding.initrd-identity",
+                     f"executed composite initrd file not found at {initrd_path} to verify provenance hash {expected_initrd_sha[:16]}...")
+            else:
+                actual_initrd_sha = __import__("hashlib").sha256(open(resolved_initrd, "rb").read()).hexdigest()
+                need(actual_initrd_sha == expected_initrd_sha, "binding.initrd-identity",
+                     f"executed composite initrd sha256 matches provenance ({actual_initrd_sha[:16]}... vs {expected_initrd_sha[:16]}...)")
+    elif initrd_path:
+        resolved_initrd = initrd_path
+        if not os.path.isabs(resolved_initrd) and not os.path.exists(resolved_initrd):
+            cand_rel = os.path.join(os.path.dirname(os.path.abspath(args.provenance)), initrd_path)
+            if os.path.exists(cand_rel):
+                resolved_initrd = cand_rel
+        if os.path.isfile(resolved_initrd):
+            need(False, "binding.initrd-identity",
+                 f"executed initrd found at {initrd_path} but provenance does not record initrd_sha256")
 
     print("-" * 66)
     print("NOTE: this binder establishes internal consistency and artifact")

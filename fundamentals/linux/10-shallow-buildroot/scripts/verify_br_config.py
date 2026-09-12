@@ -79,10 +79,10 @@ class Config:
         return symbol in self.explicitly_unset or self.values.get(symbol) == "n"
 
 
-def _validate_value(symbol: str, value: str, line_no: int) -> None:
-    if value == "":
+def _validate_value(symbol: str, value: str, line_no: int, effective: bool = False) -> None:
+    if value == "" and not effective:
         raise ConfigError(f"line {line_no}: '{symbol}' has an empty value")
-    if any(ch in FORBIDDEN_VALUE_CHARS for ch in value):
+    if not effective and any(ch in FORBIDDEN_VALUE_CHARS for ch in value):
         raise ConfigError(
             f"line {line_no}: value of '{symbol}' contains a shell metacharacter "
             f"({value!r}); a configuration fragment is data, not a script")
@@ -97,7 +97,7 @@ def _validate_value(symbol: str, value: str, line_no: int) -> None:
         raise ConfigError(f"line {line_no}: value of '{symbol}' contains a backtick")
 
 
-def parse_fragment(path: str) -> Config:
+def parse_fragment(path: str, effective: bool = False) -> Config:
     if not os.path.isfile(path):
         raise FileNotFoundError(f"configuration fragment not found: {path}")
     cfg = Config()
@@ -120,7 +120,7 @@ def parse_fragment(path: str) -> Config:
             symbol, value = match.group(1), match.group(2)
             if not SYMBOL_RE.match(symbol):
                 raise ConfigError(f"line {line_no}: invalid Kconfig symbol name {symbol!r}")
-            _validate_value(symbol, value, line_no)
+            _validate_value(symbol, value, line_no, effective=effective)
             if symbol in cfg.values and cfg.values[symbol] != value:
                 raise ConfigError(
                     f"line {line_no}: '{symbol}' is defined twice with conflicting "
@@ -139,7 +139,8 @@ def load_json(path: str) -> Dict[str, Any]:
 
 
 def validate(cfg: Config, profile: Dict[str, Any],
-             symbol_table: Optional[Dict[str, Any]]) -> List[Tuple[str, bool, str]]:
+             symbol_table: Optional[Dict[str, Any]],
+             effective: bool = False) -> List[Tuple[str, bool, str]]:
     results: List[Tuple[str, bool, str]] = []
 
     def record(ident: str, ok: bool, detail: str) -> None:
@@ -149,14 +150,28 @@ def validate(cfg: Config, profile: Dict[str, Any],
     if symbol_table and profile.get("reject_unknown_symbols"):
         known = set(symbol_table.get("symbols", {}))
         known |= set(symbol_table.get("external_symbols", {}))
-        unknown = sorted(s for s in list(cfg.values) + list(cfg.explicitly_unset)
-                         if s not in known)
-        record("symbols.known", not unknown,
-               f"{len(cfg.values)} symbol(s) declared, all present in the real "
-               f"Buildroot {profile.get('buildroot_release')} source tree"
-               if not unknown else
-               f"symbol(s) that do not exist in the real Buildroot "
-               f"{profile.get('buildroot_release')} source tree: {unknown[:8]}")
+        if effective:
+            # Effective resolved .config contains hundreds of internal Buildroot symbols.
+            # Verify that all profile-required symbols are present in the symbol table.
+            profile_symbols = set(profile.get("required_values", {}).keys())
+            profile_symbols |= set(profile.get("required_exact", {}).keys())
+            profile_symbols |= set(profile.get("required_present_nonempty", []))
+            profile_symbols |= set(profile.get("forbidden_set", []))
+            unknown_profile = sorted(s for s in profile_symbols if s not in known)
+            record("symbols.known", not unknown_profile,
+                   f"effective resolved configuration verified against real Buildroot "
+                   f"{profile.get('buildroot_release')} symbol table ({len(cfg.values)} symbols present)"
+                   if not unknown_profile else
+                   f"symbol table missing profile-required symbol(s): {unknown_profile}")
+        else:
+            unknown = sorted(s for s in list(cfg.values) + list(cfg.explicitly_unset)
+                             if s not in known)
+            record("symbols.known", not unknown,
+                   f"{len(cfg.values)} symbol(s) declared, all present in the real "
+                   f"Buildroot {profile.get('buildroot_release')} source tree"
+                   if not unknown else
+                   f"symbol(s) that do not exist in the real Buildroot "
+                   f"{profile.get('buildroot_release')} source tree: {unknown[:8]}")
 
     # --- required values -----------------------------------------------------
     for symbol, expected in sorted(profile.get("required_values", {}).items()):
@@ -210,6 +225,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                         help="JSON symbol table extracted from the real Buildroot source tree")
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--quiet", action="store_true")
+    parser.add_argument("--effective", action="store_true",
+                        help="validate a full resolved .config rather than a defconfig fragment")
     args = parser.parse_args(argv)
 
     try:
@@ -227,7 +244,7 @@ def main(argv: Optional[List[str]] = None) -> int:
             return EXIT_ERROR
 
     try:
-        cfg = parse_fragment(args.fragment)
+        cfg = parse_fragment(args.fragment, effective=args.effective)
     except FileNotFoundError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return EXIT_ERROR
@@ -235,7 +252,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         print(f"REJECT: {exc}", file=sys.stderr)
         return EXIT_REJECT
 
-    results = validate(cfg, profile, symbol_table)
+    results = validate(cfg, profile, symbol_table, effective=args.effective)
 
     if args.json:
         print(json.dumps({

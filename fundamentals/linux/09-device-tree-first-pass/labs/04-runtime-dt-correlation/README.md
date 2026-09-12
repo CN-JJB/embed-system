@@ -47,12 +47,15 @@ The script:
 
 * builds the argv from the canonical contract
   (`virt,highmem=off,gic-version=2`, `cortex-a7`, `512M`, `-smp 1`, `-nographic`);
-* records that argv, plus the SHA-256 of the DTB, kernel and initramfs, as
-  provenance;
-* boots with `-dtb <your blob>` and an injected temporary initramfs overlay
-  (`rdinit=/dtprobe_init`) that executes a bounded, read-only probe (printing
-  `model` and the property names of `/pl011@9000000`), emits `DT-PROBE-END`,
-  and powers off;
+* records that argv, the SHA-256 of the DTB, kernel, base initrd, and the SHA-256
+  of the actual composite boot initrd executed by QEMU, as provenance;
+* materialises the executed composite initrd at a deterministic capture-associated
+  path (`build/boot.composite-initrd.cpio`), ensuring the recorded argv is
+  replayable after capture;
+* boots with `-dtb <your blob>` and `-initrd <composite initrd>` containing an
+  injected temporary probe (`rdinit=/dtprobe_init`) that executes a bounded,
+  read-only probe (printing `model` and the property names of `/pl011@9000000`),
+  emits `DT-PROBE-END`, and powers off;
 * fails closed (exit code 1) if QEMU fails or the guest fails to reach `DT-PROBE-END`.
 
 Then bind the capture to your artifact:
@@ -66,7 +69,8 @@ The binder refuses to accept the capture unless the provenance records the
 canonical machine contract, the logged kernel command line matches the
 provenance bootargs, the probe completed, the guest-reported `model` equals your
 candidate's root `model`, the guest-reported property list of the probed node
-equals your candidate node's property names, **and** the booted blob is your
+equals your candidate node's property names, the executed composite initrd
+matches the provenance hash, **and** the booted blob is your
 candidate (byte-identical, or semantically identical modulo the randomised
 `chosen` seeds).
 

@@ -45,7 +45,7 @@ python3 scripts/make_sample_output_tree.py --out build/f12 --mode healthy
 ls -l --full-time build/f12/build/appliance-diag-1.0/
 
 # now change the package source
-sed -i 's/APPLIANCE-DIAG-BEGIN/APPLIANCE-DIAG-BEGIN-V2/' \
+sed -i 's/APPLIANCE_DIAG_SOURCE_REV "1.0"/APPLIANCE_DIAG_SOURCE_REV "2.0"/' \
     fixtures/br2-external/package/appliance-diag/src/appliance-diag.c
 ```
 
@@ -62,7 +62,7 @@ The stamp files are unchanged, so a plain `make` skips the package entirely.
 EXPECTED / ILLUSTRATIVE — TARGET RUN UNVERIFIED
 The package source on the host has been modified and a top-level `make` has run.
 The appliance boots, and the diagnostic utility still reports the previous
-build identity.
+source revision (SOURCE-REV=1.0).
 ```
 
 ### Own description
@@ -74,8 +74,9 @@ even though the build reported success.
 
 1. The source edit was not saved to disk.
 2. The top-level `make` did not run the package's build step because the package
-   is considered already built.
-3. The package was rebuilt, but the target installation step did not run.
+   is considered already built (.stamp_target_installed).
+3. The package was rebuilt with `make appliance-diag-rebuild`, but local-site extraction
+   was skipped (.stamp_extracted preserved), rebuilding the stale copy in `output/build/`.
 4. The image was not re-packaged from the (updated) staging tree.
 5. QEMU booted an image from a previous build.
 
@@ -83,7 +84,7 @@ even though the build reported success.
 
 ```bash
 # 1. Is the source actually modified?
-grep -n 'APPLIANCE-DIAG-BEGIN' fixtures/br2-external/package/appliance-diag/src/appliance-diag.c
+grep -n 'APPLIANCE_DIAG_SOURCE_REV' fixtures/br2-external/package/appliance-diag/src/appliance-diag.c
 
 # 2. What does the build state claim?
 ls -l --full-time output/build/appliance-diag-1.0/.stamp_*
@@ -94,24 +95,30 @@ make -C "$BR_SRC" O="$OUTPUT_DIR" BR2_EXTERNAL="$BR2_EXTERNAL" 2>&1 | grep -i ap
 
 # 4. Does the *targeted* rebuild target enter it?
 make -C "$BR_SRC" O="$OUTPUT_DIR" BR2_EXTERNAL="$BR2_EXTERNAL" appliance-diag-rebuild all
+
+# 5. Does the targeted dirclean force re-extraction from APPLIANCE_DIAG_SITE?
+make -C "$BR_SRC" O="$OUTPUT_DIR" BR2_EXTERNAL="$BR2_EXTERNAL" appliance-diag-dirclean all
 ```
 
 ### Evidence
 
-* The source file's mtime is **newer** than `.stamp_target_installed`.
+* The external source file's mtime is **newer** than `.stamp_target_installed`.
 * The plain `make` output contains no `appliance-diag` build lines: the package
-  is skipped, because its stamp exists.
-* The targeted rebuild prints the package's configure/build/install steps and
-  the stamp files are re-created.
+  is skipped because `.stamp_target_installed` exists.
+* Running `make appliance-diag-rebuild` removes `.stamp_built` and `.stamp_target_installed`,
+  re-enters the build commands, but re-compiles the **stale cached source** inside
+  `output/build/appliance-diag-1.0/` because `.stamp_extracted` was not cleared!
+* Running `make appliance-diag-dirclean` deletes `output/build/appliance-diag-1.0/`,
+  forcing Buildroot to re-extract from `APPLIANCE_DIAG_SITE`, rebuild the updated source,
+  install to `output/target/`, and regenerate the rootfs image.
 
 ### Narrow scope
 
 * The source is saved and syntactically valid — hypothesis 1 is out.
 * The toolchain works and other packages are unaffected.
-* The image file was rewritten, but from an unchanged `output/target/` —
-  hypotheses 3 and 4 are narrowed to "the package's install step never ran".
-* Re-running with the targeted rebuild changes the outcome, so the mechanism is
-  build state, not the source — hypotheses 2 and 3 survive, 5 is out.
+* Plain `make` skips due to stamp gating — hypothesis 2 confirmed for plain `make`.
+* Rebuild without dirclean leaves stale binary due to local-site extraction caching — hypothesis 3 confirmed.
+* Targeted dirclean recovery produces a refreshed image containing `SOURCE-REV=2.0`.
 
 ### Root cause
 
@@ -137,8 +144,8 @@ make -C "$BR_SRC" O="$OUTPUT_DIR" BR2_EXTERNAL="$BR2_EXTERNAL" \
 ```
 
 `appliance-diag-dirclean` completely removes `output/build/appliance-diag-1.0`, forcing Buildroot
-to re-extract the updated source from `APPLIANCE_DIAG_SITE`, rebuild it, and regenerate the rootfs
-image.
+to re-extract the updated source from `APPLIANCE_DIAG_SITE`, rebuild it, update `output/target/`,
+and regenerate the rootfs image.
 
 #### The `OVERRIDE_SRCDIR` Alternative for Active Development
 
@@ -154,22 +161,35 @@ Buildroot switches from one-shot extraction to `rsync` before every build. Under
 `make appliance-diag-rebuild all` *does* pick up external edits because Buildroot re-rsyncs the
 source before running the build step.
 
-### Observable Build Identity
+### Observable Source Identity
 
-The build ID is injected at compile time via `APPLIANCE_DIAG_BUILD_ID` in `appliance-diag.mk`.
-Inspecting `BUILD-ID` in the diagnostic output verifies whether the binary running or packaged
-is the updated revision (e.g. `1.1`) rather than the stale initial build (`1.0`).
+The source revision is defined directly in `fixtures/br2-external/package/appliance-diag/src/appliance-diag.c`
+via `APPLIANCE_DIAG_SOURCE_REV` (`SOURCE-REV=...`). Duplicate competing makefile definitions
+have been removed: `appliance-diag.mk` and `src/Makefile` do not define competing build IDs.
+The C source code itself is the single source of truth.
+
+Inspecting `SOURCE-REV` in the binary or diagnostic output verifies whether the binary running or
+packaged is the updated revision (`2.0`) rather than the stale initial build (`1.0`).
 
 ### Regression
 
+Two complementary verification paths:
+
+1. **Synthetic unit model**: `test_m06_mutations.sh` (Tests 23–27) simulates
+   stamp gating, stale rebuild, and dirclean recovery using host tools.
+2. **Real Buildroot fidelity path**: `test_f12_real_buildroot.sh` executes the full
+   sequence directly through Buildroot 2026.05.2 (gated on `BUILDROOT_SRC`) and inspects
+   the real final `output/images/rootfs.cpio` for the updated `SOURCE-REV=2.0` marker.
+
 ```bash
+# Verify output tree after recovery
 python3 scripts/audit_output_tree.py \
     --output "$OUTPUT_DIR" \
     --overlay fixtures/br2-external/board/qemu-virt-a7/rootfs-overlay
 ```
 
-plus, where the environment permits, a boot whose capture is bound to the new
-image hash and shows the updated `BUILD-ID`.
+plus, where the environment permits, inspection of the regenerated image
+bound to the updated `SOURCE-REV=2.0`.
 
 ---
 

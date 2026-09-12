@@ -62,6 +62,7 @@ OVERLAY_MARKER = "APPLIANCE-OVERLAY-BOOT-MARKER"
 RELEASE_LINE = re.compile(r"^APPLIANCE-RELEASE=(.*)$", re.MULTILINE)
 DT_MODEL_LINE = re.compile(r"^DT-MODEL=(.*)$", re.MULTILINE)
 BUILD_ID_LINE = re.compile(r"^BUILD-ID=(.*)$", re.MULTILINE)
+SOURCE_REV_LINE = re.compile(r"^SOURCE-REV=(.*)$", re.MULTILINE)
 
 
 def parse_provenance(text: str) -> Dict[str, str]:
@@ -95,7 +96,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     parser.add_argument("provenance", help="executed-argv provenance file")
     parser.add_argument("log", help="captured guest console log")
     parser.add_argument("--overlay", help="overlay source tree, to cross-check the release marker")
-    parser.add_argument("--expect-build-id", help="expected BUILD-ID value from the diagnostic utility")
+    parser.add_argument("--expect-source-rev", help="expected SOURCE-REV value from the diagnostic utility")
+    parser.add_argument("--expect-build-id", help="legacy alias for --expect-source-rev")
     args = parser.parse_args(argv)
 
     for path in (args.image, args.provenance, args.log):
@@ -166,14 +168,15 @@ def main(argv: Optional[List[str]] = None) -> int:
             need(observed == expected, "guest.release-marker",
                  f"guest release={observed!r} overlay marker={expected!r}")
 
-    if args.expect_build_id:
-        bmatch = BUILD_ID_LINE.search(log)
-        if bmatch is None:
-            need(False, "guest.build-id", "the diagnostic utility did not report BUILD-ID")
+    expected_rev = args.expect_source_rev or args.expect_build_id
+    if expected_rev:
+        smatch = SOURCE_REV_LINE.search(log) or BUILD_ID_LINE.search(log)
+        if smatch is None:
+            need(False, "guest.source-rev", "the diagnostic utility did not report SOURCE-REV")
         else:
-            observed_bid = bmatch.group(1).strip()
-            need(observed_bid == args.expect_build_id, "guest.build-id",
-                 f"guest build-id={observed_bid!r} expected {args.expect_build_id!r}")
+            observed_rev = smatch.group(1).strip()
+            need(observed_rev == expected_rev, "guest.source-rev",
+                 f"guest source-rev={observed_rev!r} expected {expected_rev!r}")
 
     # 5. the booted image is the image under audit
     recorded = prov.get("initrd_sha256") or prov.get("image_sha256") or ""

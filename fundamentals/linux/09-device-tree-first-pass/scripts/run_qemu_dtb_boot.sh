@@ -21,11 +21,12 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 M05_ROOT=$(cd "${SCRIPT_DIR}/.." && pwd)
 cd "$M05_ROOT"
 
-DTB="${1:?usage: run_qemu_dtb_boot.sh DTB KERNEL INITRD OUT_LOG OUT_ARGV}"
+DTB="${1:?usage: run_qemu_dtb_boot.sh DTB KERNEL INITRD OUT_LOG OUT_ARGV [OUT_INITRD]}"
 KERNEL="${2:?}"
 INITRD="${3:?}"
 OUT_LOG="${4:?}"
 OUT_ARGV="${5:?}"
+OUT_INITRD="${6:-}"
 
 QEMU_MACHINE="${QEMU_MACHINE:-virt,highmem=off,gic-version=2}"
 QEMU_CPU="${QEMU_CPU:-cortex-a7}"
@@ -43,11 +44,11 @@ for f in "$DTB" "$KERNEL" "$INITRD"; do
     [ -f "$f" ] || { echo "ERROR: missing required boot input: $f" >&2; exit 2; }
 done
 
-# The DTB identity that is about to be booted.  This is the binding anchor:
+# The DTB identity that is about to be booted. This is the binding anchor:
 # the runtime verifier requires the log's provenance to carry the same hash.
 DTB_SHA=$(sha256sum "$DTB" | awk '{print $1}')
 KERNEL_SHA=$(sha256sum "$KERNEL" | awk '{print $1}')
-INITRD_SHA=$(sha256sum "$INITRD" | awk '{print $1}')
+BASE_INITRD_SHA=$(sha256sum "$INITRD" | awk '{print $1}')
 
 TMPDIR_PROBE=$(mktemp -d "/tmp/dtprobe.XXXXXX")
 cleanup() {
@@ -80,14 +81,23 @@ exit 0
 EOF
 chmod +x "$TMPDIR_PROBE/dtprobe_init"
 
-# 2. Package probe script into a tiny cpio and concatenate with base initrd
+# 2. Package probe script into a tiny cpio overlay
 ( cd "$TMPDIR_PROBE" && echo "dtprobe_init" | cpio -o -H newc ) > "$TMPDIR_PROBE/overlay.cpio" 2>/dev/null
-BOOT_INITRD="$TMPDIR_PROBE/boot_initrd.cpio"
+
+# 3. Materialize executed composite boot initrd at deterministic capture-associated path
+if [ -z "$OUT_INITRD" ]; then
+    OUT_DIR=$(dirname "$OUT_ARGV")
+    OUT_STEM=$(basename "$OUT_ARGV")
+    OUT_STEM="${OUT_STEM%.*}"
+    BOOT_INITRD="${OUT_DIR}/${OUT_STEM}.composite-initrd.cpio"
+else
+    BOOT_INITRD="$OUT_INITRD"
+fi
+mkdir -p "$(dirname "$OUT_LOG")" "$(dirname "$OUT_ARGV")" "$(dirname "$BOOT_INITRD")"
 cat "$INITRD" "$TMPDIR_PROBE/overlay.cpio" > "$BOOT_INITRD"
+BOOT_INITRD_SHA=$(sha256sum "$BOOT_INITRD" | awk '{print $1}')
 
 BOOTARGS="console=${CONSOLE} earlycon=${EARLYCON} rdinit=/dtprobe_init"
-
-mkdir -p "$(dirname "$OUT_LOG")" "$(dirname "$OUT_ARGV")"
 
 ARGV=(
     "$QEMU"
@@ -108,7 +118,13 @@ ARGV=(
     printf '%s\n' "${ARGV[@]}" | sed 's/^/argv: /'
     echo "dtb_sha256: $DTB_SHA"
     echo "kernel_sha256: $KERNEL_SHA"
-    echo "initrd_sha256: $INITRD_SHA"
+    echo "base_initrd_sha256: $BASE_INITRD_SHA"
+    echo "initrd_sha256: $BOOT_INITRD_SHA"
+    echo "composite_initrd_sha256: $BOOT_INITRD_SHA"
+    echo "initrd_path: $BOOT_INITRD"
+    echo "base_initrd_path: $INITRD"
+    echo "dtb_path: $DTB"
+    echo "kernel_path: $KERNEL"
     echo "bootargs: $BOOTARGS"
     echo "machine: $QEMU_MACHINE"
     echo "cpu: $QEMU_CPU"

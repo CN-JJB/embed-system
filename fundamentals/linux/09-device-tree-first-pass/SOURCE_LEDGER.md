@@ -77,8 +77,8 @@ DTB generation adds `dumpdtb=<file>` to the machine string; booting adds
 | 7 | Structural check on the real tree | `dt_structural_check.py fixtures/qemu-virt.dtb` | PASS, 11 invariants | **VERIFIED** |
 | 8 | Fault construction (F10/F11 variants) | `fdt_patch.py` on the real fixture | seeds reproduce the intended REJECT | **VERIFIED** (static) |
 | 9 | Non-determinism characterisation | two `dumpdtb` runs, semantic diff | differ only in `chosen/rng-seed` + `chosen/kaslr-seed` | **VERIFIED** |
-| 10 | Kernel boot with `-dtb` | `run_qemu_dtb_boot.sh` | not attempted — no ARM kernel built | **UNVERIFIED** |
-| 11 | `/sys/firmware/devicetree/base` correlation | `verify_runtime_binding.py` | not attempted | **UNVERIFIED** |
+| 10 | Kernel boot with `-dtb` | `run_qemu_dtb_boot.sh` | runner path fail-closed + deterministic composite initrd verified; boot not attempted on host (no ARM kernel built) | **UNVERIFIED** |
+| 11 | `/sys/firmware/devicetree/base` correlation | `verify_runtime_binding.py` | composite initrd hash binding verified; live guest log not captured on host | **UNVERIFIED** |
 | 12 | Live GDB / register observation | — | not applicable to this module | **UNVERIFIED** |
 | 13 | Physical waveform / measurement | — | out of scope (QEMU-first curriculum) | **UNVERIFIED** |
 

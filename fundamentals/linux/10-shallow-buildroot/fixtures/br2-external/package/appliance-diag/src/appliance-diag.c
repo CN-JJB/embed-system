@@ -16,8 +16,8 @@
 #include <string.h>
 #include <sys/utsname.h>
 
-#ifndef APPLIANCE_DIAG_BUILD_ID
-#define APPLIANCE_DIAG_BUILD_ID "unset"
+#ifndef APPLIANCE_DIAG_SOURCE_REV
+#define APPLIANCE_DIAG_SOURCE_REV "1.0"
 #endif
 
 static int print_file_line(const char *path, const char *label)
@@ -45,7 +45,8 @@ int main(void)
 	struct utsname uts;
 
 	printf("APPLIANCE-DIAG-BEGIN\n");
-	printf("BUILD-ID=%s\n", APPLIANCE_DIAG_BUILD_ID);
+	printf("SOURCE-REV=%s\n", APPLIANCE_DIAG_SOURCE_REV);
+	printf("BUILD-ID=%s\n", APPLIANCE_DIAG_SOURCE_REV);
 
 	if (uname(&uts) == 0)
 		printf("KERNEL-RELEASE=%s\n", uts.release);

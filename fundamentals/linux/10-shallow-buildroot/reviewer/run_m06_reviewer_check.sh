@@ -69,25 +69,48 @@ if missing:
 print(f"[PASS] all {len(table.get('symbols', {}))} recorded symbols verified against the real tree")
 PYEOF
 
-    # Stage 6b: Real Buildroot Kconfig defconfig smoke check
+    # Stage 6b: Real Buildroot Kconfig defconfig smoke check (fail-closed)
     SMOKE_DIR="build/kconfig-smoke"
     rm -rf "$SMOKE_DIR" 2>/dev/null || true
     mkdir -p "$SMOKE_DIR"
-    echo "[INFO] Running real Buildroot defconfig smoke test..."
-    if make -C "$BR_SRC" O="$PWD/$SMOKE_DIR" BR2_EXTERNAL="$PWD/fixtures/br2-external" qemu_virt_a7_defconfig >/dev/null 2>&1; then
-        echo "[PASS] Buildroot defconfig resolved cleanly."
-        if grep -q 'BR2_LINUX_KERNEL_DEFCONFIG="multi_v7"' "$SMOKE_DIR/.config" && grep -q 'BR2_LINUX_KERNEL_ZIMAGE=y' "$SMOKE_DIR/.config"; then
-            echo "[PASS] Effective resolved .config contains BR2_LINUX_KERNEL_DEFCONFIG=\"multi_v7\" and BR2_LINUX_KERNEL_ZIMAGE=y."
-        else
-            echo "[FAIL] Effective .config missing required kernel settings" >&2
-            exit 1
-        fi
-    else
-        echo "[NOTE] Buildroot defconfig smoke test skipped or failed in host environment."
+    echo "[INFO] Running real Buildroot defconfig smoke test (fail-closed)..."
+    if ! make -C "$BR_SRC" O="$PWD/$SMOKE_DIR" BR2_EXTERNAL="$PWD/fixtures/br2-external" qemu_virt_a7_defconfig; then
+        echo "[FAIL] real Buildroot defconfig resolution failed" >&2
+        exit 1
     fi
+    echo "[PASS] Buildroot defconfig resolved cleanly."
+
+    # Validate complete effective .config using verify_br_config.py
+    echo "[INFO] Validating complete effective resolved .config against complete contract profile..."
+    if ! "$PY" scripts/verify_br_config.py "$SMOKE_DIR/.config" \
+        --profile reviewer/reference/buildroot-2026.05.2-complete.json \
+        --symbol-table fixtures/buildroot-symbols.json \
+        --effective; then
+        echo "[FAIL] Effective resolved .config failed complete contract validation!" >&2
+        exit 1
+    fi
+    echo "[PASS] Effective resolved .config satisfies complete contract profile."
+
+    # Check referenced kernel fragment exists and is source-controlled
+    FRAG_PATH="fixtures/br2-external/board/qemu-virt-a7/linux.fragment"
+    if [ ! -f "$FRAG_PATH" ]; then
+        echo "[FAIL] referenced kernel fragment missing: $FRAG_PATH" >&2
+        exit 1
+    fi
+    if ! git ls-files --error-unmatch "$FRAG_PATH" >/dev/null 2>&1; then
+        echo "[FAIL] referenced kernel fragment is not source-controlled in git: $FRAG_PATH" >&2
+        exit 1
+    fi
+    echo "[PASS] Referenced kernel fragment exists and is source-controlled in git ($FRAG_PATH)."
+
+    # Stage 6c: Real Buildroot F12 fidelity regression
+    echo "[INFO] Running real Buildroot F12 fidelity regression..."
+    BUILDROOT_SRC="$BR_SRC" bash reviewer/test_f12_real_buildroot.sh
+
+    echo "[NOTE] Real kernel-config merge and full Buildroot build status: UNVERIFIED (heavy build not executed on this host)."
 else
     echo "[NOTE] no Buildroot source tree supplied (set BUILDROOT_SRC=...): real-source"
-    echo "       symbol cross-validation & Kconfig smoke test SKIPPED (UNVERIFIED on this host)."
+    echo "       symbol cross-validation, Kconfig smoke test & F12 fidelity SKIPPED (UNVERIFIED on this host)."
     echo "       Canonical baseline: 2026.05.2 (tag 2026.05.2, peeled commit 72d9d4fa636a371ef9eb99c92a735ce9f6d829d5)."
 fi
 
