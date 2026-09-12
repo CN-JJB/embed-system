@@ -2,6 +2,29 @@
 
 > **Authoring model:** resource-first. The learner writes the drivers; the repository supplies the map, authoritative resources, source-reading targets, experiment ideas and common traps.
 
+## How to navigate this phase
+
+The unit IDs in this file are the same IDs used by:
+
+- [`../START_HERE.md`](../START_HERE.md) — learning order;
+- [`../resources/TOPIC_RESOURCE_INDEX.md`](../resources/TOPIC_RESOURCE_INDEX.md) — exact documents/source targets/actions.
+
+Use this file for **scope and dependency context**. Use the resource index for the exact reading slice.
+
+```text
+P4.1 module/build/debug loop
+→ P4.2 device/driver/bus/bind/probe
+→ P4.3 platform_driver + DT + resources
+→ P4.4 IRQ + deferred work + locking
+→ P4.5 GPIO descriptor consumer API
+→ P4.6 I2C client drivers + regmap orientation
+→ P4.7 SPI device/driver pattern
+→ P4.8 pinctrl + clock + regulator + reset
+→ P4.9 DMA mapping + DMAEngine
+→ P4.10 runtime/system PM
+→ P4.11 small driver capstone
+```
+
 ## Exit capability
 
 By the end of Phase 4, the learner should be able to:
@@ -10,267 +33,253 @@ By the end of Phase 4, the learner should be able to:
 - trace how firmware/Device Tree description becomes a bound driver instance;
 - write and debug a small `platform_driver`;
 - acquire MMIO/IRQ/GPIO/clock/regulator resources using current kernel idioms;
-- choose between hard IRQ, threaded IRQ and deferred work at a practical level;
+- choose between hard IRQ, threaded IRQ and deferred work at practical depth;
 - use `devm_*` resource management appropriately;
-- read and adapt a small I2C/SPI/GPIO-oriented upstream driver;
+- read and adapt small I2C/SPI/GPIO-oriented upstream drivers;
 - understand where DMA, pinctrl, regulators and clocks enter a SoC driver;
-- reason about probe ordering, deferred probe and runtime/system PM at orientation depth;
+- reason about probe ordering, deferred probe and runtime/system PM;
 - read a DT binding schema before inventing properties;
-- debug driver binding and probe failures with kernel logs/sysfs/debug facilities.
+- debug driver binding and probe failures using logs/sysfs/tracing evidence.
 
 The goal is **not** to memorize every driver API.
 
 ---
 
-# Recommended sequence
-
-## P4-1 — Kernel module and build/debug orientation
+## P4.1 — Kernel module, Kbuild and first debug loop
 
 ### Learn
 
-- in-tree vs out-of-tree modules;
-- Kconfig/Makefile relationship;
+- in-tree vs external modules;
+- Kbuild/Makefile relationship;
 - module load/unload lifecycle;
-- `dmesg`, dynamic debug, module parameters only as orientation;
-- kernel coding conventions and error-return style.
+- symbols and module metadata;
+- `dmesg` / dynamic debug orientation;
+- kernel coding/error-return conventions.
 
-### Resources
+### Exact resource entry
 
-- Bootlin Linux kernel and driver development training: https://bootlin.com/training/kernel/
-- Linux Kernel Labs: https://linux-kernel-labs.github.io/
-- kernel docs: https://docs.kernel.org/
+Use **P4.1** in [`../resources/TOPIC_RESOURCE_INDEX.md`](../resources/TOPIC_RESOURCE_INDEX.md): kernel **Building External Modules**, coding style, dynamic-debug HOWTO, Bootlin kernel training and Linux Kernel Labs.
 
 ### Suggested experiment
 
-Build one minimal module, load/unload it, inspect symbols and logs, then stop. Do not spend a week on “hello world modules”.
+Build one minimal external module, inspect it with `modinfo`/symbol tools, load/unload it and capture logs. Do not spend a week on hello-world modules.
 
 ---
 
-## P4-2 — Device model: device / driver / bus / binding
+## P4.2 — Device model: device / driver / bus / binding
 
 ### Learn
 
 - `struct device`;
 - `struct device_driver`;
-- buses and match/probe;
+- bus match and bind;
+- `probe()` meaning;
 - sysfs representation;
-- firmware node / OF node relationship;
-- device links and dependency ordering at orientation depth.
+- firmware-node / OF-node relationship;
+- dependency ordering at orientation depth.
 
-### Primary resources
+### Exact resource entry
 
-- driver infrastructure: https://docs.kernel.org/driver-api/infrastructure.html
-- platform devices/drivers: https://docs.kernel.org/driver-api/driver-model/platform.html
+Use **P4.2**: kernel **Device Model Overview**, driver infrastructure, platform driver model, plus `drivers/base/` / `drivers/base/platform.c` source-reading direction.
 
-### Source-reading direction
+### Questions you must be able to answer
 
-Trace one simple platform driver from:
-
-```text
-of_match_table
-→ platform_driver registration
-→ match
-→ probe
-→ resource acquisition
-→ subsystem registration
-```
-
-### Questions
-
-- Who creates the device object?
-- Who creates the driver object?
+- Who created the device object?
+- Who registered the driver?
+- What matched them?
 - What causes `probe()` to run?
-- What does a successful probe mean?
-- Why is “driver loaded” not the same as “device bound”? 
+- Why is “module loaded” not the same as “device bound”? 
 
 ---
 
-## P4-3 — Platform driver + Device Tree + resources
+## P4.3 — `platform_driver` + Device Tree + MMIO/IRQ resources
 
 ### Learn
 
 - `struct platform_driver`;
-- `of_device_id` / compatible matching;
-- MMIO resources;
-- IRQ resources;
-- `devm_*` lifecycle;
-- mapping registers using current kernel helpers;
-- error unwinding and managed resources.
+- `of_device_id` / `compatible` matching;
+- MMIO and IRQ resources;
+- `devm_*` / devres lifetime;
+- managed register mapping;
+- error paths and resource lookup.
 
-### Primary resources
+### Exact resource entry
 
-- platform driver docs: https://docs.kernel.org/driver-api/driver-model/platform.html
-- Devicetree schema writing: https://docs.kernel.org/devicetree/bindings/writing-schema.html
-- binding design guidance: https://docs.kernel.org/devicetree/bindings/writing-bindings.html
+Use **P4.3**: platform-driver docs, devres docs, DT binding guidance, and current upstream examples using `devm_platform_ioremap_resource()` / `platform_get_irq()`.
 
 ### Suggested experiment
 
-Write one tiny platform driver for a simple emulated or controlled device. Require:
-
-- DT node;
-- `compatible` match;
-- MMIO resource acquisition;
-- one observable register read/write or synthetic register region;
-- clean error path;
-- explicit evidence that probe occurred.
-
-Do not add a char device merely to “show output” if the subsystem already has a better interface.
+Create one tiny platform device/driver or controlled QEMU/DT fixture with compatible matching and at least one managed resource. Prove bind/probe through sysfs/log evidence.
 
 ---
 
-## P4-4 — IRQs and deferred work
+## P4.4 — IRQs, threaded IRQs, workqueues and locking
 
 ### Learn
 
-- interrupt context constraints;
-- hard IRQ vs threaded IRQ;
-- top half / bottom half as a historical mental model;
+- hard interrupt context constraints;
+- `request_irq()` / `request_threaded_irq()`;
+- threaded handlers;
 - workqueues;
-- completion/wait/event concepts as needed;
-- locking between interrupt and process contexts;
-- shared state and lifetime.
+- sleeping rules;
+- synchronization/lifetime across process and interrupt contexts.
 
-### Resources
+### Exact resource entry
 
-Use current kernel driver/core docs and Bootlin driver training. Read exact APIs in the kernel version used by the experiment.
+Use **P4.4**: Linux generic IRQ docs, workqueue docs, locking guide, and Bootlin's interrupt/locking/deferred-work material.
 
 ### Suggested experiment
 
-Have the device/fixture trigger an interrupt or use a safe test path. Capture:
-
-- IRQ registration;
-- handler execution;
-- deferred work execution;
-- race-free shutdown/removal.
-
-Be able to explain why sleeping in hard IRQ context is wrong.
+Trace registration → interrupt → handler → deferred work and demonstrate race-free removal/shutdown.
 
 ---
 
-## P4-5 — GPIO, I2C and SPI consumer-driver patterns
+## P4.5 — GPIO descriptor consumer API
 
 ### Learn
 
-- GPIO descriptor-based consumer API;
-- DT GPIO mappings;
-- I2C device/driver model;
-- SPI device/driver model;
-- register access patterns;
-- regmap orientation;
-- why bus drivers and client/device drivers are different roles.
+- descriptor-based GPIO consumer API;
+- firmware/DT GPIO mapping;
+- direction/value semantics;
+- why legacy global integer GPIO numbering should not be the default mental model.
 
-### Primary resources
+### Exact resource entry
 
-- GPIO docs: https://docs.kernel.org/driver-api/gpio/
-- GPIO mappings: https://docs.kernel.org/driver-api/gpio/board.html
-- I2C docs: https://docs.kernel.org/i2c/
-- SPI docs: https://docs.kernel.org/spi/
+Use **P4.5**: kernel GPIO **consumer** and **board/firmware mapping** documentation plus one small upstream `devm_gpiod_get()` consumer.
 
-### Suggested project
+### Suggested experiment
 
-Choose **one** simple sensor/peripheral and write/adapt a driver. Prefer a device with:
-
-- a small register map;
-- existing upstream binding examples;
-- easy observable output;
-- no large firmware stack.
-
-First read two upstream drivers in the same subsystem before writing yours.
+Use a DT-described GPIO from a driver and prove the descriptor came from the intended firmware mapping.
 
 ---
 
-## P4-6 — Pinctrl, clocks, regulators and reset dependencies
+## P4.6 — I2C client-driver pattern + regmap orientation
 
 ### Learn
 
-At orientation depth:
+- I2C adapter/controller vs client/device-driver roles;
+- client instantiation/matching;
+- register I/O;
+- subsystem registration;
+- regmap orientation where it reduces repeated register-access boilerplate.
+
+### Exact resource entry
+
+Use **P4.6**: kernel **Writing I2C Clients**, **Instantiating I2C Devices**, and selected upstream examples such as `drivers/hwmon/lm75.c` and `drivers/misc/eeprom/at24.c`.
+
+### Suggested experiment
+
+Read two upstream drivers before adapting/writing one small sensor/peripheral driver.
+
+---
+
+## P4.7 — SPI device/driver pattern
+
+### Learn
+
+- SPI controller vs SPI device vs device protocol;
+- `spi_driver` matching/probe;
+- messages/transfers;
+- what the SPI core handles versus what stays device-specific.
+
+### Exact resource entry
+
+Use **P4.7**: current kernel SPI docs and one small upstream SPI peripheral driver from the subsystem relevant to your project.
+
+### Suggested experiment
+
+Compare a simple register-oriented peripheral concept over I2C and SPI. Write down what changed at the bus layer and what did not.
+
+---
+
+## P4.8 — Pinctrl, clocks, regulators and reset dependencies
+
+### Learn
 
 - pinmux vs GPIO;
 - pinctrl states;
 - device clocks;
-- power regulators;
+- regulators/power supplies;
 - reset controls;
-- probe dependencies;
-- deferred probing.
+- provider/consumer dependencies;
+- deferred probe.
 
-### Primary resources
+### Exact resource entry
 
-- pin control: https://docs.kernel.org/driver-api/pin-control.html
-- regulator: https://docs.kernel.org/power/regulator/
-- current kernel docs/source for clock/reset APIs used by the target SoC.
+Use **P4.8**: kernel pinctrl, Common Clock Framework, regulator and reset-controller documentation; then read one real driver that acquires at least two of these resources.
 
 ### Suggested exercise
 
-Take a real upstream driver that requests at least two of these resources and build a dependency diagram:
+Draw the selected device dependency graph:
 
 ```text
-device
-├─ pinctrl
-├─ clock
-├─ regulator
-├─ reset
-└─ IRQ/MMIO
+power/regulator
+→ reset
+→ clock
+→ pinctrl
+→ MMIO/IRQ
+→ subsystem registration
 ```
 
-Then trace which resource is automatically handled by core code and which the driver explicitly acquires.
+Compare it with actual probe/runtime-PM code.
 
 ---
 
-## P4-7 — DMA orientation
+## P4.9 — DMA mapping and DMAEngine orientation
 
 ### Learn
 
-- CPU virtual address vs physical/DMA address;
-- coherent vs streaming mappings;
-- cache coherency assumptions;
-- DMA mask;
-- DMAEngine client model at orientation depth;
-- ownership/synchronization of buffers.
+- CPU virtual address vs physical address vs DMA address;
+- coherent vs streaming DMA mappings;
+- cache/coherency assumptions;
+- DMA masks;
+- ownership/synchronization;
+- DMAEngine client flow at orientation depth.
 
-### Primary resource
+### Exact resource entry
 
-- DMAEngine: https://docs.kernel.org/driver-api/dmaengine/
-- current DMA mapping docs under kernel core/driver docs.
+Use **P4.9**: kernel **DMA API HOWTO** and **DMAEngine Client** documentation.
 
 ### Defer
 
-Do not start with IOMMU internals, SMMU driver development or complex scatter-gather performance tuning unless a project requires it.
+IOMMU/SMMU internals and complex scatter-gather tuning unless a project requires them.
 
 ---
 
-## P4-8 — Power management orientation
+## P4.10 — Runtime PM and system sleep
 
 ### Learn
 
-- runtime PM vs system sleep;
-- device usage count mental model;
+- runtime PM vs system-wide sleep;
+- usage-count/state mental model;
 - suspend/resume callback role;
-- ordering/dependencies;
-- clocks/regulators/pinctrl during PM.
+- dependency/order interactions;
+- clocks/regulators/pinctrl across PM transitions.
 
-### Resources
+### Exact resource entry
 
-- power management docs: https://docs.kernel.org/power/
-- device links: https://docs.kernel.org/driver-api/device_link.html
+Use **P4.10**: **Runtime Power Management Framework for I/O Devices**, power-management index and device-links documentation.
 
 ### Suggested exercise
 
-Read one small upstream driver's runtime-PM path and explain what state is lost/restored and what resources are disabled/enabled.
+Read one small driver's runtime-PM path and state what is disabled, what state is lost, what gets restored and what makes concurrent accesses safe.
 
 ---
 
-# Recommended capstone
+## P4.11 — Small driver capstone
 
-Build or adapt a small driver stack that includes:
+Build or adapt one small driver stack containing:
 
 - DT binding/node;
-- platform or I2C/SPI binding;
-- resource acquisition;
+- platform, I2C or SPI binding;
+- managed resources;
 - IRQ or polling path;
 - one subsystem-facing interface;
-- clean shutdown/remove;
+- clean remove/shutdown and basic PM reasoning;
 - one deliberate binding/resource/IRQ fault;
-- short debug note with evidence.
+- short evidence-backed debug note.
+
+Use **P4.11** in the topic resource index for the Bootlin/lab cross-check and exit criterion.
 
 The capstone should remain small enough that you can explain every important line.
 
@@ -278,7 +287,7 @@ The capstone should remain small enough that you can explain every important lin
 
 # Common traps
 
-- treating a Linux driver as bare-metal register code inside a module;
+- treating a Linux driver as bare-metal register code placed inside a module;
 - creating custom sysfs/ioctl/char interfaces when a standard subsystem exists;
 - inventing DT properties instead of reading bindings;
 - confusing device creation with driver registration;
@@ -286,22 +295,18 @@ The capstone should remain small enough that you can explain every important lin
 - using legacy GPIO integer APIs in new code without a reason;
 - ignoring lifetime/removal paths;
 - confusing CPU physical addresses with DMA addresses;
-- copying vendor BSP code without checking current upstream API conventions.
-
----
+- copying vendor BSP code without checking current upstream conventions.
 
 # What to defer
 
-Until Phase 5/6 or a project demands it:
+Until Phase 5/6 or a real project demands it:
 
 - full PCIe driver development;
 - DRM/KMS;
-- networking MAC/PHY driver internals;
-- complex sound subsystem drivers;
-- V4L2/media pipelines;
+- networking MAC/PHY internals;
+- complex sound/media pipelines;
 - deep IOMMU/SMMU;
-- security/TEE integration;
-- large vendor BSP archaeology;
-- extensive upstream submission workflow.
+- TEE/security integration;
+- large vendor BSP archaeology.
 
 These are specialization tracks, not prerequisites for basic driver competence.
