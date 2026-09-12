@@ -1,0 +1,35 @@
+{
+  "assessment": "gate",
+  "expected_repair": "restore the exact 4-token bootargs set (rdinit=/sbin/init) in run + guest cmdline, and a non-hidden DT-MODEL",
+  "fault_family": "transfer: hidden bootarg decoy + hidden DT-MODEL marker (unfamiliar from tutorial fault-a/b)",
+  "hidden_signatures": [
+    "badinit-hidden-transfer",
+    "TRANSFER-HIDDEN-UNAVAILABLE"
+  ],
+  "note": "REVIEWER-ONLY hidden seed mapping. Never import from learner paths; the isolation audit scans for the hidden signatures below.",
+  "oracle_invariants": [
+    "bootargs.exact-set",
+    "log.cmdline-exact-set",
+    "guest.dt-model"
+  ],
+  "schema": "m08-seed-v1",
+  "seeded_edits": [
+    {
+      "field": "bootargs",
+      "from": "rdinit=/sbin/init",
+      "note": "hidden bootarg decoy breaks the exact 4-token bootargs set in both run record and guest cmdline",
+      "op": "replace-token",
+      "to": "rdinit=/sbin/badinit-hidden-transfer"
+    },
+    {
+      "field": "log.DT-MODEL",
+      "from": "QEMU virt",
+      "note": "hidden sysfs variant: a sentinel the runtime binder passes but only the oracle rejects",
+      "op": "replace-marker",
+      "to": "TRANSFER-HIDDEN-UNAVAILABLE"
+    }
+  ],
+  "taught_profile_detects": false,
+  "taught_profile_note": "the runtime binder rejects the bootarg decoy but treats TRANSFER-HIDDEN-UNAVAILABLE as a non-empty DT-MODEL; only this oracle knows the hidden sentinel",
+  "variant": "well-formed provenance/run record whose bootargs rdinit token and captured DT-MODEL carry hidden-transfer decoy values; different from tutorial fault-a (rdinit=/init) and fault-b (DT-MODEL=UNAVAILABLE)"
+}
