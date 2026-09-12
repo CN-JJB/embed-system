@@ -1,0 +1,63 @@
+# svc_reference.disasm — REAL captured disassembly (not illustrative)
+#
+# Evidence status: VERIFIED (actual-host toolchain compile + objdump capture)
+#
+# Toolchain identity (ACTUAL-HOST, NOT the canonical Arm GNU Toolchain):
+#   arm-linux-gnueabihf-gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+#   GNU objdump (GNU Binutils for Ubuntu) 2.42
+#   The canonical baseline for this module is Arm GNU Toolchain 13.3.rel1
+#   `arm-none-linux-gnueabihf-`; that toolchain was NOT used here.
+#
+# Exact commands that produced this capture (run under WSL Ubuntu, repo at
+# /mnt/g/ai_project/research/emb):
+#
+#   arm-linux-gnueabihf-gcc -static -march=armv7-a -mfpu=vfpv4-d16 \
+#     -mfloat-abi=hard -marm -O0 -g \
+#     -o build/calibration/svc_getpid.elf \
+#     labs/07.2-svc-syscall-trace/src/svc_main.c \
+#     labs/07.2-svc-syscall-trace/src/svc_getpid.S \
+#     -Ilabs/07.2-svc-syscall-trace/src
+#
+#   arm-linux-gnueabihf-readelf -h build/calibration/svc_getpid.elf
+#   arm-linux-gnueabihf-readelf -A build/calibration/svc_getpid.elf
+#   arm-linux-gnueabihf-objdump -d build/calibration/svc_getpid.elf
+#
+# ELF identity (readelf -h, verbatim key lines):
+#   Class:                             ELF32
+#   Data:                              2's complement, little endian
+#   Type:                              EXEC (Executable file)
+#   Machine:                           ARM
+#   Flags:                             0x5000400, Version5 EABI, hard-float ABI
+#
+# ARM EABI attributes (readelf -A, verbatim key lines):
+#   Tag_CPU_name: "7-A"
+#   Tag_CPU_arch: v7
+#   Tag_CPU_arch_profile: Application
+#   Tag_ARM_ISA_use: Yes
+#   Tag_THUMB_ISA_use: Thumb-2
+#   Tag_FP_arch: VFPv4-D16
+#   Tag_ABI_VFP_args: VFP registers
+#
+# Disassembly of the executed reachable path (objdump -d, verbatim):
+000104e0 <svc_getpid_raw>:
+   104e0:	e3a07014 	mov	r7, #20
+   104e4:	ef000000 	svc	0x00000000
+   104e8:	e12fff1e 	bx	lr
+#
+# What this proves:
+# - The committed svc_getpid.S actually assembles, links, and reaches the final
+#   ELF with `mov r7,#20` (__NR_getpid = 20, ARM EABI) immediately followed by
+#   `svc 0x00000000`, then `bx lr` (return value in r0). ARM mode, not Thumb
+#   (0xe3a07014 / 0xef000000 / 0xe12fff1e are ARM encodings).
+# - The ELF is ARM EABI5 hard-float (Machine=ARM, Flags=Version5 EABI,
+#   hard-float ABI; Tag_ABI_VFP_args=VFP registers).
+#
+# What this does NOT prove by itself:
+# - That `svc #0` actually trapped into a kernel and returned a pid. That
+#   runtime fact is proven separately (see calibration-evidence.md): under
+#   qemu-arm user-mode AND under a real ARM Linux kernel boot, the same binary
+#   returned a real pid matching libc getpid().
+#
+# This file is accepted by scripts/check_svc_artifact.py:
+#   python3 scripts/check_svc_artifact.py --elf <elf> --disasm <this-file> \
+#     --entry-symbol svc_getpid_raw   -> PASS
